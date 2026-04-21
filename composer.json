@@ -1,0 +1,33 @@
+{
+  "name": "ozi-ui/core",
+  "description": "Orquestrador do ecossistema ozi-ui — plugins front-end para Laravel",
+  "type": "library",
+  "license": "MIT",
+  "keywords": ["laravel", "ozi-ui", "plugins", "frontend", "jquery"],
+  "homepage": "https://oziui.com",
+  "authors": [
+    {
+      "name": "Devs",
+      "email": "suport@oziui.com",
+      "homepage": "https://oziui.com"
+    }
+  ],
+  "require": {
+    "php": "^8.2",
+    "illuminate/support": "^10.0|^11.0|^12.0|^13.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "OziUI\\Core\\": "src/"
+    }
+  },
+  "extra": {
+    "laravel": {
+      "providers": [
+        "OziUI\\Core\\OziCoreServiceProvider"
+      ]
+    }
+  },
+  "minimum-stability": "stable",
+  "prefer-stable": true
+}

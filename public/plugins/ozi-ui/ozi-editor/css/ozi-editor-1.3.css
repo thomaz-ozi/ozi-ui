@@ -1,0 +1,202 @@
+:root {
+    --ozi-editor-bg: #ffffff;
+    --ozi-editor-border: #dee2e6;
+    --ozi-editor-radius: 10px;
+    --ozi-editor-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
+
+    --ozi-editor-toolbar-bg: #f8f9fa;
+    --ozi-editor-toolbar-border: #dee2e6;
+
+    --ozi-editor-text: #212529;
+    --ozi-editor-muted: #6c757d;
+
+    --ozi-editor-btn-bg: #ffffff;
+    --ozi-editor-btn-border: #d7dce1;
+    --ozi-editor-btn-hover-bg: #f1f3f5;
+    --ozi-editor-btn-hover-color: #212529;
+
+    --ozi-editor-active-bg: rgba(154, 184, 243, 0.18);
+    --ozi-editor-active-color: #4c79c7;
+
+    --ozi-editor-placeholder: #9aa0a6;
+    --ozi-editor-invalid: #dc3545;
+
+    --ozi-editor-uicolor: #9AB8F3;
+}
+
+[data-bs-theme="dark"] {
+    --ozi-editor-bg: #1f2430;
+    --ozi-editor-border: #343a40;
+    --ozi-editor-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
+
+    --ozi-editor-toolbar-bg: #262c39;
+    --ozi-editor-toolbar-border: #343a40;
+
+    --ozi-editor-text: #e9ecef;
+    --ozi-editor-muted: #adb5bd;
+
+    --ozi-editor-btn-bg: #232833;
+    --ozi-editor-btn-border: #3d4554;
+    --ozi-editor-btn-hover-bg: #313949;
+    --ozi-editor-btn-hover-color: #f8f9fa;
+
+    --ozi-editor-active-bg: rgba(154, 184, 243, 0.22);
+    --ozi-editor-active-color: #b9d0ff;
+
+    --ozi-editor-placeholder: #8b93a1;
+    --ozi-editor-invalid: #ff6b6b;
+}
+
+.ozi-editor-wrap {
+    border: 1px solid var(--ozi-editor-border);
+    border-radius: var(--ozi-editor-radius);
+    background: var(--ozi-editor-bg);
+    box-shadow: var(--ozi-editor-shadow);
+    overflow: hidden;
+    color: var(--ozi-editor-text);
+}
+
+.ozi-editor-wrap.is-disabled {
+    opacity: 0.75;
+}
+
+.ozi-editor-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px;
+    background: var(--ozi-editor-toolbar-bg);
+    border-bottom: 1px solid var(--ozi-editor-toolbar-border);
+}
+
+.ozi-editor-btn {
+    min-width: 38px;
+    height: 34px;
+    padding: 0 10px;
+    border: 1px solid var(--ozi-editor-btn-border);
+    border-radius: 8px;
+    background: var(--ozi-editor-btn-bg);
+    color: var(--ozi-editor-text);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    font-size: 13px;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    white-space: nowrap;
+}
+
+.ozi-editor-btn:hover {
+    background: var(--ozi-editor-btn-hover-bg);
+    color: var(--ozi-editor-btn-hover-color);
+}
+
+.ozi-editor-btn.is-active {
+    background: var(--ozi-editor-active-bg);
+    color: var(--ozi-editor-active-color);
+    border-color: var(--ozi-editor-uicolor);
+}
+
+.ozi-editor-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.ozi-editor-content {
+    padding: 14px;
+    outline: none;
+    color: var(--ozi-editor-text);
+    line-height: 1.5;
+    background: var(--ozi-editor-bg);
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.ozi-editor-content:focus {
+    box-shadow: inset 0 0 0 1px var(--ozi-editor-uicolor);
+}
+
+.ozi-editor-content[contenteditable="true"]:empty::before {
+    content: attr(data-placeholder);
+    color: var(--ozi-editor-placeholder);
+    pointer-events: none;
+}
+
+.ozi-editor-content p {
+    margin: 0 0 10px;
+}
+
+.ozi-editor-content ul,
+.ozi-editor-content ol {
+    margin: 0 0 10px 18px;
+    padding: 0;
+}
+
+.ozi-editor-content pre {
+    margin: 0 0 10px;
+    padding: 12px;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.05);
+    overflow: auto;
+    font-family: Consolas, Monaco, monospace;
+    font-size: 13px;
+}
+
+[data-bs-theme="dark"] .ozi-editor-content pre {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.ozi-editor-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0 0 10px;
+}
+
+.ozi-editor-content td,
+.ozi-editor-content th {
+    border: 1px solid var(--ozi-editor-border);
+    padding: 8px;
+    vertical-align: top;
+}
+
+.ozi-editor-source-area {
+    display: none;
+    width: 100%;
+    border: 0;
+    outline: none;
+    resize: vertical;
+    padding: 14px;
+    font-family: Consolas, Monaco, monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--ozi-editor-text);
+    background: var(--ozi-editor-bg);
+    overflow-y: auto;
+    overflow-x: auto;
+}
+
+.ozi-editor-wrap.is-source-mode .ozi-editor-content {
+    display: none;
+}
+
+.ozi-editor-wrap.is-source-mode .ozi-editor-source-area {
+    display: block;
+}
+
+.ozi-editor-content.is-invalid,
+.ozi-editor-source-area.is-invalid {
+    box-shadow: inset 0 0 0 1px var(--ozi-editor-invalid);
+}
+
+.ozi-editor-feedback {
+    display: none;
+    padding: 0 14px 12px;
+    color: var(--ozi-editor-invalid);
+    font-size: 13px;
+}
+
+.ozi-editor-feedback.is-visible {
+    display: block;
+}

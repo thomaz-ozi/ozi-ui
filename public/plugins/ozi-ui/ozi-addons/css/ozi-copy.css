@@ -1,0 +1,32 @@
+:root{
+    --copy-text:#fff;
+    --copy-feedback-success:#198754;
+    --copy-feedback-error:#dc3545;
+}
+[data-ozi-copy-value],
+[data-ozi-copy] {
+    cursor: pointer;
+    position: relative;
+}
+
+.ozi-copy-feedback {
+    z-index: 10;
+    top: 50%;
+    left: calc(100% + 8px);
+    transform: translateY(-50%);
+    white-space: nowrap;
+    pointer-events: none;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 11px;
+    line-height: 1.2;
+    color: var(--copy-text);
+}
+
+.ozi-copy-feedback-success {
+    background-color: var(--copy-feedback-success);
+}
+
+.ozi-copy-feedback-error {
+    background-color: var(--copy-feedback-error);
+}

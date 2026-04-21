@@ -1,0 +1,115 @@
+.zld-disabled {
+    opacity: .6;
+    cursor: not-allowed;
+    filter: grayscale(.1);
+}
+:root {
+    --zld-alert-radius: 12px;
+    --zld-alert-padding-y: 10px;
+    --zld-alert-padding-x: 12px;
+    --zld-alert-font-size: 13px;
+    --zld-alert-meta-font-size: 11px;
+    --zld-alert-border-width: 1px;
+
+    --zld-warning-bg: #fff8e1;
+    --zld-warning-border: #f1c40f;
+    --zld-warning-text: #7a5d00;
+
+    --zld-danger-bg: #fdecec;
+    --zld-danger-border: #e57373;
+    --zld-danger-text: #8a1f1f;
+
+    --zld-progress-height: 7px;
+    --zld-progress-radius: 999px;
+    --zld-progress-bg: #eceff1;
+    --zld-progress-loading-bg: #f4b400;
+    --zld-progress-success-bg: #2e7d32;
+    --zld-progress-text: #ffffff;
+
+    --zld-disabled-opacity: 0.6;
+}
+
+.zld-disabled {
+    opacity: var(--zld-disabled-opacity);
+    cursor: not-allowed;
+}
+
+.zld-alert {
+    display: block;
+    width: 100%;
+    padding: var(--zld-alert-padding-y) var(--zld-alert-padding-x);
+    border-radius: var(--zld-alert-radius);
+    border: var(--zld-alert-border-width) solid transparent;
+    font-size: var(--zld-alert-font-size);
+    line-height: 1.45;
+    box-sizing: border-box;
+}
+
+.zld-alert-warning {
+    background: var(--zld-warning-bg);
+    border-color: var(--zld-warning-border);
+    color: var(--zld-warning-text);
+}
+
+.zld-alert-danger {
+    background: var(--zld-danger-bg);
+    border-color: var(--zld-danger-border);
+    color: var(--zld-danger-text);
+}
+
+.zld-alert-meta {
+    margin-top: 4px;
+    font-size: var(--zld-alert-meta-font-size);
+    opacity: 0.85;
+}
+
+.zld-progress {
+    width: 100%;
+    overflow: hidden;
+    border-radius: var(--zld-progress-radius);
+    background: var(--zld-progress-bg);
+}
+
+.zld-progress-bar {
+    display: block;
+    width: 0%;
+    height: var(--zld-progress-height);
+    border-radius: var(--zld-progress-radius);
+    color: var(--zld-progress-text);
+    text-align: center;
+    white-space: nowrap;
+    transition: width 0.3s ease;
+    box-sizing: border-box;
+    font-size: 11px;
+    line-height: var(--zld-progress-height);
+}
+
+.zld-progress-loading {
+    background-color: var(--zld-progress-loading-bg);
+    background-image: linear-gradient(
+            45deg,
+            rgba(255, 255, 255, 0.20) 25%,
+            transparent 25%,
+            transparent 50%,
+            rgba(255, 255, 255, 0.20) 50%,
+            rgba(255, 255, 255, 0.20) 75%,
+            transparent 75%,
+            transparent
+    );
+    background-size: 1rem 1rem;
+    animation: zld-progress-stripes 1s linear infinite;
+}
+
+.zld-progress-success {
+    background-color: var(--zld-progress-success-bg);
+    background-image: none;
+}
+
+@keyframes zld-progress-stripes {
+    from {
+        background-position: 1rem 0;
+    }
+    to {
+        background-position: 0 0;
+    }
+}

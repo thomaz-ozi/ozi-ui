@@ -1,0 +1,4 @@
+.ozi-check-disabled {
+    opacity: .55;
+    pointer-events: none;
+}

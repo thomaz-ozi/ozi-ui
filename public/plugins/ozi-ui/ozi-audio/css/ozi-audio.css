@@ -1,0 +1,333 @@
+:root {
+    --ozi-audio-color: #b8b8b9;
+    --ozi-audio-color-secondary: #ff7f50;
+    --ozi-audio-text: #808080;
+    --ozi-audio-text-secondary: #dfdfdf;
+    --ozi-audio-bg: rgba(255, 255, 255, 0.77);
+    --ozi-audio-shadow: rgba(117, 108, 108, 0.22);
+    --ozi-audio-border: rgba(255, 255, 255, 0.22);
+
+    --ozi-audio-progress-bg: var(--ozi-audio-color);
+    --ozi-audio-progress-fill: var(--ozi-audio-color-secondary);
+
+    --ozi-audio-volume-bg: var(--ozi-audio-color);
+    --ozi-audio-volume-fill: var(--ozi-audio-color-secondary);
+
+    --ozi-audio-speed-bg: var(--ozi-audio-color);
+    --ozi-audio-speed-bg-hover: var(--ozi-audio-color-secondary);
+    --ozi-audio-speed-text: var(--ozi-audio-text-secondary);
+
+    --ozi-audio-record-bg: #dc3545;
+    --ozi-audio-record-bg-hover: #bb2d3b;
+    --ozi-audio-record-text: #ffffff;
+
+    --ozi-audio-save-bg: #198754;
+    --ozi-audio-save-bg-hover: #157347;
+    --ozi-audio-save-text: #ffffff;
+
+    --ozi-audio-status: #808080;
+
+    --ozi-audio-radius: 15px;
+    --ozi-audio-gap: 8px;
+    --ozi-audio-width-min: 250px;
+    --ozi-audio-width-max: 350px;
+    --ozi-audio-padding: 8px 10px;
+    --ozi-audio-timeline-height: 15px;
+    --ozi-audio-volume-height: 7px;
+}
+
+.ozi-audio {
+    min-width: var(--ozi-audio-width-min);
+    max-width: var(--ozi-audio-width-max);
+    background: var(--ozi-audio-bg);
+    box-shadow: 1px 1px 1px 1px var(--ozi-audio-shadow);
+    border: 1px solid var(--ozi-audio-border);
+    border-radius: var(--ozi-audio-radius);
+    padding: var(--ozi-audio-padding);
+    color: var(--ozi-audio-text);
+    box-sizing: border-box;
+}
+
+.ozi-audio *,
+.ozi-audio *::before,
+.ozi-audio *::after {
+    box-sizing: border-box;
+}
+
+.ozi-audio__main {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--ozi-audio-gap);
+}
+
+.ozi-audio__timeline-box {
+    flex: 1;
+    min-width: 0;
+}
+
+.ozi-audio__title {
+    font-size: 12px;
+    margin-bottom: 4px;
+    color: var(--ozi-audio-text);
+    word-break: break-word;
+}
+
+.ozi-audio__play,
+.ozi-audio__record,
+.ozi-audio__save,
+.ozi-audio__speed,
+.ozi-audio__volume-btn {
+    border: 0;
+    outline: none;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.ozi-audio__play:disabled,
+.ozi-audio__record:disabled,
+.ozi-audio__save:disabled,
+.ozi-audio__speed:disabled,
+.ozi-audio__volume-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.ozi-audio__play {
+    width: 30px;
+    min-width: 30px;
+    height: 30px;
+    background: transparent;
+    color: var(--ozi-audio-color);
+    font-size: 24px;
+    line-height: 1;
+    padding: 0;
+}
+
+.ozi-audio__play:hover:not(:disabled) {
+    color: var(--ozi-audio-color-secondary);
+}
+
+.ozi-audio__play .ozi-audio__pause-icon {
+    display: none;
+}
+
+.ozi-audio__play.is-pause .ozi-audio__play-icon {
+    display: none;
+}
+
+.ozi-audio__play.is-pause .ozi-audio__pause-icon {
+    display: inline;
+}
+
+.ozi-audio__timeline {
+    height: var(--ozi-audio-timeline-height);
+    border-radius: 20px;
+    background: var(--ozi-audio-progress-bg);
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+    margin-bottom: 5px;
+}
+
+.ozi-audio__timeline.is-disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.ozi-audio__progress {
+    width: 0%;
+    height: 100%;
+    background: var(--ozi-audio-progress-fill);
+    border-radius: 20px;
+    transition: width 0.25s ease;
+}
+
+.ozi-audio__meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 18px;
+}
+
+.ozi-audio__time {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 10px;
+    min-width: 58px;
+}
+
+.ozi-audio__time-current,
+.ozi-audio__time-length,
+.ozi-audio__time-sep {
+    line-height: 1;
+}
+
+.ozi-audio__status {
+    font-size: 11px;
+    color: var(--ozi-audio-status);
+    white-space: nowrap;
+}
+
+.ozi-audio__volume {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 110px;
+    flex: 1;
+    max-width: 140px;
+}
+
+.ozi-audio__volume-btn {
+    background: transparent;
+    color: var(--ozi-audio-color);
+    font-size: 18px;
+    line-height: 1;
+    padding: 0;
+    min-width: 20px;
+}
+
+.ozi-audio__volume-btn:hover:not(:disabled) {
+    color: var(--ozi-audio-color-secondary);
+}
+
+.ozi-audio__volume-btn .ozi-audio__volume-off {
+    display: none;
+}
+
+.ozi-audio__volume-btn.is-off .ozi-audio__volume-on {
+    display: none;
+}
+
+.ozi-audio__volume-btn.is-off .ozi-audio__volume-off {
+    display: inline;
+    color: var(--ozi-audio-color-secondary);
+}
+
+.ozi-audio__volume-bar {
+    width: 100%;
+    height: var(--ozi-audio-volume-height);
+    background: var(--ozi-audio-volume-bg);
+    border-radius: 20px;
+    overflow: hidden;
+    cursor: pointer;
+}
+
+.ozi-audio__volume-bar.is-disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.ozi-audio__volume-fill {
+    width: 50%;
+    height: 100%;
+    background: var(--ozi-audio-volume-fill);
+    border-radius: 20px;
+    transition: width 0.25s ease;
+}
+
+.ozi-audio__speed {
+    width: 40px;
+    min-width: 40px;
+    height: 24px;
+    border-radius: 50px;
+    background: var(--ozi-audio-speed-bg);
+    color: var(--ozi-audio-speed-text);
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1;
+    margin-top: 6px;
+    padding: 0;
+}
+
+.ozi-audio__speed:hover:not(:disabled) {
+    background: var(--ozi-audio-speed-bg-hover);
+}
+
+.ozi-audio__record {
+    width: 40px;
+    min-width: 40px;
+    height: 32px;
+    border-radius: 50px;
+    background: var(--ozi-audio-record-bg);
+    color: var(--ozi-audio-record-text);
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1;
+    margin-top: 2px;
+    padding: 0;
+}
+
+.ozi-audio__record:hover:not(:disabled) {
+    background: var(--ozi-audio-record-bg-hover);
+}
+
+.ozi-audio__record .ozi-audio__record-stop-icon {
+    display: none;
+}
+
+.ozi-audio__record.is-recording .ozi-audio__record-idle-icon {
+    display: none;
+}
+
+.ozi-audio__record.is-recording .ozi-audio__record-stop-icon {
+    display: inline;
+}
+
+.ozi-audio__save {
+    min-width: 64px;
+    height: 28px;
+    padding: 0 12px;
+    border-radius: 50px;
+    background: var(--ozi-audio-save-bg);
+    color: var(--ozi-audio-save-text);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+    margin-top: 4px;
+}
+
+.ozi-audio__save:hover:not(:disabled) {
+    background: var(--ozi-audio-save-bg-hover);
+}
+
+.ozi-audio__preview-wrap {
+    margin-top: 8px;
+}
+
+.ozi-audio__preview {
+    width: 100%;
+    max-width: 100%;
+    display: block;
+}
+
+.ozi-audio-player .ozi-audio__main,
+.ozi-audio-full .ozi-audio__main {
+    align-items: flex-start;
+}
+
+.ozi-audio-recorder .ozi-audio__main {
+    align-items: flex-start;
+}
+
+.ozi-audio-full .ozi-audio__status {
+    min-width: 70px;
+    text-align: right;
+}
+
+@media (max-width: 480px) {
+    .ozi-audio {
+        min-width: 100%;
+        max-width: 100%;
+    }
+
+    .ozi-audio__main {
+        gap: 6px;
+    }
+
+    .ozi-audio__volume {
+        min-width: 90px;
+        max-width: 110px;
+    }
+}
