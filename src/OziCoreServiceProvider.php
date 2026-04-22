@@ -4,17 +4,16 @@ namespace OziUI\Core;
 
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Blade;
+use OziUI\Core\Commands\OziCheckCommand;
 
 class OziCoreServiceProvider extends ServiceProvider
 {
-    /**
-     * Todos os assets publicáveis do ecossistema ozi-ui.
-     */
     public function boot(): void
     {
         $this->publishAssets();
         $this->publishConfig();
         $this->registerBladeDirectives();
+        $this->registerCommands();
     }
 
     public function register(): void
@@ -23,6 +22,23 @@ class OziCoreServiceProvider extends ServiceProvider
             __DIR__ . '/../config/ozi-ui.php',
             'ozi-ui'
         );
+
+        $this->app->singleton(OziAssets::class, function () {
+            return new OziAssets();
+        });
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // Commands
+    // ──────────────────────────────────────────────────────────────
+
+    protected function registerCommands(): void
+    {
+        if ($this->app->runningInConsole()) {
+            $this->commands([
+                OziCheckCommand::class,
+            ]);
+        }
     }
 
     // ──────────────────────────────────────────────────────────────
@@ -31,16 +47,9 @@ class OziCoreServiceProvider extends ServiceProvider
 
     protected function publishAssets(): void
     {
-        // Publica TUDO de uma vez
         $this->publishes([
             __DIR__ . '/../public' => public_path('plugins/ozi-ui'),
         ], 'ozi-ui');
-
-        // Ou por plugin individualmente
-        $this->publishes([
-            __DIR__ . '/../public/plugins/ozi-ui/ozi-core.js' => public_path('plugins/ozi-ui/ozi-core.js'),
-            __DIR__ . '/../public/plugins/ozi-ui/ozi-core.css' => public_path('plugins/ozi-ui/ozi-core.css'),
-        ], 'ozi-ui-core');
 
         $this->publishes([
             __DIR__ . '/../public/plugins/ozi-ui/ozi-loaddata' => public_path('plugins/ozi-ui/ozi-loaddata'),
@@ -88,32 +97,14 @@ class OziCoreServiceProvider extends ServiceProvider
 
     protected function registerBladeDirectives(): void
     {
-        /**
-         * @oziStyles
-         * Carrega o CSS do core + plugins configurados.
-         *
-         * Uso: @oziStyles
-         */
         Blade::directive('oziStyles', function () {
             return "<?php echo app(\OziUI\Core\OziAssets::class)->styles(); ?>";
         });
 
-        /**
-         * @oziScripts
-         * Carrega o JS do core + plugins configurados.
-         *
-         * Uso: @oziScripts
-         */
         Blade::directive('oziScripts', function () {
             return "<?php echo app(\OziUI\Core\OziAssets::class)->scripts(); ?>";
         });
 
-        /**
-         * @oziPlugin('nome')
-         * Carrega CSS + JS de um plugin específico.
-         *
-         * Uso: @oziPlugin('ozi-select')
-         */
         Blade::directive('oziPlugin', function (string $expression) {
             return "<?php echo app(\OziUI\Core\OziAssets::class)->plugin({$expression}); ?>";
         });

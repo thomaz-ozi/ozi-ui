@@ -293,7 +293,6 @@
     oziCore.loadScript = loadScript;
     oziCore.loadMany = loadMany;
     oziCore.version = '1.2.0';
-
     window.oziCore = oziCore;
 
 })(window, document);
