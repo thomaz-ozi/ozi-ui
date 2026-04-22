@@ -7,7 +7,7 @@
   "homepage": "https://oziui.com",
   "authors": [
     {
-      "name": "Devs",
+      "name": "Suport",
       "email": "suport@oziui.com",
       "homepage": "https://oziui.com"
     }
@@ -28,6 +28,6 @@
       ]
     }
   },
-  "minimum-stability": "stable",
+  "minimum-stability": "alpha",
   "prefer-stable": true
 }
