@@ -48,8 +48,9 @@ class OziCoreServiceProvider extends ServiceProvider
     protected function publishAssets(): void
     {
         $this->publishes([
-            __DIR__ . '/../public' => public_path('plugins/ozi-ui'),
+            __DIR__ . '/../public/plugins/ozi-ui' => public_path('plugins/ozi-ui'),
         ], 'ozi-ui');
+
 
         $this->publishes([
             __DIR__ . '/../public/plugins/ozi-ui/ozi-loaddata' => public_path('plugins/ozi-ui/ozi-loaddata'),
