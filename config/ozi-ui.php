@@ -38,5 +38,4 @@ return [
     |
     */
     'debug' => env('OZI_DEBUG', false),
-
 ];
