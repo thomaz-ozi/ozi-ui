@@ -143,7 +143,6 @@ class OziAssets
         return "<link rel=\"stylesheet\" href=\"{$url}\">";
     }
 
-
     protected function script(string $file): string
     {
         $url = asset($this->base() . '/' . $file);
