@@ -33,6 +33,7 @@
     // ------------------------------------------
     // [1] HELPERS DE URL
     // ------------------------------------------
+
     function normalizeBase(urlBase) {
         var base = String(urlBase || '').trim();
 
@@ -289,9 +290,11 @@
     // ------------------------------------------
     // [6] EXPORTS PÚBLICOS
     // ------------------------------------------
+
     oziCore.loadScript = loadScript;
     oziCore.loadMany = loadMany;
     oziCore.version = '1.2.0';
+
     window.oziCore = oziCore;
 
 })(window, document);
