@@ -41,15 +41,24 @@
 ````javascript
  oziCore({
      urlBase: '/plugins/ozi-ui/',
-     urlScript: [
-              'ozi-loaddata/js/ozi-loaddata.js',
-              'ozi-select/js/ozi-select.js',
-              'ozi-autocomplete/js/ozi-autocomplete.js',
-              'ozi-audio/js/ozi-audio.js',
-              'ozi-editor/js/ozi-editor.js',
-              'ozi-search/js/ozi-search.js',
-              'ozi-addons/js/ozi-addons.js'
-          ],
+    urlScript: [
+        // 1º SEMPRE — os demais dependem do zldConf que ele expõe
+        'ozi-loaddata/js/ozi-loaddata.js',
+
+        // Demais plugins na ordem que precisar
+        'ozi-autocomplete/js/ozi-autocomplete.js',
+        'ozi-select/js/ozi-select.js',
+        'ozi-search/js/ozi-search.js',
+        'ozi-editor/js/ozi-editor.js',
+        'ozi-audio/js/ozi-audio.js',
+        // addons
+        'ozi-addons/js/ozi-addons.js',
+        'ozi-addons/js/ozi-auth.js',
+        'ozi-addons/js/ozi-check.js',
+        'ozi-addons/js/ozi-copy.js',
+        'ozi-addons/js/ozi-toggle.js',
+    ],
+
      log: false
  });
 ````
@@ -119,14 +128,38 @@ A função retorna uma Promise que resolve com:
 ### ESTRUTURA DE PASTAS ESPERADA
 
  ````html
- public/plugins/ozi-ui/
- ├── ozi-loaddata/js/ozi-loaddata.js
- ├── ozi-select/js/ozi-select.js
- ├── ozi-autocomplete/js/ozi-autocomplete.js
- ├── ozi-audio/js/ozi-audio.js
- ├── ozi-editor/js/ozi-editor.js
- ├── ozi-search/js/ozi-search.js
- └── ozi-addons/js/ozi-addons.js
+public/plugins/ozi-ui/
+├── ozi-core.js
+├── ozi-core.css
+├── ozi-loaddata/
+│   ├── js/ozi-loaddata.js
+│   └── css/ozi-loaddata.css
+├── ozi-autocomplete/
+│   ├── js/ozi-autocomplete.js
+│   └── css/ozi-autocomplete.css
+├── ozi-select/
+│   ├── js/ozi-select.js
+│   └── css/ozi-select.css
+├── ozi-search/
+│   └── js/ozi-search.js
+├── ozi-editor/
+│   ├── js/ozi-editor.js
+│   └── css/ozi-editor.css
+├── ozi-audio/
+│   ├── js/ozi-audio.js
+│   └── css/ozi-audio.css
+└── ozi-addons/
+├── js/
+│   ├── ozi-addons.js
+│   ├── ozi-auth.js
+│   ├── ozi-check.js
+│   ├── ozi-copy.js
+│   └── ozi-toggle.js
+└── css/
+├── ozi-auth.css
+├── ozi-check.css
+├── ozi-copy.css
+└── ozi-toggle.css
 ````
 ````php
  @param {Object|string} config
