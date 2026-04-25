@@ -143,9 +143,10 @@ class OziAssets
         return "<link rel=\"stylesheet\" href=\"{$url}\">";
     }
 
+
     protected function script(string $file): string
     {
         $url = asset($this->base() . '/' . $file);
-        return "<script src=\"{$url}\"></script>";
+        return "<script src=\"{$url}\" data-navigate-once></script>";
     }
 }

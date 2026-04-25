@@ -13,7 +13,7 @@ class OziCheckCommand extends Command
     protected array $plugins = [
         'oziCore'         => ['version' => 'v0.10.0-alpha', 'asset' => 'plugins/ozi-ui/ozi-core.js'],
         'oziLoadData'     => ['version' => 'v3.9.4',        'asset' => 'plugins/ozi-ui/ozi-loaddata/js/ozi-loaddata.js'],
-        'oziSelect'       => ['version' => 'v4.2.0',        'asset' => 'plugins/ozi-ui/ozi-select/js/ozi-select.js'],
+        'oziSelect'       => ['version' => 'v4.3.1',        'asset' => 'plugins/ozi-ui/ozi-select/js/ozi-select.js'],
         'oziAutocomplete' => ['version' => 'v1.0.0',        'asset' => 'plugins/ozi-ui/ozi-autocomplete/js/ozi-autocomplete.js'],
         'oziSearch'       => ['version' => 'v1.5',          'asset' => 'plugins/ozi-ui/ozi-search/js/ozi-search.js'],
         'oziEditor'       => ['version' => 'v1.4.1',        'asset' => 'plugins/ozi-ui/ozi-editor/js/ozi-editor.js'],
