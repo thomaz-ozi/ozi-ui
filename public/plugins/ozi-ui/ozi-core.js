@@ -10,13 +10,18 @@
      * ------------------------------------------
      * oziCore
      * ------------------------------------------
-     * Ver: (1.2.0)
-     * 2026-04-19
+     * Ver: (1.3.0)
+     * 2026-04-26
      * ------------------------------------------
      * @description
      * Orquestrador do ecossistema ozi-ui.
      * Carrega os scripts dos plugins em sequência,
      * garante dependências e registra hooks automáticos.
+     *
+     * Suporte:
+     * - oziLoadData (zldConf.zldHooks.afterRender)
+     * - Livewire 3 (Livewire.hook → commit)
+     * - Livewire 4 (Livewire.hook → morph.updated)
      *
      * @example
      * oziCore({
@@ -145,60 +150,68 @@
     }
 
     // ------------------------------------------
-    // [3] REGISTRO AUTOMÁTICO DE HOOKS
+    // [3] PLUGINS — candidatos ao afterRender
     // ------------------------------------------
 
-    function registerAfterRenderHooks(log) {
+    var hookCandidates = [
+        {
+            key: 'OziAudio',
+            fn: function (root) {
+                if (window.OziAudio && typeof window.OziAudio.init === 'function') {
+                    window.OziAudio.init(root);
+                }
+            }
+        },
+        {
+            key: 'OziAutocomplete',
+            fn: function (root) {
+                if (window.OziAutocomplete && typeof window.OziAutocomplete.init === 'function') {
+                    window.OziAutocomplete.init(root);
+                }
+            }
+        },
+        {
+            key: 'OziEditor',
+            fn: function (root) {
+                if (window.OziEditor && typeof window.OziEditor.init === 'function') {
+                    window.OziEditor.init(root);
+                }
+            }
+        },
+        {
+            key: 'OziSelect',
+            fn: function (root) {
+                if (window.OziSelect && typeof window.OziSelect.init === 'function') {
+                    window.OziSelect.init(root);
+                }
+            }
+        }
+    ];
+
+    function runCandidates(root) {
+        hookCandidates.forEach(function (item) {
+            if (window[item.key]) {
+                item.fn(root);
+            }
+        });
+    }
+
+    // ------------------------------------------
+    // [4] HOOK — oziLoadData (zldConf)
+    // ------------------------------------------
+
+    function registerZldHooks(log) {
         if (
             !window.zldConf ||
             !window.zldConf.zldHooks ||
             !Array.isArray(window.zldConf.zldHooks.afterRender)
         ) {
             if (log) console.warn('oziCore: zldConf.zldHooks.afterRender não disponível.');
-            return;
+            return false;
         }
 
-        var candidates = [
-            {
-                check: 'OziAudio',
-                key: 'OziAudio',
-                fn: function (root) {
-                    if (window.OziAudio && typeof window.OziAudio.init === 'function') {
-                        window.OziAudio.init(root);
-                    }
-                }
-            },
-            {
-                check: 'OziAutocomplete',
-                key: 'OziAutocomplete',
-                fn: function (root) {
-                    if (window.OziAutocomplete && typeof window.OziAutocomplete.init === 'function') {
-                        window.OziAutocomplete.init(root);
-                    }
-                }
-            },
-            {
-                check: 'OziEditor',
-                key: 'OziEditor',
-                fn: function (root) {
-                    if (window.OziEditor && typeof window.OziEditor.init === 'function') {
-                        window.OziEditor.init(root);
-                    }
-                }
-            },
-            {
-                check: 'OziSelect',
-                key: 'OziSelect',
-                fn: function (root) {
-                    if (window.OziSelect && typeof window.OziSelect.init === 'function') {
-                        window.OziSelect.init(root);
-                    }
-                }
-            }
-        ];
-
-        candidates.forEach(function (item) {
-            if (!window[item.check]) return;
+        hookCandidates.forEach(function (item) {
+            if (!window[item.key]) return;
 
             var alreadyBound = window.zldConf.zldHooks.afterRender.some(function (fn) {
                 return fn && fn.__oziCoreHook === item.key;
@@ -210,12 +223,116 @@
             hook.__oziCoreHook = item.key;
             window.zldConf.zldHooks.afterRender.push(hook);
 
-            if (log) console.log('oziCore: hook afterRender registrado →', item.key);
+            if (log) console.log('oziCore: zldHook registrado →', item.key);
         });
+
+        return true;
     }
 
     // ------------------------------------------
-    // [4] CONFIG
+    // [5] HOOK — Livewire 4 (morph.updated)
+    // ------------------------------------------
+
+    function registerLivewire4Hooks(log) {
+        if (
+            !window.Livewire ||
+            typeof window.Livewire.hook !== 'function'
+        ) return false;
+
+        // Detecta Livewire 4 pelo hook morph.updated
+        try {
+            if (window.__oziCoreLw4Registered) return true;
+            window.__oziCoreLw4Registered = true;
+
+            window.Livewire.hook('morph.updated', function (el) {
+                var root = el && el.el ? el.el : el;
+                if (log) console.log('oziCore: Livewire 4 morph.updated →', root);
+                runCandidates(root);
+            });
+
+            if (log) console.log('oziCore: Livewire 4 hook registrado (morph.updated).');
+            return true;
+        } catch (e) {
+            if (log) console.warn('oziCore: Livewire 4 hook falhou.', e);
+            return false;
+        }
+    }
+
+    // ------------------------------------------
+    // [6] HOOK — Livewire 3 (commit)
+    // ------------------------------------------
+
+    function registerLivewire3Hooks(log) {
+        if (
+            !window.Livewire ||
+            typeof window.Livewire.hook !== 'function'
+        ) return false;
+
+        try {
+            if (window.__oziCoreLw3Registered) return true;
+            window.__oziCoreLw3Registered = true;
+
+            window.Livewire.hook('commit', function (payload) {
+                var succeed = payload && typeof payload.succeed === 'function'
+                    ? payload.succeed
+                    : null;
+
+                if (!succeed) return;
+
+                succeed(function () {
+                    var el = payload.component && payload.component.el
+                        ? payload.component.el
+                        : document.body;
+
+                    if (log) console.log('oziCore: Livewire 3 commit →', el);
+                    runCandidates(el);
+                });
+            });
+
+            if (log) console.log('oziCore: Livewire 3 hook registrado (commit).');
+            return true;
+        } catch (e) {
+            if (log) console.warn('oziCore: Livewire 3 hook falhou.', e);
+            return false;
+        }
+    }
+
+    // ------------------------------------------
+    // [7] REGISTRO AUTOMÁTICO DE HOOKS
+    // ------------------------------------------
+
+    function registerAfterRenderHooks(log) {
+        // 1. oziLoadData (sempre — funciona em qualquer stack)
+        registerZldHooks(log);
+
+        if (!window.Livewire) {
+            if (log) console.log('oziCore: Livewire não detectado — apenas zldHooks ativos.');
+            return;
+        }
+
+        // 2. Detecta versão do Livewire
+        var lw = window.Livewire;
+        var version = (lw.version || lw.VERSION || '').toString();
+        var major = parseInt(version.split('.')[0], 10) || 0;
+
+        if (log) console.log('oziCore: Livewire detectado → v' + (version || '?'));
+
+        if (major >= 4) {
+            // Livewire 4 — morph.updated
+            var lw4ok = registerLivewire4Hooks(log);
+
+            if (!lw4ok) {
+                // fallback para Livewire 3 caso morph.updated falhe
+                registerLivewire3Hooks(log);
+            }
+        } else {
+            // Livewire 3 — commit
+            registerLivewire3Hooks(log);
+        }
+    }
+
+    // ------------------------------------------
+    // [8] CONFIG
     // ------------------------------------------
 
     function parseConfig(config) {
@@ -243,17 +360,13 @@
 
         return {
             urlBase: config.urlBase || '',
-            urlScript: config.urlScript || [
-                // 'ozi-loaddata/js/ozi-loaddata.js',
-                // 'ozi-select/js/ozi-select.js',
-                // 'ozi-search/js/ozi-search.js'
-            ],
+            urlScript: config.urlScript || [],
             log: config.log === true
         };
     }
 
     // ------------------------------------------
-    // [5] FUNÇÃO PRINCIPAL
+    // [9] FUNÇÃO PRINCIPAL
     // ------------------------------------------
 
     function oziCore(config) {
@@ -287,12 +400,12 @@
     }
 
     // ------------------------------------------
-    // [6] EXPORTS PÚBLICOS
+    // [10] EXPORTS PÚBLICOS
     // ------------------------------------------
 
-    oziCore.loadScript = loadScript;
-    oziCore.loadMany = loadMany;
-    oziCore.version = '1.2.0';
+    oziCore.loadScript  = loadScript;
+    oziCore.loadMany    = loadMany;
+    oziCore.version     = '1.3.0';
 
     window.oziCore = oziCore;
 
