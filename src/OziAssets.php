@@ -4,148 +4,117 @@ namespace OziUI\Core;
 
 class OziAssets
 {
-    protected array $config;
+    protected string $base = '/plugins/ozi-ui/';
+    protected string $version = '0.18.1';
 
-    // Mapa de plugins com seus arquivos CSS e JS
-    protected array $pluginMap = [
-        'ozi-loaddata' => [
-            'css' => ['ozi-loaddata/css/ozi-loaddata.css'],
-            'js'  => ['ozi-loaddata/js/ozi-loaddata.js'],
-        ],
-        'ozi-select' => [
-            'css' => ['ozi-select/css/ozi-select.css'],
-            'js'  => ['ozi-select/js/ozi-select.js'],
-        ],
-        'ozi-select-livewire' => [
-            'css' => [],
-            'js'  => ['ozi-select/js/ozi-select.livewire.js'],
-        ],
-        'ozi-search' => [
-            'css' => [],
-            'js'  => ['ozi-search/js/ozi-search.js'],
-        ],
-        'ozi-editor' => [
-            'css' => ['ozi-editor/css/ozi-editor.css'],
-            'js'  => ['ozi-editor/js/ozi-editor.js'],
-        ],
-        'ozi-autocomplete' => [
-            'css' => ['ozi-autocomplete/css/ozi-autocomplete.css'],
-            'js'  => ['ozi-autocomplete/js/ozi-autocomplete.js'],
-        ],
-        'ozi-audio' => [
-            'css' => ['ozi-audio/css/ozi-audio.css'],
-            'js'  => ['ozi-audio/js/ozi-audio.js'],
-        ],
-        'ozi-addons' => [
-            'css' => [
-                'ozi-addons/css/ozi-toggle.css',
-                'ozi-addons/css/ozi-copy.css',
-                'ozi-addons/css/ozi-check.css',
-                'ozi-addons/css/ozi-auth.css',
-            ],
-            'js' => [
-                'ozi-addons/js/ozi-addons.js',
-                'ozi-addons/js/ozi-toggle.js',
-                'ozi-addons/js/ozi-copy.js',
-                'ozi-addons/js/ozi-check.js',
-                'ozi-addons/js/ozi-auth.js',
-            ],
-        ],
+    protected array $availableStyles = [
+        'core'           => 'ozi-core/css/ozi-core.css',
+        'loaddata'       => 'ozi-loaddata/css/ozi-loaddata.css',
+        'select'         => 'ozi-select/css/ozi-select.css',
+        'audio'          => 'ozi-audio/css/ozi-audio.css',
+        'editor'         => 'ozi-editor/css/ozi-editor.css',
+        'auth'           => 'ozi-addons/css/ozi-auth.css',
     ];
 
-    public function __construct()
+    protected array $availableScripts = [
+        'loaddata'       => 'ozi-loaddata/js/ozi-loaddata.js',
+        'select'         => 'ozi-select/js/ozi-select.js',
+        'audio'          => 'ozi-audio/js/ozi-audio.js',
+        'autocomplete'   => 'ozi-autocomplete/js/ozi-autocomplete.js',
+        'editor'         => 'ozi-editor/js/ozi-editor.js',
+        'search'         => 'ozi-search/js/ozi-search.js',
+        'addons'         => 'ozi-addons/js/ozi-addons.js',
+        'auth'           => 'ozi-addons/js/ozi-auth.js',
+        'check'          => 'ozi-addons/js/ozi-check.js',
+        'copy'           => 'ozi-addons/js/ozi-copy.js',
+        'toggle'         => 'ozi-addons/js/ozi-toggle.js',
+    ];
+
+    // plugins que sempre devem ser carregados juntos
+    protected array $groups = [
+        'auth'  => ['auth', 'check', 'copy', 'toggle', 'addons'],
+        'forms' => ['loaddata', 'select', 'autocomplete', 'auth', 'check'],
+        'full'  => [], // vazio = carrega tudo
+    ];
+
+    public function styles(array $only = []): string
     {
-        $this->config = config('ozi-ui', []);
+        $map = $this->resolveKeys($this->availableStyles, $only);
+
+        return implode("\n", array_map(
+            fn($file) => '<link rel="stylesheet" href="' . $this->url($file) . '">',
+            $map
+        ));
     }
 
-    // ──────────────────────────────────────────────────────────────
-    // Retorna todos os <link> CSS configurados
-    // ──────────────────────────────────────────────────────────────
-
-    public function styles(): string
+    public function scripts(array $only = []): string
     {
-        $html = [];
+        $map = $this->resolveKeys($this->availableScripts, $only);
 
-        // CSS do core
-        $html[] = $this->link('ozi-core.css');
+        return implode("\n", array_map(
+            fn($file) => '<script src="' . $this->url($file) . '"></script>',
+            $map
+        ));
+    }
 
-        // CSS dos plugins ativos
-        foreach ($this->activePlugins() as $plugin) {
-            foreach ($this->pluginMap[$plugin]['css'] ?? [] as $file) {
-                $html[] = $this->link($file);
+    protected function resolveKeys(array $available, array $only): array
+    {
+        // sem filtro — retorna tudo
+        if (empty($only)) {
+            return array_values($available);
+        }
+
+        $keys = [];
+
+        foreach ($only as $key) {
+            $key = strtolower(trim($key));
+
+            // é um grupo?
+            if (isset($this->groups[$key])) {
+                $groupKeys = $this->groups[$key];
+
+                // grupo vazio = tudo
+                if (empty($groupKeys)) {
+                    return array_values($available);
+                }
+
+                foreach ($groupKeys as $gk) {
+                    $keys[] = $gk;
+                }
+
+                continue;
+            }
+
+            $keys[] = $key;
+        }
+
+        // dedup mantendo ordem
+        $keys = array_unique($keys);
+
+        $result = [];
+        foreach ($keys as $key) {
+            if (isset($available[$key])) {
+                $result[] = $available[$key];
             }
         }
 
-        return implode("\n", array_filter($html));
+        return $result;
     }
 
-    // ──────────────────────────────────────────────────────────────
-    // Retorna todos os <script> JS configurados
-    // ──────────────────────────────────────────────────────────────
-
-    public function scripts(): string
+    protected function url(string $file): string
     {
-        $html = [];
-
-        // JS do core
-        $html[] = $this->script('ozi-core.js');
-
-        // JS dos plugins ativos
-        foreach ($this->activePlugins() as $plugin) {
-            foreach ($this->pluginMap[$plugin]['js'] ?? [] as $file) {
-                $html[] = $this->script($file);
-            }
-        }
-
-        return implode("\n", array_filter($html));
+        return $this->base . $file . '?v=' . $this->version;
     }
 
-    // ──────────────────────────────────────────────────────────────
-    // Carrega CSS + JS de um plugin específico
-    // ──────────────────────────────────────────────────────────────
-
-    public function plugin(string $name): string
+    public function setBase(string $base): static
     {
-        if (!isset($this->pluginMap[$name])) {
-            return "<!-- ozi-ui: plugin [{$name}] não encontrado -->";
-        }
-
-        $html = [];
-
-        foreach ($this->pluginMap[$name]['css'] ?? [] as $file) {
-            $html[] = $this->link($file);
-        }
-
-        foreach ($this->pluginMap[$name]['js'] ?? [] as $file) {
-            $html[] = $this->script($file);
-        }
-
-        return implode("\n", array_filter($html));
+        $this->base = rtrim($base, '/') . '/';
+        return $this;
     }
 
-    // ──────────────────────────────────────────────────────────────
-    // Helpers internos
-    // ──────────────────────────────────────────────────────────────
-
-    protected function activePlugins(): array
+    public function setVersion(string $version): static
     {
-        return $this->config['plugins'] ?? array_keys($this->pluginMap);
-    }
-
-    protected function base(): string
-    {
-        return rtrim($this->config['base_path'] ?? 'plugins/ozi-ui', '/');
-    }
-
-    protected function link(string $file): string
-    {
-        $url = asset($this->base() . '/' . $file);
-        return "<link rel=\"stylesheet\" href=\"{$url}\">";
-    }
-
-    protected function script(string $file): string
-    {
-        $url = asset($this->base() . '/' . $file);
-        return "<script src=\"{$url}\" data-navigate-once></script>";
+        $this->version = $version;
+        return $this;
     }
 }
