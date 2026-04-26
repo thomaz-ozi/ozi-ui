@@ -1,12 +1,11 @@
-// OZI COPY
-// VERSAO: 1.0.0
-// DATA: 2026-04-12
-// DESCRICAO:
-// Plugin simples de copia com 2 formas:
-// 1. data-ozi-copy-value="..."
-// 2. data-ozi-copy="id" + data-ozi-copy-content="id"
-// Com feedback padrao de sucesso e erro.
-
+/**
+ * ------------------------------------------
+ * oziAuth
+ * ------------------------------------------
+ * Ver: (2.3.1)
+ * 2026-04-25
+ * ------------------------------------------
+ */
 (function ($) {
     'use strict';
 
@@ -31,7 +30,7 @@
         successText: 'Copiado!',
         errorText: 'Erro ao copiar!',
         fadeOutTime: 1000,
-        removeDelay: 92200
+        removeDelay: 2200
     };
 
     function str(value) {

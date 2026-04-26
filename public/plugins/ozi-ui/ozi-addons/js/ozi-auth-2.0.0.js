@@ -1,22 +1,8 @@
-/**
- * ------------------------------------------
- * oziAuth
- * ------------------------------------------
- * Ver: (2.2.4)
- * 2026-04-25
- * ------------------------------------------
- */
-
-
 (function ($) {
     'use strict';
 
     if (window.__oziAuthInited) return;
     window.__oziAuthInited = true;
-
-    // ------------------------------------------
-    // [1] MOTOR DE VALIDAÇÃO
-    // ------------------------------------------
 
     function oziAuth(data = {}) {
         const result = {
@@ -87,19 +73,14 @@
         return result;
     }
 
-    // ------------------------------------------
-    // [2] REGRAS
-    // ------------------------------------------
-
     function getPassRules() {
         return [
-            { key: 'mailValid',        text: 'Preencher email obrigatório' },
-            { key: 'passLength',       text: '8 até 14 caracteres', badge: true },
-            { key: 'passLowercase',    text: '1 letra minúscula' },
-            { key: 'passUppercase',    text: '1 letra maiúscula' },
-            { key: 'passNumber',       text: '1 número' },
-            { key: 'passSpecial',      text: '1 caractere especial' },
-            { key: 'passNoSpace',      text: 'Não pode conter espaços' },
+            { key: 'passLength', text: '8 até 14 caracteres' },
+            { key: 'passLowercase', text: '1 letra minúscula' },
+            { key: 'passUppercase', text: '1 letra maiúscula' },
+            { key: 'passNumber', text: '1 número' },
+            { key: 'passSpecial', text: '1 caractere especial' },
+            { key: 'passNoSpace', text: 'Não pode conter espaços' },
             { key: 'passNoEmailParts', text: 'Não pode conter partes do email' }
         ];
     }
@@ -110,10 +91,6 @@
         ];
     }
 
-    // ------------------------------------------
-    // [3] MODO
-    // ------------------------------------------
-
     function getMode($form) {
         const $submit = $form.find('[data-ozi-auth-submit]').first();
 
@@ -122,56 +99,35 @@
                 submit: $(),
                 listId: '',
                 list: false,
-                dropdown: true,
-                checkIcons: null
+                dropdown: true
             };
         }
 
-        const listId     = String($submit.attr('data-ozi-auth-list-id') || '').trim();
+        const listId = String($submit.attr('data-ozi-auth-list-id') || '').trim();
         const hasDropdown = $submit.is('[data-ozi-auth-dropdown]');
-
-        const checkRaw = String($submit.attr('data-ozi-auth-check') || '').trim();
-        let checkIcons = null;
-
-        if (checkRaw) {
-            const parts = checkRaw.split(',').map(v => v.trim()).filter(Boolean);
-            checkIcons = {
-                invalid: parts[0] || '',
-                valid:   parts[1] || parts[0] || ''
-            };
-        }
 
         return {
             submit: $submit,
             listId,
             list: !!listId,
-            dropdown: hasDropdown || !listId,
-            checkIcons
+            dropdown: hasDropdown || !listId
         };
     }
 
-    // ------------------------------------------
-    // [4] TOGGLE SHOW/HIDE SENHA
-    // ------------------------------------------
-
     function buildToggle($input, iconShow, iconHide) {
-        if ($input.parent().hasClass('ozi-auth-input-group')) return;
+        if ($input.parent().hasClass('ozi-auth-input-wrap')) return;
 
         const type = String($input.attr('type') || '').toLowerCase();
         if (type !== 'password') return;
 
-        const customClass = String($input.attr('data-ozi-auth-class') || '').trim();
-        const btnClass    = customClass || 'ozi-auth-btn-toggle';
-
-        const $wrapper = $('<div>', { class: 'ozi-auth-input-group' });
+        const $wrapper = $('<div class="input-group ozi-auth-input-wrap"></div>');
         $input.wrap($wrapper);
 
-        const $toggle = $('<button>', {
-            type: 'button',
-            class: btnClass,
-            tabindex: -1,
-            'aria-label': 'Mostrar senha'
-        }).append($('<i>', { class: iconShow }));
+        const $toggle = $(`
+            <button type="button" class="btn btn-outline-secondary ozi-auth-toggle" tabindex="-1" aria-label="Mostrar senha">
+                <i class="${iconShow}"></i>
+            </button>
+        `);
 
         $input.after($toggle);
 
@@ -182,7 +138,6 @@
                 .attr('aria-label', isPassword ? 'Ocultar senha' : 'Mostrar senha')
                 .find('i')
                 .attr('class', isPassword ? iconHide : iconShow);
-            $input.trigger('focus');
         });
     }
 
@@ -201,57 +156,13 @@
 
             if (!icons) return;
 
-            const parts    = icons.split(',').map(v => v.trim()).filter(Boolean);
+            const parts = icons.split(',').map(v => v.trim()).filter(Boolean);
             const iconShow = parts[0] || 'bi bi-eye-slash';
             const iconHide = parts[1] || 'bi bi-eye';
 
             buildToggle($input, iconShow, iconHide);
         });
     }
-
-    // ------------------------------------------
-    // [5] HELPERS DE RENDER
-    // ------------------------------------------
-
-    function buildRuleItemHtml(rule) {
-        const badgeHtml = rule.badge
-            ? `<span class="ozi-badge-count">0/14</span>`
-            : '';
-
-        return `
-            <div class="ozi-auth-list-item ozi-auth-list-item--invalid" data-rule="${rule.key}">
-                <span class="ozi-auth-rule-icon"><i class="ozi-auth-icon-invalid"></i></span>
-                <span class="ozi-auth-rule-text">${rule.text} ${badgeHtml}</span>
-            </div>
-        `;
-    }
-
-    function buildDropdownItemEl(rule) {
-        const $item = $('<div>', {
-            class: 'ozi-auth-dropdown-item ozi-auth-dropdown-item--invalid',
-            'data-rule': rule.key
-        });
-
-        const $icon = $('<span>', { class: 'ozi-auth-dd-icon' })
-            .append($('<i>', { class: 'ozi-auth-icon-invalid' }));
-
-        const $textWrap = $('<span>', { class: 'ozi-auth-dd-text' });
-
-        if (rule.badge) {
-            $textWrap
-                .append(document.createTextNode(rule.text + ' '))
-                .append($('<span>', { class: 'ozi-badge-count' }).text('0/14'));
-        } else {
-            $textWrap.text(rule.text);
-        }
-
-        $item.append($icon, $textWrap);
-        return $item;
-    }
-
-    // ------------------------------------------
-    // [6] LIST
-    // ------------------------------------------
 
     function ensureList($form, mode) {
         if (!mode.list || !mode.listId) return null;
@@ -265,43 +176,63 @@
 
         $container.data('oziAuthListReady', 1);
 
-        const passRules    = getPassRules();
+        const passRules = getPassRules();
         const confirmRules = getConfirmRules();
 
-        let rulesHtml = '';
-        passRules.forEach(rule => { rulesHtml += buildRuleItemHtml(rule); });
-        confirmRules.forEach(rule => { rulesHtml += buildRuleItemHtml(rule); });
+        let html = `
+            <div class="alert alert-light border ozi-auth-list-box mb-0">
+                <h6 class="mb-2">Regras da senha</h6>
+                <div class="ozi-auth-list-rules">
+        `;
 
-        $container.html(`
-            <div class="ozi-auth-alert ozi-auth-alert-box">
-                <div class="ozi-auth-alert-title">Regras da senha</div>
-                <div class="ozi-auth-list-rules">${rulesHtml}</div>
-                <div class="ozi-auth-summary ozi-auth-summary--invalid">
-                    Preencha os critérios acima para continuar.
+        passRules.forEach(rule => {
+            html += `
+                <div class="ozi-auth-list-item" data-rule="${rule.key}">
+                    <span class="ozi-auth-rule-icon me-2">•</span>${rule.text}
                 </div>
+            `;
+        });
+
+        confirmRules.forEach(rule => {
+            html += `
+                <div class="ozi-auth-list-item" data-rule="${rule.key}">
+                    <span class="ozi-auth-rule-icon me-2">•</span>${rule.text}
+                </div>
+            `;
+        });
+
+        html += `
+                </div>
+                <div class="ozi-auth-summary small mt-2 text-danger">Preencha os critérios acima para continuar.</div>
             </div>
-        `);
+        `;
+
+        $container.html(html);
+
+        $container.find('.ozi-auth-list-item').addClass('text-danger opacity-75');
 
         return $container;
     }
-
-    // ------------------------------------------
-    // [7] DROPDOWN
-    // ------------------------------------------
 
     function createDropdown($input, rules, extraClass) {
         const existing = $input.data('oziAuthDropdown');
         if (existing) return existing;
 
-        const $wrap = $('<div>', { class: 'ozi-auth-dropdown-wrap' });
+        const $wrap = $('<div class="ozi-auth-dropdown-wrap position-relative"></div>');
         $input.wrap($wrap);
 
-        const $dropdown = $('<div>', {
-            class: 'ozi-auth-dropdown-menu ' + (extraClass || '')
-        });
+        const $dropdown = $(`
+            <div class="dropdown-menu p-2 ozi-auth-dropdown ${extraClass || ''}"
+                 style="display:none; position:absolute; inset:auto auto auto 0; min-width:100%; z-index:1055;">
+            </div>
+        `);
 
         rules.forEach(rule => {
-            $dropdown.append(buildDropdownItemEl(rule));
+            $dropdown.append(`
+                <div class="dropdown-item small py-1 px-2" data-rule="${rule.key}">
+                    <span class="ozi-auth-dd-icon me-2">•</span>${rule.text}
+                </div>
+            `);
         });
 
         $input.after($dropdown);
@@ -313,79 +244,39 @@
     function ensureDropdowns($form, mode) {
         if (!mode.dropdown) return;
 
-        const $pass    = $form.find('[data-ozi-auth-pass]').first();
+        const $pass = $form.find('[data-ozi-auth-pass]').first();
         const $confirm = $form.find('[data-ozi-auth-confirm]').first();
-
-        if (!window.__oziAuthDropdownOutsideBound) {
-            window.__oziAuthDropdownOutsideBound = true;
-
-            $(document).on('mousedown.oziAuthDropdown', function (e) {
-                if (!$(e.target).closest('.ozi-auth-dropdown-wrap').length) {
-                    $('.ozi-auth-dropdown-menu').hide();
-                }
-            });
-        }
-
-        function bindDropdownToInput($input, $dropdown) {
-            var blurTimer = null;
-
-            $input.on('focus.oziAuthDD click.oziAuthDD', function () {
-                clearTimeout(blurTimer);
-                $('.ozi-auth-dropdown-menu').not($dropdown).hide();
-                $dropdown.show();
-            });
-
-            $input.on('blur.oziAuthDD', function () {
-                blurTimer = setTimeout(function () {
-                    $dropdown.hide();
-                }, 150);
-            });
-
-            $dropdown.on('mousedown.oziAuthDD', function () {
-                clearTimeout(blurTimer);
-            });
-        }
 
         if ($pass.length && !$pass.data('oziAuthDropdownReady')) {
             $pass.data('oziAuthDropdownReady', 1);
+
             const $dropdownPass = createDropdown($pass, getPassRules(), 'ozi-auth-dropdown-pass');
-            bindDropdownToInput($pass, $dropdownPass);
+
+            $pass.on('focus click', function () {
+                $form.find('.ozi-auth-dropdown').hide();
+                $dropdownPass.show();
+            });
         }
 
         if ($confirm.length && !$confirm.data('oziAuthDropdownReady')) {
             $confirm.data('oziAuthDropdownReady', 1);
+
             const $dropdownConfirm = createDropdown($confirm, getConfirmRules(), 'ozi-auth-dropdown-confirm');
-            bindDropdownToInput($confirm, $dropdownConfirm);
+
+            $confirm.on('focus click', function () {
+                $form.find('.ozi-auth-dropdown').hide();
+                $dropdownConfirm.show();
+            });
         }
-    }
 
-    // ------------------------------------------
-    // [8] UPDATE UI
-    // ------------------------------------------
+        if (!$form.data('oziAuthDropdownOutsideBound')) {
+            $form.data('oziAuthDropdownOutsideBound', 1);
 
-    function resolveRuleIcon($item, ok, checkIcons) {
-        const $icon = $item.find('.ozi-auth-rule-icon i, .ozi-auth-dd-icon i').first();
-
-        if (checkIcons) {
-            $icon.attr('class', ok ? checkIcons.valid : checkIcons.invalid);
-        } else {
-            $icon.attr('class', ok ? 'ozi-auth-icon-valid' : 'ozi-auth-icon-invalid');
-        }
-    }
-
-    function updateBadge($item, passLen) {
-        const $badge = $item.find('.ozi-badge-count');
-        if (!$badge.length) return;
-
-        const len  = Math.min(passLen, 14);
-        const rest = Math.max(0, 8 - passLen);
-
-        if (passLen === 0) {
-            $badge.text('0/14');
-        } else if (passLen <= 14) {
-            $badge.text(len + '/14' + (rest > 0 ? ' · faltam ' + rest : ''));
-        } else {
-            $badge.text(passLen + '/14 · excedido');
+            $(document).on('mousedown.oziAuthDropdown', function (e) {
+                if (!$(e.target).closest($form).length) {
+                    $form.find('.ozi-auth-dropdown').hide();
+                }
+            });
         }
     }
 
@@ -397,61 +288,75 @@
 
         $container.find('[data-rule]').each(function () {
             const $item = $(this);
-            const key   = String($item.attr('data-rule') || '');
-            const ok    = !!result[key];
+            const key = String($item.attr('data-rule') || '');
+            const ok = !!result[key];
 
-            $item
-                .removeClass('ozi-auth-list-item--valid ozi-auth-list-item--invalid')
-                .addClass(ok ? 'ozi-auth-list-item--valid' : 'ozi-auth-list-item--invalid');
+            $item.removeClass('text-success text-danger fw-semibold opacity-75');
+            $item.find('.ozi-auth-rule-icon').remove();
 
-            resolveRuleIcon($item, ok, mode.checkIcons);
-
-            if (key === 'passLength') {
-                updateBadge($item, result.passLen);
+            if (ok) {
+                $item.addClass('text-success').prepend('<span class="ozi-auth-rule-icon me-2">✅</span>');
+            } else {
+                $item.addClass('text-danger opacity-75').prepend('<span class="ozi-auth-rule-icon me-2">•</span>');
             }
         });
 
         const $summary = $container.find('.ozi-auth-summary');
 
         if ($summary.length) {
-            $summary
-                .removeClass('ozi-auth-summary--valid ozi-auth-summary--invalid')
-                .addClass(result.access ? 'ozi-auth-summary--valid' : 'ozi-auth-summary--invalid')
-                .html(result.access
-                    ? 'Senha pronta para salvar.'
-                    : 'Preencha os critérios acima para continuar.'
-                );
+            if (result.access) {
+                $summary.removeClass('text-danger')
+                    .addClass('text-success')
+                    .html('✅ Senha pronta para salvar.');
+            } else {
+                $summary.removeClass('text-success')
+                    .addClass('text-danger')
+                    .html('Preencha os critérios acima para continuar.');
+            }
         }
     }
 
-    function updateDropdown($dropdown, result, checkIcons) {
+    function updateDropdown($dropdown, result) {
         if (!$dropdown || !$dropdown.length) return;
+
+        let allOk = true;
 
         $dropdown.find('[data-rule]').each(function () {
             const $item = $(this);
-            const key   = String($item.attr('data-rule') || '');
-            const ok    = !!result[key];
+            const key = String($item.attr('data-rule') || '');
+            const ok = !!result[key];
 
-            $item
-                .removeClass('ozi-auth-dropdown-item--valid ozi-auth-dropdown-item--invalid')
-                .addClass(ok ? 'ozi-auth-dropdown-item--valid' : 'ozi-auth-dropdown-item--invalid');
+            $item.removeClass('text-success text-danger opacity-75');
+            $item.find('.ozi-auth-dd-icon').text(ok ? '✅' : '•');
 
-            resolveRuleIcon($item, ok, checkIcons);
-
-            if (key === 'passLength') {
-                updateBadge($item, result.passLen);
+            if (ok) {
+                $item.addClass('text-success');
+            } else {
+                $item.addClass('text-danger opacity-75');
+                allOk = false;
             }
         });
+
+        // Se todas as regras foram cumpridas
+        if (allOk) {
+            if (!$dropdown.siblings(".ozi-feedback").length) {
+                $dropdown.after("<div class='ozi-feedback text-success mt-1'>✅ Completado</div>");
+            }
+            setTimeout(function () {
+                $dropdown.slideUp();
+                $dropdown.siblings(".ozi-feedback").fadeOut(function () { $(this).remove(); });
+            }, 1500);
+        }
     }
 
     function updateDropdowns($form, result, mode) {
         if (!mode.dropdown) return;
 
-        const $pass    = $form.find('[data-ozi-auth-pass]').first();
+        const $pass = $form.find('[data-ozi-auth-pass]').first();
         const $confirm = $form.find('[data-ozi-auth-confirm]').first();
 
-        updateDropdown($pass.data('oziAuthDropdown'), result, mode.checkIcons);
-        updateDropdown($confirm.data('oziAuthDropdown'), result, mode.checkIcons);
+        updateDropdown($pass.data('oziAuthDropdown'), result);
+        updateDropdown($confirm.data('oziAuthDropdown'), result);
     }
 
     function updateFieldState($field, valid, emptyOk = true) {
@@ -477,51 +382,28 @@
     function updateButton($form, result, mode) {
         if (!mode.submit.length) return;
 
-        const $submit    = mode.submit;
-        const checkIcons = mode.checkIcons;
-
-        $submit
-            .prop('disabled', !result.access)
-            .toggleClass('ozi-auth-submit--disabled', !result.access)
-            .toggleClass('ozi-auth-submit--ready', result.access);
-
-        if (checkIcons) {
-            let $icon = $submit.find('.ozi-auth-btn-check-icon').first();
-
-            if (!$icon.length) {
-                $icon = $('<i>', { class: 'ozi-auth-btn-check-icon' });
-                $submit.prepend($icon);
-            }
-
-            $icon.attr('class', 'ozi-auth-btn-check-icon ' + (result.access ? checkIcons.valid : checkIcons.invalid));
-        }
+        mode.submit.prop('disabled', !result.access)
+            .toggleClass('btn-secondary', !result.access)
+            .toggleClass('btn-primary', result.access);
     }
-
-    // ------------------------------------------
-    // [9] AVALIAÇÃO DO FORM
-    // ------------------------------------------
 
     function evaluateForm($form) {
         const mode = getMode($form);
 
-        const $mail    = $form.find('[data-ozi-auth-mail]').first();
-        const $pass    = $form.find('[data-ozi-auth-pass]').first();
+        const $mail = $form.find('[data-ozi-auth-mail]').first();
+        const $pass = $form.find('[data-ozi-auth-pass]').first();
         const $confirm = $form.find('[data-ozi-auth-confirm]').first();
-        const $user    = $form.find('[data-ozi-auth-user]').first();
+        const $user = $form.find('[data-ozi-auth-user]').first();
 
         const result = oziAuth({
             user: $user.val(),
-            userCaracter: $user.attr('data-ozi-auth-user-caracter') || 0,
+            userCaracter: $user.data('ozi-auth-user-caracter') || 0,
             mail: $mail.val(),
             password: $pass.val(),
             confirm: $confirm.val()
         });
 
-        // passLen disponível nos updates de badge
-        result.passLen = String($pass.val() || '').length;
-
-        // email: só valida visualmente se pass já tiver conteúdo
-        updateFieldState($mail, result.mailValid, $pass.val() === '');
+        updateFieldState($mail, result.mailValid, true);
 
         updateFieldState($pass, (
             result.passLength &&
@@ -540,10 +422,6 @@
 
         return result;
     }
-
-    // ------------------------------------------
-    // [10] INIT
-    // ------------------------------------------
 
     function initOziAuth($scope = $(document)) {
         $scope.find('form').each(function () {
@@ -576,19 +454,20 @@
             evaluateForm($form);
         });
     }
-
     function oziAuthInitFetched(root = document) {
         const $root = root instanceof jQuery ? root : $(root);
         initOziAuth($root);
     }
 
     function bindOziAuthFetchSupport() {
+        // evento manual para uso externo
         $(document)
             .off('oziAuth:initFetched')
             .on('oziAuth:initFetched', function (e, root) {
                 oziAuthInitFetched(root || document);
             });
 
+        // integração automática com ZLD
         if (
             window.zldConf &&
             window.zldConf.zldHooks &&
@@ -608,7 +487,6 @@
             }
         }
     }
-
     $(document).ready(function () {
         initOziAuth($(document));
         bindOziAuthFetchSupport();

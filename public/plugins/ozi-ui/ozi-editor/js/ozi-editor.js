@@ -1,6 +1,11 @@
 /**
-* 1.5
-* */
+ * ------------------------------------------
+ * oziEditor
+ * ------------------------------------------
+ * Ver: (1.5.1)
+ * 2026-04-25
+ * ------------------------------------------
+ */
 
 (function ($) {
     'use strict';
@@ -41,7 +46,7 @@
         }
     };
 
-    var OZI_EDITOR_ICON_BASE = '/ozi-ui-dev/public/plugins/ozi-ui/ozi-editor/icon/';
+    var OZI_EDITOR_ICON_BASE = '/plugins/ozi-ui/ozi-editor/icon/';
     var oziEditorIconCache = {};
     var oziEditorIconPending = {};
 
@@ -1405,7 +1410,16 @@
             var instance = this.get(selectorOrKey);
             if (!instance) return null;
             return instance.reload();
+        },
+        setIconBase: function (path) {
+            OZI_EDITOR_ICON_BASE = String(path || '').trim();
+            if (OZI_EDITOR_ICON_BASE && !OZI_EDITOR_ICON_BASE.endsWith('/')) {
+                OZI_EDITOR_ICON_BASE += '/';
+            }
+            oziEditorIconCache   = {};
+            oziEditorIconPending = {};
         }
+
     };
 
     function oziEditorInitFetched(root) {
@@ -1418,5 +1432,6 @@
     });
 
     window.oziEditorInitFetched = oziEditorInitFetched;
+
 
 })(jQuery);

@@ -1,3 +1,11 @@
+/**
+ * ------------------------------------------
+ * oziAutocomplete
+ * ------------------------------------------
+ * Ver: (2.0.0)
+ * 2026-04-25
+ * ------------------------------------------
+ */
 (function ($) {
     'use strict';
 
@@ -9,7 +17,7 @@
         this.key = String(this.$input.attr('data-ozi-autocomplete') || '').trim();
 
         if (!this.key) {
-            throw new Error('oziAutocomplete 1.0.0: data-ozi-autocomplete é obrigatório.');
+            throw new Error('oziAutocomplete 1.1.0: data-ozi-autocomplete é obrigatório.');
         }
 
         this.uid = 'ozi-autocomplete-' + (++instanceCounter);
@@ -27,12 +35,25 @@
             this.$input.attr('data-ozi-autocomplete-msg-search') || 'Pesquisando...'
         ).trim();
 
+        // busca remota
+        this.zldUrl    = String(this.$input.attr('data-ozi-autocomplete-zld-url')    || '').trim();
+        this.zldMethod = String(this.$input.attr('data-ozi-autocomplete-zld-method') || 'POST').trim().toUpperCase();
+        this.zldParam  = String(this.$input.attr('data-ozi-autocomplete-zld-param')  || 'search').trim();
+        this.zldMin    = this.parseIntegerAttr('data-ozi-autocomplete-zld-min',   1);
+        this.zldDelay  = this.parseIntegerAttr('data-ozi-autocomplete-zld-delay', 300);
+        this.zldLog    = this.parseBooleanAttr('data-ozi-autocomplete-zld-log');
+
         this.options = [];
+        this.initialOptions = [];
         this.filteredOptions = [];
         this.selectedItem = null;
         this.highlightedIndex = -1;
         this.isOpen = false;
         this.isLoading = false;
+
+        this.remoteRequestTimer = null;
+        this.remoteAbortController = null;
+        this.remoteRequestSeq = 0;
 
         this.$wrap = null;
         this.$dropdown = null;
@@ -42,11 +63,39 @@
         this.init();
     }
 
+    // ------------------------------------------
+    // HELPERS DE ATRIBUTO
+    // ------------------------------------------
+
+    OziAutocomplete.prototype.parseBooleanAttr = function (attrName) {
+        if (!this.$input.is('[' + attrName + ']')) return false;
+        var raw = this.$input.attr(attrName);
+        if (raw === undefined || raw === '') return true;
+        raw = String(raw).trim().toLowerCase();
+        if (raw === 'false' || raw === '0' || raw === 'no' || raw === 'off') return false;
+        return true;
+    };
+
+    OziAutocomplete.prototype.parseIntegerAttr = function (attrName, fallback) {
+        if (!this.$input.is('[' + attrName + ']')) return fallback;
+        var parsed = parseInt(String(this.$input.attr(attrName) || '').trim(), 10);
+        return isNaN(parsed) ? fallback : parsed;
+    };
+
+    OziAutocomplete.prototype.isRemoteEnabled = function () {
+        return !!this.zldUrl;
+    };
+
+    // ------------------------------------------
+    // INIT
+    // ------------------------------------------
+
     OziAutocomplete.prototype.init = function () {
         if (this.$input.data('ozi-autocomplete-initialized')) return;
         this.$input.data('ozi-autocomplete-initialized', true);
 
         this.options = this.loadOptions();
+        this.initialOptions = this.cloneOptions(this.options);
         this.filteredOptions = this.options.slice();
 
         this.buildUI();
@@ -54,42 +103,50 @@
         this.bindEvents();
     };
 
+    OziAutocomplete.prototype.cloneOptions = function (options) {
+        try {
+            return JSON.parse(JSON.stringify(Array.isArray(options) ? options : []));
+        } catch (e) {
+            return Array.isArray(options) ? options.slice() : [];
+        }
+    };
+
+    // ------------------------------------------
+    // LOAD OPTIONS
+    // ------------------------------------------
+
     OziAutocomplete.prototype.loadOptions = function () {
         var selector = 'script[data-ozi-autocomplete-options="' + this.key + '"]';
         var $script = this.$input.nextAll(selector).first();
 
-        if (!$script.length) {
-            $script = this.$input.parent().find(selector).first();
-        }
-
-        if (!$script.length) {
-            $script = $(selector).first();
-        }
-
-        if (!$script.length) {
-            return [];
-        }
+        if (!$script.length) $script = this.$input.parent().find(selector).first();
+        if (!$script.length) $script = $(selector).first();
+        if (!$script.length) return [];
 
         try {
             var parsed = JSON.parse($script.text().trim() || '[]');
             return Array.isArray(parsed) ? parsed : [];
         } catch (error) {
-            console.error('oziAutocomplete 1.0.0: erro ao parsear JSON de "' + this.key + '".', error);
+            console.error('oziAutocomplete 1.1.0: erro ao parsear JSON de "' + this.key + '".', error);
             return [];
         }
     };
+
+    // ------------------------------------------
+    // BUILD UI
+    // ------------------------------------------
 
     OziAutocomplete.prototype.buildUI = function () {
         this.$input.addClass('ozi-autocomplete-input');
 
         if (!this.$input.parent().hasClass('ozi-autocomplete-wrap')) {
-            this.$input.wrap('<div class="ozi-autocomplete-wrap position-relative"></div>');
+            this.$input.wrap('<div class="ozi-autocomplete-wrap"></div>');
         }
 
         this.$wrap = this.$input.parent();
 
         this.$dropdown = $('<div>', {
-            class: 'ozi-autocomplete-dropdown dropdown-menu w-100',
+            class: 'ozi-autocomplete-dropdown',
             style: 'display:none;'
         });
 
@@ -109,6 +166,10 @@
         this.$wrap.append(this.$hidden);
     };
 
+    // ------------------------------------------
+    // EVENTOS
+    // ------------------------------------------
+
     OziAutocomplete.prototype.bindEvents = function () {
         var self = this;
 
@@ -125,8 +186,7 @@
                 self.syncHidden();
             }
 
-            self.filterAndRender(text);
-            self.open();
+            self.handleInput(text);
         });
 
         this.$input.on('keydown' + this.ns, function (e) {
@@ -157,6 +217,175 @@
             }
         });
     };
+
+    // ------------------------------------------
+    // HANDLE INPUT — local + remoto
+    // ------------------------------------------
+
+    OziAutocomplete.prototype.handleInput = function (text) {
+        // sempre filtra local primeiro — resposta imediata
+        this.filterAndRender(text);
+        this.open();
+
+        if (!this.isRemoteEnabled()) return;
+
+        // cancela timer anterior
+        if (this.remoteRequestTimer) {
+            clearTimeout(this.remoteRequestTimer);
+            this.remoteRequestTimer = null;
+        }
+
+        // abaixo do mínimo — volta para opções iniciais
+        if (!text.length || text.length < this.zldMin) {
+            this.abortRemoteRequest();
+            this.resetToInitialOptions();
+            return;
+        }
+
+        // debounce
+        var self = this;
+        this.remoteRequestTimer = setTimeout(function () {
+            self.fetchRemoteOptions(text);
+        }, this.zldDelay);
+    };
+
+    // ------------------------------------------
+    // BUSCA REMOTA
+    // ------------------------------------------
+
+    OziAutocomplete.prototype.abortRemoteRequest = function () {
+        if (this.remoteRequestTimer) {
+            clearTimeout(this.remoteRequestTimer);
+            this.remoteRequestTimer = null;
+        }
+
+        if (this.remoteAbortController) {
+            this.remoteAbortController.abort();
+            this.remoteAbortController = null;
+        }
+    };
+
+    OziAutocomplete.prototype.resetToInitialOptions = function () {
+        this.options = this.cloneOptions(this.initialOptions);
+        this.filterAndRender(this.$input.val() || '');
+    };
+
+    OziAutocomplete.prototype.setLoading = function (state) {
+        this.isLoading = !!state;
+        this.$input.toggleClass('is-loading', this.isLoading);
+        this.renderList();
+    };
+
+    OziAutocomplete.prototype.extractOptions = function (json) {
+        if (Array.isArray(json)) return json;
+        if (json && Array.isArray(json.options)) return json.options;
+        return [];
+    };
+
+    OziAutocomplete.prototype.fetchRemoteOptions = function (query) {
+        var self = this;
+
+        this.abortRemoteRequest();
+
+        this.remoteRequestSeq += 1;
+        var requestId = this.remoteRequestSeq;
+
+        this.remoteAbortController = typeof AbortController !== 'undefined'
+            ? new AbortController()
+            : null;
+
+        this.setLoading(true);
+
+        var csrf = $('meta[name="csrf-token"]').attr('content');
+        var method = this.zldMethod === 'GET' ? 'GET' : 'POST';
+
+        var headers = {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json'
+        };
+
+        if (csrf) headers['X-CSRF-TOKEN'] = csrf;
+
+        var url = this.zldUrl;
+        var fetchConfig = { method: method, headers: headers };
+
+        if (this.remoteAbortController) {
+            fetchConfig.signal = this.remoteAbortController.signal;
+        }
+
+        if (method === 'GET') {
+            var joiner = url.indexOf('?') >= 0 ? '&' : '?';
+            url += joiner + encodeURIComponent(this.zldParam) + '=' + encodeURIComponent(query);
+        } else {
+            var formData = new FormData();
+            formData.append(this.zldParam, query);
+
+            if (csrf && !formData.has('_token')) {
+                formData.append('_token', csrf);
+            }
+
+            fetchConfig.body = formData;
+        }
+
+        if (this.zldLog) {
+            console.log('oziAutocomplete| remote request', {
+                key: this.key,
+                method: method,
+                url: url,
+                query: query
+            });
+        }
+
+        return fetch(url, fetchConfig)
+            .then(function (response) {
+                return response.json().then(function (json) {
+                    return { response: response, json: json };
+                });
+            })
+            .then(function (result) {
+                if (requestId !== self.remoteRequestSeq) return;
+
+                var response = result.response;
+                var json     = result.json;
+
+                if (self.zldLog) {
+                    console.log('oziAutocomplete| remote json', json);
+                }
+
+                // integra zldActions se disponível
+                if (json && Array.isArray(json.actions) && typeof window.zldActions === 'function') {
+                    window.zldActions(json.actions, {
+                        loadData: { zldUrl: self.zldUrl, zldApi: true, zldExpectJson: true },
+                        response: response,
+                        json: json
+                    });
+                }
+
+                if (!response.ok) return;
+
+                var options = self.extractOptions(json);
+                self.options = self.cloneOptions(options);
+
+                var liveQuery = String(self.$input.val() || '').trim();
+                self.filterAndRender(liveQuery);
+            })
+            .catch(function (err) {
+                if (err && err.name === 'AbortError') return;
+
+                if (self.zldLog) {
+                    console.error('oziAutocomplete| erro remoto', err);
+                }
+            })
+            .finally(function () {
+                if (requestId !== self.remoteRequestSeq) return;
+                self.setLoading(false);
+                self.remoteAbortController = null;
+            });
+    };
+
+    // ------------------------------------------
+    // KEYDOWN
+    // ------------------------------------------
 
     OziAutocomplete.prototype.handleKeydown = function (e) {
         if (!this.isOpen && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
@@ -201,6 +430,7 @@
 
             case 'Escape':
                 e.preventDefault();
+                this.abortRemoteRequest();
                 this.close();
                 break;
 
@@ -210,6 +440,10 @@
                 break;
         }
     };
+
+    // ------------------------------------------
+    // NORMALIZE / FILTER
+    // ------------------------------------------
 
     OziAutocomplete.prototype.normalize = function (value) {
         return String(value || '')
@@ -222,9 +456,7 @@
         var self = this;
         var normalizedQuery = this.normalize(query);
 
-        if (!normalizedQuery) {
-            return this.options.slice();
-        }
+        if (!normalizedQuery) return this.options.slice();
 
         return this.options.filter(function (item) {
             var label = self.normalize(item.label);
@@ -239,6 +471,10 @@
         this.renderList();
     };
 
+    // ------------------------------------------
+    // RENDER
+    // ------------------------------------------
+
     OziAutocomplete.prototype.renderList = function () {
         var self = this;
 
@@ -246,18 +482,16 @@
 
         if (this.isLoading) {
             this.$list.append(
-                $('<div>', {
-                    class: 'ozi-autocomplete-empty dropdown-item-text text-muted'
-                }).text(this.msgSearch)
+                $('<div>', { class: 'ozi-autocomplete-empty ozi-autocomplete-loading' })
+                    .text(this.msgSearch)
             );
             return;
         }
 
         if (!this.filteredOptions.length) {
             this.$list.append(
-                $('<div>', {
-                    class: 'ozi-autocomplete-empty dropdown-item-text text-muted'
-                }).text(this.msgEmpty)
+                $('<div>', { class: 'ozi-autocomplete-empty' })
+                    .text(this.msgEmpty)
             );
             return;
         }
@@ -267,33 +501,38 @@
 
             var $option = $('<button>', {
                 type: 'button',
-                class: 'dropdown-item ozi-autocomplete-option' + (isSelected ? ' is-selected' : ''),
+                class: 'ozi-autocomplete-option' + (isSelected ? ' is-selected' : ''),
                 'data-index': index
-            });
+            }).text(item.label || item.value || '');
 
-            $option.text(item.label || item.value || '');
             self.$list.append($option);
         });
     };
 
+    // ------------------------------------------
+    // OPEN / CLOSE
+    // ------------------------------------------
+
     OziAutocomplete.prototype.open = function () {
         if (this.isOpen) return;
-
         this.isOpen = true;
         this.$dropdown.show();
     };
 
     OziAutocomplete.prototype.close = function () {
         if (!this.isOpen) return;
-
         this.isOpen = false;
         this.$dropdown.hide();
         this.clearHighlight();
     };
 
+    // ------------------------------------------
+    // HIGHLIGHT
+    // ------------------------------------------
+
     OziAutocomplete.prototype.clearHighlight = function () {
         this.highlightedIndex = -1;
-        this.$list.find('.ozi-autocomplete-option').removeClass('active');
+        this.$list.find('.ozi-autocomplete-option').removeClass('is-highlighted');
     };
 
     OziAutocomplete.prototype.highlightOption = function (index) {
@@ -308,18 +547,18 @@
         if (index >= $options.length) index = $options.length - 1;
 
         this.highlightedIndex = index;
-        $options.removeClass('active');
+        $options.removeClass('is-highlighted');
 
-        var $current = $options.eq(index).addClass('active');
+        var $current = $options.eq(index).addClass('is-highlighted');
 
-        var listEl = this.$dropdown[0];
+        var listEl   = this.$dropdown[0];
         var optionEl = $current[0];
 
         if (listEl && optionEl) {
-            var optionTop = optionEl.offsetTop;
+            var optionTop    = optionEl.offsetTop;
             var optionBottom = optionTop + optionEl.offsetHeight;
-            var listTop = listEl.scrollTop;
-            var listBottom = listTop + listEl.clientHeight;
+            var listTop      = listEl.scrollTop;
+            var listBottom   = listTop + listEl.clientHeight;
 
             if (optionTop < listTop) {
                 listEl.scrollTop = optionTop;
@@ -330,15 +569,12 @@
     };
 
     OziAutocomplete.prototype.highlightNext = function () {
-        if (!this.isOpen) return;
-        if (!this.filteredOptions.length) return;
-
+        if (!this.isOpen || !this.filteredOptions.length) return;
         this.highlightOption(this.highlightedIndex + 1);
     };
 
     OziAutocomplete.prototype.highlightPrev = function () {
-        if (!this.isOpen) return;
-        if (!this.filteredOptions.length) return;
+        if (!this.isOpen || !this.filteredOptions.length) return;
 
         if (this.highlightedIndex <= 0) {
             this.highlightOption(this.filteredOptions.length - 1);
@@ -347,6 +583,10 @@
 
         this.highlightOption(this.highlightedIndex - 1);
     };
+
+    // ------------------------------------------
+    // SELEÇÃO
+    // ------------------------------------------
 
     OziAutocomplete.prototype.selectItem = function (item) {
         if (!item) return;
@@ -370,7 +610,6 @@
 
     OziAutocomplete.prototype.findExactMatchByLabel = function (text) {
         var normalizedText = this.normalize(text);
-
         if (!normalizedText) return null;
 
         for (var i = 0; i < this.options.length; i++) {
@@ -411,13 +650,13 @@
 
     OziAutocomplete.prototype.syncInitialFromHidden = function () {
         var hiddenValue = String(this.$hidden.val() || '').trim();
-        var inputValue = String(this.$input.val() || '').trim();
+        var inputValue  = String(this.$input.val()  || '').trim();
         var self = this;
 
         if (hiddenValue) {
-            var byValue = this.options.find(function (item) {
+            var byValue = this.options.filter(function (item) {
                 return String(item.value) === hiddenValue;
-            });
+            })[0];
 
             if (byValue) {
                 this.selectedItem = byValue;
@@ -428,9 +667,9 @@
         }
 
         if (inputValue) {
-            var byLabel = this.options.find(function (item) {
+            var byLabel = this.options.filter(function (item) {
                 return self.normalize(item.label) === self.normalize(inputValue);
-            });
+            })[0];
 
             if (byLabel) {
                 this.selectedItem = byLabel;
@@ -454,6 +693,10 @@
             this.emitChange();
         }
     };
+
+    // ------------------------------------------
+    // API DE INSTÂNCIA
+    // ------------------------------------------
 
     OziAutocomplete.prototype.getValue = function () {
         return this.selectedItem ? this.selectedItem.value : null;
@@ -488,9 +731,9 @@
 
     OziAutocomplete.prototype.emitChange = function () {
         var detail = {
-            key: this.key,
-            value: this.getValue(),
-            item: this.getItem(),
+            key:      this.key,
+            value:    this.getValue(),
+            item:     this.getItem(),
             instance: this
         };
 
@@ -499,22 +742,19 @@
         if (this.$input[0] && typeof CustomEvent === 'function') {
             this.$input[0].dispatchEvent(new CustomEvent('ozi:change', {
                 bubbles: true,
-                detail: detail
+                detail:  detail
             }));
         }
     };
 
     OziAutocomplete.prototype.destroy = function () {
+        this.abortRemoteRequest();
+
         $(document).off(this.ns);
         this.$input.off(this.ns);
 
-        if (this.$dropdown) {
-            this.$dropdown.remove();
-        }
-
-        if (this.$hidden) {
-            this.$hidden.remove();
-        }
+        if (this.$dropdown) this.$dropdown.remove();
+        if (this.$hidden)   this.$hidden.remove();
 
         this.$input.removeData('ozi-autocomplete-initialized');
 
@@ -528,26 +768,28 @@
         return instances[this.key];
     };
 
+    // ------------------------------------------
+    // API PÚBLICA
+    // ------------------------------------------
+
     window.OziAutocomplete = {
         init: function (selector) {
             var $elements = selector ? $(selector) : $('[data-ozi-autocomplete]');
-            var $targets = $elements.filter('[data-ozi-autocomplete]').add($elements.find('[data-ozi-autocomplete]'));
+            var $targets  = $elements.filter('[data-ozi-autocomplete]').add($elements.find('[data-ozi-autocomplete]'));
 
             $targets.each(function () {
-                var $el = $(this);
-                var key = String($el.attr('data-ozi-autocomplete') || '').trim();
+                var $el  = $(this);
+                var key  = String($el.attr('data-ozi-autocomplete') || '').trim();
 
                 if (!key) return;
 
                 var existing = instances[key];
 
                 if (existing) {
-                    var sameElement = existing.$input && existing.$input[0] === this;
+                    var sameElement   = existing.$input && existing.$input[0] === this;
                     var oldStillInDom = existing.$input && document.contains(existing.$input[0]);
 
-                    if (sameElement && $el.data('ozi-autocomplete-initialized')) {
-                        return;
-                    }
+                    if (sameElement && $el.data('ozi-autocomplete-initialized')) return;
 
                     if (!sameElement && !oldStillInDom) {
                         existing.destroy();
@@ -579,18 +821,12 @@
                         }
 
                         var $children = $node.find('[data-ozi-autocomplete]');
-                        if ($children.length) {
-                            window.OziAutocomplete.init($node);
-                        }
+                        if ($children.length) window.OziAutocomplete.init($node);
                     });
                 });
             });
 
-            observer.observe(document.body, {
-                childList: true,
-                subtree: true
-            });
-
+            observer.observe(document.body, { childList: true, subtree: true });
             window.__oziAutocompleteObserver = observer;
         },
 
@@ -616,9 +852,7 @@
             var instance = this.get(selectorOrKey);
             if (!instance) return null;
 
-            if (newValue === undefined) {
-                return instance.getValue();
-            }
+            if (newValue === undefined) return instance.getValue();
 
             return instance.setValue(newValue);
         },

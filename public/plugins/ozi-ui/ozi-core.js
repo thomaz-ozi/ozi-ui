@@ -223,18 +223,17 @@
             return {
                 urlBase: config,
                 urlScript: [
+                    'ozi-loaddata/js/ozi-loaddata.js',  // ← primeiro sempre
+                    'ozi-select/js/ozi-select.js',
                     'ozi-audio/js/ozi-audio.js',
                     'ozi-autocomplete/js/ozi-autocomplete.js',
                     'ozi-editor/js/ozi-editor.js',
-                    'ozi-loaddata/js/ozi-loaddata.js',
                     'ozi-search/js/ozi-search.js',
-                    'ozi-select/js/ozi-select.js',
                     'ozi-addons/js/ozi-addons.js',
                     'ozi-addons/js/ozi-auth.js',
                     'ozi-addons/js/ozi-check.js',
                     'ozi-addons/js/ozi-copy.js',
                     'ozi-addons/js/ozi-toggle.js',
-
                 ],
                 log: false
             };

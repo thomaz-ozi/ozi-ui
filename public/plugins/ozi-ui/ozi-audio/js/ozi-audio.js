@@ -1,12 +1,13 @@
-// OZI AUDIO
-// VERSAO: 1.2.0
-// DATA: 2026-04-12
-// DESCRICAO:
-// Componente declarativo de audio.
-// Modos:
-// - data-ozi-audio="player"
-// - data-ozi-audio="recorder"
-// - data-ozi-audio="full"
+/**
+ * ------------------------------------------
+ * oziAudio
+ * ------------------------------------------
+ * Ver: (2.6.6)
+ * 2026-04-25
+ * ------------------------------------------
+ */
+
+//por que versão 2, pois ja exista um outro plugin que eu tina veito
 
 (function ($) {
     'use strict';
@@ -19,6 +20,88 @@
     var instances = {};
     var instanceCounter = 0;
     var activePlayerInstance = null;
+
+    // ------------------------------------------
+    // SISTEMA DE ÍCONES SVG
+    // ------------------------------------------
+
+    var OZI_AUDIO_ICON_BASE = './plugins/ozi-ui/ozi-audio/icon/';
+    var oziAudioIconCache = {};
+    var oziAudioIconPending = {};
+
+    function oziAudioNormalizeSvg(svgText) {
+        var raw = String(svgText || '').trim();
+        if (!raw) return '';
+
+        var parser = new DOMParser();
+        var doc = parser.parseFromString(raw, 'image/svg+xml');
+        var svg = doc.querySelector('svg');
+
+        if (!svg) return '';
+
+        var cls = String(svg.getAttribute('class') || '').trim();
+        var classes = cls ? cls.split(/\s+/) : [];
+
+        if (classes.indexOf('ozi-icon-svg') === -1) {
+            classes.push('ozi-icon-svg');
+        }
+
+        svg.setAttribute('class', classes.join(' ').trim());
+        svg.setAttribute('aria-hidden', 'true');
+        svg.removeAttribute('width');
+        svg.removeAttribute('height');
+
+        return svg.outerHTML;
+    }
+
+    function oziAudioFetchIcon(iconFile) {
+        if (!iconFile) return Promise.resolve('');
+
+        if (oziAudioIconCache[iconFile]) {
+            return Promise.resolve(oziAudioIconCache[iconFile]);
+        }
+
+        if (oziAudioIconPending[iconFile]) {
+            return oziAudioIconPending[iconFile];
+        }
+
+        oziAudioIconPending[iconFile] = fetch(OZI_AUDIO_ICON_BASE + iconFile, {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+            .then(function (response) {
+                if (!response.ok) throw new Error('icone nao encontrado: ' + iconFile);
+                return response.text();
+            })
+            .then(function (svgText) {
+                var clean = oziAudioNormalizeSvg(svgText);
+                oziAudioIconCache[iconFile] = clean;
+                delete oziAudioIconPending[iconFile];
+                return clean;
+            })
+            .catch(function (error) {
+                console.warn('oziAudio| erro ao carregar icone:', iconFile, error);
+                delete oziAudioIconPending[iconFile];
+                return '';
+            });
+
+        return oziAudioIconPending[iconFile];
+    }
+
+    function oziAudioSetIcon($el, iconFile, fallback) {
+        if (!$el || !$el.length) return;
+
+        oziAudioFetchIcon(iconFile).then(function (svgHtml) {
+            if (svgHtml) {
+                $el.html(svgHtml);
+            } else {
+                $el.html(fallback || '');
+            }
+        });
+    }
+
+    // ------------------------------------------
+    // CONSTRUCTOR
+    // ------------------------------------------
 
     function OziAudio(element) {
         this.$root = $(element);
@@ -114,7 +197,7 @@
             return;
         }
 
-        console.warn('oziAudio 1.2.0: modo inválido em #' + this.uid + '.');
+        console.warn('oziAudio 1.3.0: modo invalido em #' + this.uid + '.');
     };
 
     OziAudio.prototype.emit = function (eventName, payload) {
@@ -176,9 +259,7 @@
         this.ensureAudioObject();
 
         if (this.playerObjectUrl) {
-            try {
-                URL.revokeObjectURL(this.playerObjectUrl);
-            } catch (error) {}
+            try { URL.revokeObjectURL(this.playerObjectUrl); } catch (e) {}
             this.playerObjectUrl = '';
         }
 
@@ -205,37 +286,31 @@
     OziAudio.prototype.syncPlayerAvailability = function (enabled) {
         var isEnabled = !!enabled;
 
-        if (this.$play) {
-            this.$play.prop('disabled', !isEnabled);
-        }
-
-        if (this.$timeline) {
-            this.$timeline.toggleClass('is-disabled', !isEnabled);
-        }
-
-        if (this.$volumeBtn) {
-            this.$volumeBtn.prop('disabled', !isEnabled);
-        }
-
-        if (this.$volumeBar) {
-            this.$volumeBar.toggleClass('is-disabled', !isEnabled);
-        }
-
-        if (this.$speed) {
-            this.$speed.prop('disabled', !isEnabled);
-        }
+        if (this.$play) this.$play.prop('disabled', !isEnabled);
+        if (this.$timeline) this.$timeline.toggleClass('is-disabled', !isEnabled);
+        if (this.$volumeBtn) this.$volumeBtn.prop('disabled', !isEnabled);
+        if (this.$volumeBar) this.$volumeBar.toggleClass('is-disabled', !isEnabled);
+        if (this.$speed) this.$speed.prop('disabled', !isEnabled);
     };
 
     OziAudio.prototype.buildPlayerControls = function () {
+
+        // play button
         this.$play = $('<button>', {
             type: 'button',
             class: 'ozi-audio__play is-play',
             'aria-label': 'Reproduzir'
-        }).html(
-            '<span class="ozi-audio__play-icon">▶</span>' +
-            '<span class="ozi-audio__pause-icon">❚❚</span>'
-        );
+        });
 
+        var $playIcon  = $('<span>', { class: 'ozi-audio__play-icon',  'aria-hidden': 'true' });
+        var $pauseIcon = $('<span>', { class: 'ozi-audio__pause-icon', 'aria-hidden': 'true' });
+
+        this.$play.append($playIcon, $pauseIcon);
+
+        oziAudioSetIcon($playIcon,  'play.svg',  '&#9654;');
+        oziAudioSetIcon($pauseIcon, 'pause.svg', '&#10074;&#10074;');
+
+        // timeline
         this.$timeline = $('<div>', {
             class: 'ozi-audio__timeline',
             role: 'progressbar',
@@ -244,27 +319,15 @@
             'aria-valuenow': '0'
         });
 
-        this.$progress = $('<div>', {
-            class: 'ozi-audio__progress'
-        });
-
+        this.$progress = $('<div>', { class: 'ozi-audio__progress' });
         this.$timeline.append(this.$progress);
 
-        var $meta = $('<div>', {
-            class: 'ozi-audio__meta'
-        });
+        // meta
+        var $meta = $('<div>', { class: 'ozi-audio__meta' });
+        var $time = $('<div>', { class: 'ozi-audio__time' });
 
-        var $time = $('<div>', {
-            class: 'ozi-audio__time'
-        });
-
-        this.$timeCurrent = $('<span>', {
-            class: 'ozi-audio__time-current'
-        }).text('0:00');
-
-        this.$timeLength = $('<span>', {
-            class: 'ozi-audio__time-length'
-        }).text('0:00');
+        this.$timeCurrent = $('<span>', { class: 'ozi-audio__time-current' }).text('0:00');
+        this.$timeLength  = $('<span>', { class: 'ozi-audio__time-length'  }).text('0:00');
 
         $time.append(
             this.$timeCurrent,
@@ -274,27 +337,26 @@
 
         $meta.append($time);
 
+        // volume
         if (this.showVolume) {
-            this.$volumeWrap = $('<div>', {
-                class: 'ozi-audio__volume'
-            });
+            this.$volumeWrap = $('<div>', { class: 'ozi-audio__volume' });
 
             this.$volumeBtn = $('<button>', {
                 type: 'button',
                 class: 'ozi-audio__volume-btn is-on',
                 'aria-label': 'Volume'
-            }).html(
-                '<span class="ozi-audio__volume-on">🔊</span>' +
-                '<span class="ozi-audio__volume-off">🔇</span>'
-            );
-
-            this.$volumeBar = $('<div>', {
-                class: 'ozi-audio__volume-bar'
             });
 
-            this.$volumeFill = $('<div>', {
-                class: 'ozi-audio__volume-fill'
-            });
+            var $volOnIcon  = $('<span>', { class: 'ozi-audio__volume-on',  'aria-hidden': 'true' });
+            var $volOffIcon = $('<span>', { class: 'ozi-audio__volume-off', 'aria-hidden': 'true' });
+
+            this.$volumeBtn.append($volOnIcon, $volOffIcon);
+
+            oziAudioSetIcon($volOnIcon,  'volume-on.svg',  '&#128266;');
+            oziAudioSetIcon($volOffIcon, 'volume-off.svg', '&#128263;');
+
+            this.$volumeBar  = $('<div>', { class: 'ozi-audio__volume-bar' });
+            this.$volumeFill = $('<div>', { class: 'ozi-audio__volume-fill' });
 
             this.$volumeBar.append(this.$volumeFill);
             this.$volumeWrap.append(this.$volumeBtn, this.$volumeBar);
@@ -302,9 +364,9 @@
         }
 
         this.$box.append(this.$timeline, $meta);
-
         this.$ui.append(this.$play, this.$box);
 
+        // speed — mantém texto dinâmico
         if (this.showSpeed) {
             this.$speed = $('<button>', {
                 type: 'button',
@@ -321,33 +383,39 @@
             type: 'button',
             class: 'ozi-audio__record is-idle',
             'aria-label': 'Gravar'
-        }).html(
-            '<span class="ozi-audio__record-idle-icon">●</span>' +
-            '<span class="ozi-audio__record-stop-icon">■</span>'
-        );
+        });
+
+        var $recordIdleIcon = $('<span>', { class: 'ozi-audio__record-idle-icon', 'aria-hidden': 'true' });
+        var $recordStopIcon = $('<span>', { class: 'ozi-audio__record-stop-icon', 'aria-hidden': 'true' });
+
+        this.$record.append($recordIdleIcon, $recordStopIcon);
+
+        oziAudioSetIcon($recordIdleIcon, 'record.svg', '&#9679;');
+        oziAudioSetIcon($recordStopIcon, 'stop.svg',   '&#9632;');
 
         this.$ui.append(this.$record);
     };
 
+    OziAudio.prototype.buildSaveButton = function () {
+        this.$save = $('<button>', {
+            type: 'button',
+            class: 'ozi-audio__save',
+            'aria-label': 'Salvar audio',
+            disabled: true
+        });
+
+        oziAudioSetIcon(this.$save, 'save.svg', 'Salvar');
+        this.$ui.append(this.$save);
+    };
+
     OziAudio.prototype.buildRecorderBox = function () {
-        var $meta = $('<div>', {
-            class: 'ozi-audio__meta'
-        });
+        var $meta = $('<div>', { class: 'ozi-audio__meta' });
+        var $time = $('<div>', { class: 'ozi-audio__time' });
 
-        var $time = $('<div>', {
-            class: 'ozi-audio__time'
-        });
-
-        this.$timeCurrent = $('<span>', {
-            class: 'ozi-audio__time-current'
-        }).text('0:00');
-
+        this.$timeCurrent = $('<span>', { class: 'ozi-audio__time-current' }).text('0:00');
         $time.append(this.$timeCurrent);
 
-        this.$status = $('<div>', {
-            class: 'ozi-audio__status'
-        }).text('Pronto');
-
+        this.$status = $('<div>', { class: 'ozi-audio__status' }).text('Pronto');
         $meta.append($time, this.$status);
         this.$box.append($meta);
 
@@ -367,14 +435,7 @@
         }
 
         if (this.saveUrl) {
-            this.$save = $('<button>', {
-                type: 'button',
-                class: 'ozi-audio__save',
-                'aria-label': 'Salvar áudio',
-                disabled: true
-            }).text('Salvar');
-
-            this.$ui.append(this.$save);
+            this.buildSaveButton();
         }
     };
 
@@ -383,12 +444,11 @@
         this.buildShell();
         this.$box = this.appendTitleBox(this.$ui);
         this.buildPlayerControls();
-
         this.bindPlayerEvents();
         this.updateTimeUI(0, 0);
 
         if (!this.url) {
-            console.warn('oziAudio 1.2.0: data-ozi-audio-url é obrigatório no modo player.');
+            console.warn('oziAudio 1.3.0: data-ozi-audio-url obrigatorio no modo player.');
             this.syncPlayerAvailability(false);
             return;
         }
@@ -402,7 +462,6 @@
         this.$box = this.appendTitleBox(this.$ui);
         this.buildRecorderBox();
         this.buildRecorderControls();
-
         this.bindRecorderEvents();
         this.updateRecorderTimeUI(0);
         this.setRecorderStatus('Pronto');
@@ -412,13 +471,9 @@
         this.$root.addClass('ozi-audio-full');
         this.buildShell();
         this.$box = this.appendTitleBox(this.$ui);
-
         this.buildPlayerControls();
 
-        this.$status = $('<div>', {
-            class: 'ozi-audio__status'
-        }).text('Pronto');
-
+        this.$status = $('<div>', { class: 'ozi-audio__status' }).text('Pronto');
         this.$box.find('.ozi-audio__meta').append(this.$status);
 
         if (this.showPreview) {
@@ -439,14 +494,7 @@
         this.buildRecorderControls();
 
         if (this.saveUrl) {
-            this.$save = $('<button>', {
-                type: 'button',
-                class: 'ozi-audio__save',
-                'aria-label': 'Salvar áudio',
-                disabled: true
-            }).text('Salvar');
-
-            this.$ui.append(this.$save);
+            this.buildSaveButton();
         }
 
         this.bindPlayerEvents();
@@ -523,23 +571,16 @@
         if (activePlayerInstance && activePlayerInstance !== this) {
             activePlayerInstance.pause();
         }
-
         activePlayerInstance = this;
     };
 
     OziAudio.prototype.togglePlay = function () {
         if (!this.audio) return;
-
-        if (this.audio.paused) {
-            this.play();
-        } else {
-            this.pause();
-        }
+        if (this.audio.paused) { this.play(); } else { this.pause(); }
     };
 
     OziAudio.prototype.play = function () {
         var self = this;
-
         if (!this.audio) return;
 
         this.pauseOtherPlayerIfNeeded();
@@ -547,10 +588,7 @@
         this.audio.play().then(function () {
             self.setPlayState(true);
             self.startPlayerLoop();
-            self.emit('ozi:audio-play', {
-                mode: self.mode,
-                url: self.audio ? self.audio.src : ''
-            });
+            self.emit('ozi:audio-play', { mode: self.mode, url: self.audio ? self.audio.src : '' });
         }).catch(function (error) {
             console.warn('oziAudio: erro ao reproduzir', error);
         });
@@ -562,18 +600,14 @@
         this.audio.pause();
         this.setPlayState(false);
         this.stopPlayerLoop();
-
-        this.emit('ozi:audio-pause', {
-            mode: this.mode,
-            url: this.audio ? this.audio.src : ''
-        });
+        this.emit('ozi:audio-pause', { mode: this.mode, url: this.audio ? this.audio.src : '' });
     };
 
     OziAudio.prototype.setPlayState = function (isPlaying) {
         if (!this.$play) return;
 
         this.$play.toggleClass('is-pause', !!isPlaying);
-        this.$play.toggleClass('is-play', !isPlaying);
+        this.$play.toggleClass('is-play',  !isPlaying);
         this.$play.attr('aria-label', isPlaying ? 'Pausar' : 'Reproduzir');
     };
 
@@ -584,7 +618,6 @@
 
     OziAudio.prototype.handlePlayerEnded = function () {
         if (!this.audio) return;
-
         this.pause();
         this.audio.currentTime = 0;
         this.updateProgressUI(0);
@@ -593,16 +626,13 @@
 
     OziAudio.prototype.startPlayerLoop = function () {
         var self = this;
-
         this.stopPlayerLoop();
 
         this.playerTimer = setInterval(function () {
             if (!self.audio) return;
-
-            var current = self.audio.currentTime || 0;
-            var duration = self.audio.duration || 0;
+            var current  = self.audio.currentTime || 0;
+            var duration = self.audio.duration    || 0;
             var progress = duration > 0 ? (current / duration) * 100 : 0;
-
             self.updateProgressUI(progress);
             self.updateTimeUI(current, duration);
         }, 250);
@@ -617,28 +647,22 @@
 
     OziAudio.prototype.updateProgressUI = function (percent) {
         if (!this.$progress || !this.$timeline) return;
-
         percent = isNaN(percent) ? 0 : percent;
         this.$progress.css('width', percent + '%');
         this.$timeline.attr('aria-valuenow', Math.round(percent));
     };
 
     OziAudio.prototype.updateTimeUI = function (current, duration) {
-        if (this.$timeCurrent) {
-            this.$timeCurrent.text(this.getTimeCodeFromNum(current));
-        }
-
-        if (this.$timeLength) {
-            this.$timeLength.text(this.getTimeCodeFromNum(duration));
-        }
+        if (this.$timeCurrent) this.$timeCurrent.text(this.getTimeCodeFromNum(current));
+        if (this.$timeLength)  this.$timeLength.text(this.getTimeCodeFromNum(duration));
     };
 
     OziAudio.prototype.seekTo = function (e) {
         if (!this.audio || !this.audio.duration || !this.$timeline) return;
 
-        var width = this.$timeline.outerWidth();
+        var width   = this.$timeline.outerWidth();
         var offsetX = e.pageX - this.$timeline.offset().left;
-        var ratio = Math.max(0, Math.min(1, offsetX / width));
+        var ratio   = Math.max(0, Math.min(1, offsetX / width));
 
         this.audio.currentTime = ratio * this.audio.duration;
         this.updateProgressUI(ratio * 100);
@@ -648,18 +672,17 @@
     OziAudio.prototype.setVolumeFromEvent = function (e) {
         if (!this.audio || !this.$volumeBar) return;
 
-        var width = this.$volumeBar.outerWidth();
+        var width   = this.$volumeBar.outerWidth();
         var offsetX = e.pageX - this.$volumeBar.offset().left;
-        var ratio = Math.max(0, Math.min(1, offsetX / width));
+        var ratio   = Math.max(0, Math.min(1, offsetX / width));
 
         this.audio.volume = ratio;
-        this.audio.muted = false;
+        this.audio.muted  = false;
         this.syncVolumeUI();
     };
 
     OziAudio.prototype.toggleMute = function () {
         if (!this.audio) return;
-
         this.audio.muted = !this.audio.muted;
         this.syncVolumeUI();
     };
@@ -669,9 +692,8 @@
 
         var volume = this.audio.muted ? 0 : this.audio.volume;
         this.$volumeFill.css('width', (volume * 100) + '%');
-
         this.$volumeBtn.toggleClass('is-off', !!this.audio.muted);
-        this.$volumeBtn.toggleClass('is-on', !this.audio.muted);
+        this.$volumeBtn.toggleClass('is-on',  !this.audio.muted);
     };
 
     OziAudio.prototype.toggleSpeed = function () {
@@ -680,29 +702,24 @@
         var current = this.audio.playbackRate || 1;
         var next = 1;
 
-        if (current === 1) next = 1.25;
+        if      (current === 1)    next = 1.25;
         else if (current === 1.25) next = 1.5;
-        else if (current === 1.5) next = 1.75;
+        else if (current === 1.5)  next = 1.75;
         else if (current === 1.75) next = 2;
-        else if (current === 2) next = 0.75;
+        else if (current === 2)    next = 0.75;
+        else                       next = 1;
 
         this.audio.playbackRate = next;
         this.$speed.text(next + 'x');
     };
 
     OziAudio.prototype.toggleRecord = function () {
-        if (this.isRecording) {
-            this.stopRecording();
-            return;
-        }
-
+        if (this.isRecording) { this.stopRecording(); return; }
         this.startRecording();
     };
 
     OziAudio.prototype.getPreferredRecorderMimeType = function () {
-        if (!window.MediaRecorder || typeof MediaRecorder.isTypeSupported !== 'function') {
-            return '';
-        }
+        if (!window.MediaRecorder || typeof MediaRecorder.isTypeSupported !== 'function') return '';
 
         var candidates = [
             'audio/webm;codecs=opus',
@@ -712,9 +729,7 @@
         ];
 
         for (var i = 0; i < candidates.length; i++) {
-            if (MediaRecorder.isTypeSupported(candidates[i])) {
-                return candidates[i];
-            }
+            if (MediaRecorder.isTypeSupported(candidates[i])) return candidates[i];
         }
 
         return '';
@@ -723,49 +738,39 @@
     OziAudio.prototype.startRecording = function () {
         var self = this;
 
-        if (this.audio && !this.audio.paused) {
-            this.pause();
-        }
+        if (this.audio && !this.audio.paused) this.pause();
 
         if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
-            this.setRecorderStatus('Microfone indisponível');
-            this.emit('ozi:audio-record-error', {
-                message: 'getUserMedia indisponível'
-            });
+            this.setRecorderStatus('Microfone indisponivel');
+            this.emit('ozi:audio-record-error', { message: 'getUserMedia indisponivel' });
             return;
         }
 
         if (!window.MediaRecorder) {
-            this.setRecorderStatus('Gravação indisponível');
-            this.emit('ozi:audio-record-error', {
-                message: 'MediaRecorder indisponível'
-            });
+            this.setRecorderStatus('Gravacao indisponivel');
+            this.emit('ozi:audio-record-error', { message: 'MediaRecorder indisponivel' });
             return;
         }
 
         navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
             var mimeType = self.getPreferredRecorderMimeType();
-            var config = mimeType ? { mimeType: mimeType } : {};
+            var config   = mimeType ? { mimeType: mimeType } : {};
 
             self.cleanupRecorderMedia();
-            self.mediaStream = stream;
-            self.recordChunks = [];
-            self.recordStartedAt = Date.now();
-            self.recordDuration = 0;
-            self.recordedBlob = null;
-            self.recordedFile = null;
-            self.recordedMimeType = mimeType || 'audio/webm';
+            self.mediaStream       = stream;
+            self.recordChunks      = [];
+            self.recordStartedAt   = Date.now();
+            self.recordDuration    = 0;
+            self.recordedBlob      = null;
+            self.recordedFile      = null;
+            self.recordedMimeType  = mimeType || 'audio/webm';
 
-            if (self.$save) {
-                self.$save.prop('disabled', true);
-            }
+            if (self.$save) self.$save.prop('disabled', true);
 
             self.mediaRecorder = new MediaRecorder(stream, config);
 
             self.mediaRecorder.addEventListener('dataavailable', function (event) {
-                if (event.data && event.data.size > 0) {
-                    self.recordChunks.push(event.data);
-                }
+                if (event.data && event.data.size > 0) self.recordChunks.push(event.data);
             });
 
             self.mediaRecorder.addEventListener('stop', function () {
@@ -777,12 +782,10 @@
             self.setRecordState(true);
             self.setRecorderStatus('Gravando...');
             self.startRecorderLoop();
+            self.emit('ozi:audio-record-start', { mode: self.mode });
 
-            self.emit('ozi:audio-record-start', {
-                mode: self.mode
-            });
         }).catch(function (error) {
-            self.setRecorderStatus('Permissão negada');
+            self.setRecorderStatus('Permissao negada');
             self.emit('ozi:audio-record-error', {
                 message: error && error.message ? error.message : 'Erro ao acessar microfone'
             });
@@ -802,18 +805,18 @@
         } catch (error) {
             this.setRecorderStatus('Erro ao parar');
             this.emit('ozi:audio-record-error', {
-                message: error && error.message ? error.message : 'Erro ao parar gravação'
+                message: error && error.message ? error.message : 'Erro ao parar gravacao'
             });
             this.cleanupRecorderMedia();
         }
     };
 
     OziAudio.prototype.handleRecorderStop = function () {
-        var mimeType = (this.mediaRecorder && this.mediaRecorder.mimeType) || this.recordedMimeType || 'audio/webm';
-        var duration = (Date.now() - this.recordStartedAt) / 1000;
+        var mimeType  = (this.mediaRecorder && this.mediaRecorder.mimeType) || this.recordedMimeType || 'audio/webm';
+        var duration  = (Date.now() - this.recordStartedAt) / 1000;
         var extension = this.guessExtension(mimeType);
-        var filename = 'gravacao-' + this.uid + '-' + Date.now() + '.' + extension;
-        var blob = new Blob(this.recordChunks, { type: mimeType });
+        var filename  = 'gravacao-' + this.uid + '-' + Date.now() + '.' + extension;
+        var blob      = new Blob(this.recordChunks, { type: mimeType });
         var file;
 
         try {
@@ -823,10 +826,10 @@
             file.name = filename;
         }
 
-        this.recordedBlob = blob;
-        this.recordedFile = file;
+        this.recordedBlob     = blob;
+        this.recordedFile     = file;
         this.recordedMimeType = mimeType;
-        this.recordDuration = Math.max(0, duration);
+        this.recordDuration   = Math.max(0, duration);
 
         if (this.showPreview && this.$preview && this.$previewWrap) {
             this.revokePreviewUrl();
@@ -835,13 +838,9 @@
             this.$previewWrap.prop('hidden', false);
         }
 
-        if (this.mode === 'full') {
-            this.attachRecordedAudioToPlayer(blob);
-        }
+        if (this.mode === 'full') this.attachRecordedAudioToPlayer(blob);
 
-        if (this.$save) {
-            this.$save.prop('disabled', false);
-        }
+        if (this.$save) this.$save.prop('disabled', false);
 
         this.setRecorderStatus('Pronto');
         this.updateRecorderTimeUI(this.recordDuration);
@@ -850,21 +849,19 @@
         this.emit('ozi:audio-recorded', {
             duration: parseFloat(this.recordDuration.toFixed(2)),
             mimeType: mimeType,
-            size: file.size || blob.size || 0,
-            file: file
+            size:     file.size || blob.size || 0,
+            file:     file
         });
     };
 
     OziAudio.prototype.attachRecordedAudioToPlayer = function (blob) {
         if (!blob) return;
-
         var objectUrl = URL.createObjectURL(blob);
         this.setAudioSource(objectUrl, true);
     };
 
     OziAudio.prototype.startRecorderLoop = function () {
         var self = this;
-
         this.stopRecorderLoop();
 
         this.recordTimer = setInterval(function () {
@@ -881,81 +878,56 @@
     };
 
     OziAudio.prototype.updateRecorderTimeUI = function (seconds) {
-        if (this.$timeCurrent) {
-            this.$timeCurrent.text(this.getTimeCodeFromNum(seconds));
-        }
+        if (this.$timeCurrent) this.$timeCurrent.text(this.getTimeCodeFromNum(seconds));
     };
 
     OziAudio.prototype.setRecordState = function (isRecording) {
         if (!this.$record) return;
-
         this.$record.toggleClass('is-recording', !!isRecording);
-        this.$record.toggleClass('is-idle', !isRecording);
-        this.$record.attr('aria-label', isRecording ? 'Parar gravação' : 'Gravar');
+        this.$record.toggleClass('is-idle',      !isRecording);
+        this.$record.attr('aria-label', isRecording ? 'Parar gravacao' : 'Gravar');
     };
 
     OziAudio.prototype.setRecorderStatus = function (text) {
-        if (this.$status) {
-            this.$status.text(String(text || '').trim());
-        }
+        if (this.$status) this.$status.text(String(text || '').trim());
     };
 
     OziAudio.prototype.guessExtension = function (mimeType) {
         var type = String(mimeType || '').toLowerCase();
-
-        if (type.indexOf('ogg') !== -1) return 'ogg';
-        if (type.indexOf('mp4') !== -1) return 'mp4';
+        if (type.indexOf('ogg')  !== -1) return 'ogg';
+        if (type.indexOf('mp4')  !== -1) return 'mp4';
         if (type.indexOf('mpeg') !== -1 || type.indexOf('mp3') !== -1) return 'mp3';
-
         return 'webm';
     };
 
     OziAudio.prototype.saveRecording = function () {
-        var self = this;
+        var self   = this;
         var sender = window.oziLoaddata || window.oziLoadData || (typeof oziLoaddata === 'function' ? oziLoaddata : null);
 
-        if (!this.recordedFile) {
-            this.setRecorderStatus('Sem gravação');
-            return;
-        }
+        if (!this.recordedFile) { this.setRecorderStatus('Sem gravacao'); return; }
+        if (!this.saveUrl)      { this.setRecorderStatus('Sem destino');  return; }
+        if (!sender)            { this.setRecorderStatus('ZLD indisponivel'); return; }
 
-        if (!this.saveUrl) {
-            this.setRecorderStatus('Sem destino');
-            return;
-        }
-
-        if (!sender) {
-            this.setRecorderStatus('ZLD indisponível');
-            return;
-        }
-
-        if (this.$save) {
-            this.$save.prop('disabled', true);
-        }
-
+        if (this.$save) this.$save.prop('disabled', true);
         this.setRecorderStatus('Enviando...');
 
         var payload = {
-            zldUrl: this.saveUrl,
-            zldMode: 'fetch',
+            zldUrl:        this.saveUrl,
+            zldMode:       'fetch',
             zldModeMethod: 'POST',
             zldExpectJson: true,
-            zldApi: true,
-            zldFiles: [
-                {
-                    name: this.saveField,
-                    file: this.recordedFile,
-                    filename: this.recordedFile.name || ('gravacao.' + this.guessExtension(this.recordedMimeType))
-                }
-            ],
-            zldJson: [
-                {
-                    duration: parseFloat(this.recordDuration.toFixed(2)),
-                    mimeType: this.recordedFile.type || this.recordedMimeType || '',
-                    size: this.recordedFile.size || 0,
-                    source: 'oziAudio'
-                }
-            ]
+            zldApi:        true,
+            zldFiles: [{
+                name:     this.saveField,
+                file:     this.recordedFile,
+                filename: this.recordedFile.name || ('gravacao.' + this.guessExtension(this.recordedMimeType))
+            }],
+            zldJson: [{
+                duration: parseFloat(this.recordDuration.toFixed(2)),
+                mimeType: this.recordedFile.type || this.recordedMimeType || '',
+                size:     this.recordedFile.size || 0,
+                source:   'oziAudio'
+            }]
         };
 
         var result = sender(payload, null, this.$save ? this.$save[0] : this.$root[0]);
@@ -966,43 +938,30 @@
 
                 if (ok) {
                     self.setRecorderStatus('Salvo');
-                    self.emit('ozi:audio-saved', {
-                        response: response
-                    });
+                    self.emit('ozi:audio-saved', { response: response });
                     return;
                 }
 
                 self.setRecorderStatus('Erro ao salvar');
-                self.emit('ozi:audio-save-error', {
-                    response: response
-                });
+                self.emit('ozi:audio-save-error', { response: response });
             }).catch(function (error) {
                 self.setRecorderStatus('Erro ao salvar');
-                self.emit('ozi:audio-save-error', {
-                    error: error
-                });
+                self.emit('ozi:audio-save-error', { error: error });
             }).finally(function () {
-                if (self.$save) {
-                    self.$save.prop('disabled', false);
-                }
+                if (self.$save) self.$save.prop('disabled', false);
             });
 
             return;
         }
 
-        if (this.$save) {
-            this.$save.prop('disabled', false);
-        }
+        if (this.$save) this.$save.prop('disabled', false);
     };
 
     OziAudio.prototype.cleanupRecorderMedia = function () {
         if (this.mediaStream) {
-            this.mediaStream.getTracks().forEach(function (track) {
-                track.stop();
-            });
+            this.mediaStream.getTracks().forEach(function (track) { track.stop(); });
             this.mediaStream = null;
         }
-
         this.mediaRecorder = null;
     };
 
@@ -1014,9 +973,7 @@
     };
 
     OziAudio.prototype.getTimeCodeFromNum = function (num) {
-        if (!Number.isFinite(Number(num))) {
-            return '0:00';
-        }
+        if (!Number.isFinite(Number(num))) return '0:00';
 
         var seconds = parseInt(num, 10);
         var minutes = parseInt(seconds / 60, 10);
@@ -1036,9 +993,7 @@
         this.stopRecorderLoop();
 
         if (this.playerObjectUrl) {
-            try {
-                URL.revokeObjectURL(this.playerObjectUrl);
-            } catch (error) {}
+            try { URL.revokeObjectURL(this.playerObjectUrl); } catch (e) {}
             this.playerObjectUrl = '';
         }
 
@@ -1056,30 +1011,43 @@
             .removeClass('ozi-audio ozi-audio-player ozi-audio-recorder ozi-audio-full')
             .empty();
 
-        if (activePlayerInstance === this) {
-            activePlayerInstance = null;
-        }
+        if (activePlayerInstance === this) activePlayerInstance = null;
 
         delete instances[this.uid];
     };
 
+    // ------------------------------------------
+    // API PÚBLICA
+    // ------------------------------------------
+
     window.OziAudio = {
+
+        iconBase: OZI_AUDIO_ICON_BASE,
+
+        setIconBase: function (path) {
+            OZI_AUDIO_ICON_BASE = String(path || '').trim();
+            if (OZI_AUDIO_ICON_BASE && !OZI_AUDIO_ICON_BASE.endsWith('/')) {
+                OZI_AUDIO_ICON_BASE += '/';
+            }
+            // limpa cache para recarregar com novo base
+            oziAudioIconCache   = {};
+            oziAudioIconPending = {};
+        },
+
         init: function (selector) {
             var $elements = selector ? $(selector) : $('[data-ozi-audio]');
-            var $targets = $elements.filter('[data-ozi-audio]').add($elements.find('[data-ozi-audio]'));
+            var $targets  = $elements.filter('[data-ozi-audio]').add($elements.find('[data-ozi-audio]'));
 
             $targets.each(function () {
-                var $el = $(this);
-                var id = String($el.attr('id') || '').trim();
+                var $el      = $(this);
+                var id       = String($el.attr('id') || '').trim();
                 var existing = id ? instances[id] : null;
 
                 if (existing) {
-                    var sameElement = existing.$root && existing.$root[0] === this;
+                    var sameElement   = existing.$root && existing.$root[0] === this;
                     var oldStillInDom = existing.$root && document.contains(existing.$root[0]);
 
-                    if (sameElement && $el.data('ozi-audio-initialized')) {
-                        return;
-                    }
+                    if (sameElement && $el.data('ozi-audio-initialized')) return;
 
                     if (!sameElement && !oldStillInDom) {
                         existing.destroy();
@@ -1112,31 +1080,20 @@
                         }
 
                         var $children = $node.find('[data-ozi-audio]');
-                        if ($children.length) {
-                            window.OziAudio.init($node);
-                        }
+                        if ($children.length) window.OziAudio.init($node);
                     });
                 });
             });
 
-            observer.observe(document.body, {
-                childList: true,
-                subtree: true
-            });
-
+            observer.observe(document.body, { childList: true, subtree: true });
             window.__oziAudioObserver = observer;
         },
 
-        refresh: function (selector) {
-            return this.init(selector);
-        },
+        refresh: function (selector) { return this.init(selector); },
 
         get: function (selectorOrId) {
             if (!selectorOrId) return null;
-
-            if (instances[selectorOrId]) {
-                return instances[selectorOrId];
-            }
+            if (instances[selectorOrId]) return instances[selectorOrId];
 
             var $el = $(selectorOrId).first();
             if (!$el.length) return null;
@@ -1145,45 +1102,17 @@
             return instances[id] || null;
         },
 
-        destroy: function (selectorOrId) {
-            var instance = this.get(selectorOrId);
-            if (!instance) return;
-            instance.destroy();
-        },
-
-        play: function (selectorOrId) {
-            var instance = this.get(selectorOrId);
-            if (!instance) return;
-            instance.play();
-        },
-
-        pause: function (selectorOrId) {
-            var instance = this.get(selectorOrId);
-            if (!instance) return;
-            instance.pause();
-        },
-
-        record: function (selectorOrId) {
-            var instance = this.get(selectorOrId);
-            if (!instance) return;
-            instance.startRecording();
-        },
-
-        stopRecord: function (selectorOrId) {
-            var instance = this.get(selectorOrId);
-            if (!instance) return;
-            instance.stopRecording();
-        },
-
-        save: function (selectorOrId) {
-            var instance = this.get(selectorOrId);
-            if (!instance) return;
-            instance.saveRecording();
-        }
+        destroy:    function (id) { var i = this.get(id); if (i) i.destroy(); },
+        play:       function (id) { var i = this.get(id); if (i) i.play(); },
+        pause:      function (id) { var i = this.get(id); if (i) i.pause(); },
+        record:     function (id) { var i = this.get(id); if (i) i.startRecording(); },
+        stopRecord: function (id) { var i = this.get(id); if (i) i.stopRecording(); },
+        save:       function (id) { var i = this.get(id); if (i) i.saveRecording(); }
     };
 
     $(function () {
         window.OziAudio.init();
         window.OziAudio.observe();
     });
+
 })(jQuery);

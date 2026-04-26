@@ -1,89 +1,173 @@
 # oziAuth
 
-## Identificação
-
+### Identificação
 - **Nome:** `oziAuth`
-- **Versão:** `2.0.0`
-- **Data:** `2026-04-14`
-
-### 🔑 Estrutura da função
-A função `oziAuth` recebe um objeto com os dados:
-- **user** → nome do usuário.
-- **mail** → e-mail de acesso.
-- **password** → senha digitada.
-- **confirm** → confirmação da senha.
-- **userCaracter** → mínimo de caracteres para o nome de usuário (opcional).
-
-### Atributos
-- `data-ozi-auth-mail` → Autentica o e-mail
-- `data-ozi-auth-pass="icon,icon"` → Autentica e campos para colocar dois icons
-- `data-ozi-auth-confirm="icon,icon"` → Confirma  e campos para colocar dois icons
-- `data-ozi-auth-submit` → Botão de autenticação fica ativo/inativo
-- `data-ozi-auth-list-id="ID"` → Gera a lista de check no `id` indicado
-- `data-ozi-auth-dropdown"` → indica que você quer tambem o menu(dropdown)
-
-### ⚙️ O que ela valida
-1. **Usuário**
-    - Verifica se o nome do usuário tem o número mínimo de caracteres.
-
-2. **E-mail**
-    - Checa se o e-mail é válido (formato `nome@dominio.com`).
-    - Garante que a senha não contenha partes do e-mail (prefixo, sufixo ou domínio).
-
-3. **Senha**
-    - Comprimento: entre 8 e 14 caracteres.
-    - Pelo menos uma letra minúscula.
-    - Pelo menos uma letra maiúscula.
-    - Pelo menos um número.
-    - Pelo menos um caractere especial.
-    - Não pode conter espaços ou tabulações.
-    - Não pode começar com letra maiúscula.
-
-4. **Confirmação**
-    - Verifica se o campo `confirm` é igual ao campo `password`.
-
-### 📦 O que ela retorna
-Um objeto com os resultados de cada regra, por exemplo:
-```javascript
-{
-  userValid: true/false,
-  mailValid: true/false,
-  passLength: true/false,
-  passLowercase: true/false,
-  passUppercase: true/false,
-  passNumber: true/false,
-  passSpecial: true/false,
-  passNoSpace: true/false,
-  passNoEmailParts: true/false,
-  passConfirm: true/false,
-  access: true/false // resultado final
-}
-```
-
-### 🚀 Resultado final
-- Se todas as regras forem atendidas, `access = true` → o usuário está autenticado.
-- Se alguma regra falhar, `access = false` → bloqueia o acesso e mostra feedback.
+- **Versão:** `2.2.4`
+- **Data:** `2026-04-25`
 
 ---
 
-Ou seja, a função **oziAuth** é um **motor de autenticação**: ela concentra todas as regras de senha, e-mail e confirmação, e devolve um objeto claro para o front-end aplicar feedback visual e decidir se libera o botão de salvar.
+### Descrição
+`oziAuth` é um plugin de validação de formulários de autenticação. Concentra as regras de senha, e-mail e confirmação em um motor isolado — `oziAuth()` — e aplica feedback visual em tempo real nos campos, lista de regras e botão de envio, orientando o usuário a seguir a ordem correta de preenchimento.
 
-Quer que eu monte um **fluxo visual (diagrama)** mostrando como os dados entram no `oziAuth`, passam pelas validações e resultam no `access` final? Isso pode ajudar a documentar no seu site **oziui.com**.
+---
 
+### [1] ATRIBUTOS
 
-Regras de comportamento
-1. Se tiver só data-ozi-auth-submit
+| Atributo | Descrição |
+|----------|-----------|
+| `data-ozi-auth-mail` | Campo de e-mail — valida formato e bloqueia partes do e-mail na senha |
+| `data-ozi-auth-pass="iconShow,iconHide"` | Campo de senha — ativa toggle show/hide com os ícones informados |
+| `data-ozi-auth-confirm="iconShow,iconHide"` | Campo de confirmação de senha — ativa toggle show/hide |
+| `data-ozi-auth-user` | Campo de usuário — valida comprimento mínimo |
+| `data-ozi-auth-user-caracter` | Mínimo de caracteres para o campo usuário |
+| `data-ozi-auth-submit` | Botão de envio — ativado/desativado conforme validação |
+| `data-ozi-auth-list-id="id"` | ID do container onde a lista de regras será renderizada |
+| `data-ozi-auth-dropdown` | Ativa dropdown de regras nos campos de senha e confirmação |
+| `data-ozi-auth-class="classes"` | Substitui a classe padrão `ozi-auth-btn-toggle` no botão show/hide |
+| `data-ozi-auth-check="iconInvalid,iconValid"` | Ícones customizados para os estados de regra — aplicados na lista, dropdown e botão |
 
-Mostra dropdown por padrão.
+#### Exemplo:
+```html
+<input
+    type="email"
+    name="email"
+    data-ozi-auth-mail
+    class="form-control"
+    placeholder="E-mail">
 
-2. Se tiver data-ozi-auth-list-id
+<input
+    type="password"
+    name="senha"
+    data-ozi-auth-pass="bi bi-eye-slash,bi bi-eye"
+    class="form-control"
+    placeholder="Senha">
 
-Usa a lista naquele container.
+<input
+    type="password"
+    name="confirma"
+    data-ozi-auth-confirm="bi bi-eye-slash,bi bi-eye"
+    class="form-control"
+    placeholder="Confirmar senha">
 
-3. Se tiver data-ozi-auth-dropdown
+<button
+    type="submit"
+    data-ozi-auth-submit
+    data-ozi-auth-list-id="regrasSenha"
+    data-ozi-auth-check="bi bi-circle,bi bi-check2-circle"
+    class="btn btn-secondary"
+    disabled>
+    Salvar
+</button>
 
-Usa dropdown.
+<div id="regrasSenha"></div>
+```
 
-4. Se tiver os dois
+---
 
-Usa lista + dropdown.
+### [2] REGRAS DE COMPORTAMENTO — LISTA E DROPDOWN
+
+| Configuração | Comportamento |
+|-------------|--------------|
+| Só `data-ozi-auth-submit` | Exibe dropdown por padrão |
+| Só `data-ozi-auth-list-id` | Exibe lista no container indicado |
+| Só `data-ozi-auth-dropdown` | Exibe dropdown |
+| `data-ozi-auth-list-id` + `data-ozi-auth-dropdown` | Exibe lista + dropdown simultaneamente |
+
+---
+
+### [3] MOTOR DE VALIDAÇÃO — `oziAuth(data)`
+
+Função pura e isolada. Recebe um objeto com os dados do formulário e retorna o resultado de cada regra.
+
+#### Entrada:
+| Campo | Descrição |
+|-------|-----------|
+| `user` | Nome do usuário |
+| `mail` | E-mail de acesso |
+| `password` | Senha digitada |
+| `confirm` | Confirmação da senha |
+| `userCaracter` | Mínimo de caracteres para o usuário (opcional) |
+
+#### Retorno:
+```js
+{
+    userValid: true/false,       // usuário tem o mínimo de caracteres
+    mailValid: true/false,       // e-mail válido
+    passLength: true/false,      // entre 8 e 14 caracteres
+    passLowercase: true/false,   // mínimo 1 letra minúscula
+    passUppercase: true/false,   // mínimo 1 letra maiúscula
+    passNumber: true/false,      // mínimo 1 número
+    passSpecial: true/false,     // mínimo 1 caractere especial
+    passNoSpace: true/false,     // sem espaços
+    passNoEmailParts: true/false,// senha não contém partes do e-mail
+    passConfirm: true/false,     // senha === confirmação
+    access: true/false           // resultado final — todas as regras atendidas
+}
+```
+
+#### Uso isolado:
+```js
+const result = oziAuth({
+    mail: 'user@email.com',
+    password: 'Senha@123',
+    confirm: 'Senha@123'
+});
+
+if (result.access) {
+    // libera envio
+}
+```
+
+---
+
+### [4] VALIDAÇÕES APLICADAS
+
+**Usuário**
+- Comprimento mínimo definido por `data-ozi-auth-user-caracter`
+
+**E-mail**
+- Formato `nome@dominio.com`
+
+**Senha**
+- Entre 8 e 14 caracteres — badge de contagem em tempo real
+- Mínimo 1 letra minúscula
+- Mínimo 1 letra maiúscula
+- Mínimo 1 número
+- Mínimo 1 caractere especial
+- Sem espaços
+- Não pode conter partes do e-mail (prefixo, domínio ou fragmentos)
+
+**Confirmação**
+- Deve ser idêntica à senha
+
+**UX — ordem de preenchimento**
+- Ao digitar a senha, o campo e-mail é validado automaticamente mesmo sem ter sido tocado — orienta o usuário a preencher na ordem correta: e-mail → senha → confirmação → enviar
+
+---
+
+### [5] BADGE DE CONTAGEM
+
+A regra `passLength` exibe um badge em tempo real junto ao texto da regra:
+
+| Estado | Exibição |
+|--------|----------|
+| Sem digitação | `0/14` |
+| Dentro do limite | `6/14 · faltam 2` |
+| Limite atingido | `8/14` |
+| Limite excedido | `15/14 · excedido` |
+
+---
+
+### [6] API PÚBLICA
+
+```js
+window.oziAuth(data)              // motor de validação isolado
+window.oziAuthInit($scope)        // inicializa em um escopo
+window.oziAuthInitFetched(root)   // reinicializa após render dinâmico
+```
+
+#### Evento manual para conteúdo dinâmico:
+```js
+$(document).trigger('oziAuth:initFetched', [rootElement]);
+```

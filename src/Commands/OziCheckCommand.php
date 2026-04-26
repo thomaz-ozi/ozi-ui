@@ -11,18 +11,18 @@ class OziCheckCommand extends Command
 
     // Mapa de plugins com suas classes/arquivos de verificação
     protected array $plugins = [
-        'oziCore'         => ['version' => 'v0.10.0-alpha', 'asset' => 'plugins/ozi-ui/ozi-core.js'],
-        'oziLoadData'     => ['version' => 'v3.9.4',        'asset' => 'plugins/ozi-ui/ozi-loaddata/js/ozi-loaddata.js'],
-        'oziSelect'       => ['version' => 'v4.3.1',        'asset' => 'plugins/ozi-ui/ozi-select/js/ozi-select.js'],
-        'oziAutocomplete' => ['version' => 'v1.0.0',        'asset' => 'plugins/ozi-ui/ozi-autocomplete/js/ozi-autocomplete.js'],
-        'oziSearch'       => ['version' => 'v1.5',          'asset' => 'plugins/ozi-ui/ozi-search/js/ozi-search.js'],
-        'oziEditor'       => ['version' => 'v1.4.1',        'asset' => 'plugins/ozi-ui/ozi-editor/js/ozi-editor.js'],
-        'oziAudio'        => ['version' => 'v1.2.0',        'asset' => 'plugins/ozi-ui/ozi-audio/js/ozi-audio.js'],
+        'oziCore'         => ['version' => 'v0.18.1-alpha', 'asset' => 'plugins/ozi-ui/ozi-core.js'],
+        'oziLoadData'     => ['version' => 'v3.10.2',        'asset' => 'plugins/ozi-ui/ozi-loaddata/js/ozi-loaddata.js'],
+        'oziSelect'       => ['version' => 'v4.3.2',        'asset' => 'plugins/ozi-ui/ozi-select/js/ozi-select.js'],
+        'oziAutocomplete' => ['version' => 'v2.0.1',        'asset' => 'plugins/ozi-ui/ozi-autocomplete/js/ozi-autocomplete.js'],
+        'oziSearch'       => ['version' => 'v1.5.0',          'asset' => 'plugins/ozi-ui/ozi-search/js/ozi-search.js'],
+        'oziEditor'       => ['version' => 'v1.5.1',        'asset' => 'plugins/ozi-ui/ozi-editor/js/ozi-editor.js'],
+        'oziAudio'        => ['version' => 'v2.6.6',        'asset' => 'plugins/ozi-ui/ozi-audio/js/ozi-audio.js'],
         'oziToggle'       => ['version' => 'v2.3.0',        'asset' => 'plugins/ozi-ui/ozi-addons/js/ozi-toggle.js'],
-        'oziCopy'         => ['version' => 'v2.0.0',        'asset' => 'plugins/ozi-ui/ozi-addons/js/ozi-copy.js'],
+        'oziCopy'         => ['version' => 'v2.3.1',        'asset' => 'plugins/ozi-ui/ozi-addons/js/ozi-copy.js'],
         'oziCheck'        => ['version' => 'v1.0.0',        'asset' => 'plugins/ozi-ui/ozi-addons/js/ozi-check.js'],
-        'oziAuth'         => ['version' => 'v2.0.0',        'asset' => 'plugins/ozi-ui/ozi-addons/js/ozi-auth.js'],
-        'oziAddons'       => ['version' => 'v1.0.0',        'asset' => 'plugins/ozi-ui/ozi-addons/js/ozi-addons.js'],
+        'oziAuth'         => ['version' => 'v2.2.4',        'asset' => 'plugins/ozi-ui/ozi-addons/js/ozi-auth.js'],
+        'oziAddons'       => ['version' => 'v1.2.0',        'asset' => 'plugins/ozi-ui/ozi-addons/js/ozi-addons.js'],
     ];
 
     public function handle(): int

@@ -1,0 +1,14 @@
+.ozi-auth-summary {
+    font-weight: 500;
+}
+
+.ozi-auth-rule-icon,
+.ozi-auth-dd-icon {
+    display: inline-block;
+    width: 16px;
+    text-align: center;
+}
+
+.ozi-auth-list-item {
+    margin-bottom: 4px;
+}

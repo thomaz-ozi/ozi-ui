@@ -34,8 +34,16 @@
     --ozi-audio-padding: 8px 10px;
     --ozi-audio-timeline-height: 15px;
     --ozi-audio-volume-height: 7px;
+
+    --ozi-audio-icon-play-size: 20px;
+    --ozi-audio-icon-volume-size: 18px;
+    --ozi-audio-icon-record-size: 16px;
+    --ozi-audio-icon-save-size: 14px;
 }
 
+/* ------------------------------------------
+   BASE
+------------------------------------------ */
 .ozi-audio {
     min-width: var(--ozi-audio-width-min);
     max-width: var(--ozi-audio-width-max);
@@ -54,6 +62,44 @@
     box-sizing: border-box;
 }
 
+/* ------------------------------------------
+   SVG ÍCONES
+------------------------------------------ */
+.ozi-icon-svg {
+    display: inline-block;
+    fill: currentColor;
+    vertical-align: middle;
+    pointer-events: none;
+    flex-shrink: 0;
+}
+
+.ozi-audio__play-icon .ozi-icon-svg,
+.ozi-audio__pause-icon .ozi-icon-svg {
+    width: var(--ozi-audio-icon-play-size);
+    height: var(--ozi-audio-icon-play-size);
+}
+
+.ozi-audio__volume-on .ozi-icon-svg,
+.ozi-audio__volume-off .ozi-icon-svg {
+    width: var(--ozi-audio-icon-volume-size);
+    height: var(--ozi-audio-icon-volume-size);
+}
+
+.ozi-audio__record-idle-icon .ozi-icon-svg,
+.ozi-audio__record-stop-icon .ozi-icon-svg {
+    width: var(--ozi-audio-icon-record-size);
+    height: var(--ozi-audio-icon-record-size);
+}
+
+.ozi-audio__save .ozi-icon-svg {
+    width: var(--ozi-audio-icon-save-size);
+    height: var(--ozi-audio-icon-save-size);
+    margin-right: 4px;
+}
+
+/* ------------------------------------------
+   LAYOUT
+------------------------------------------ */
 .ozi-audio__main {
     display: flex;
     align-items: flex-start;
@@ -72,6 +118,9 @@
     word-break: break-word;
 }
 
+/* ------------------------------------------
+   BOTÕES BASE
+------------------------------------------ */
 .ozi-audio__play,
 .ozi-audio__record,
 .ozi-audio__save,
@@ -81,6 +130,9 @@
     outline: none;
     cursor: pointer;
     font-family: inherit;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .ozi-audio__play:disabled,
@@ -92,14 +144,15 @@
     cursor: not-allowed;
 }
 
+/* ------------------------------------------
+   PLAY
+------------------------------------------ */
 .ozi-audio__play {
     width: 30px;
     min-width: 30px;
     height: 30px;
     background: transparent;
     color: var(--ozi-audio-color);
-    font-size: 24px;
-    line-height: 1;
     padding: 0;
 }
 
@@ -116,9 +169,12 @@
 }
 
 .ozi-audio__play.is-pause .ozi-audio__pause-icon {
-    display: inline;
+    display: inline-flex;
 }
 
+/* ------------------------------------------
+   TIMELINE
+------------------------------------------ */
 .ozi-audio__timeline {
     height: var(--ozi-audio-timeline-height);
     border-radius: 20px;
@@ -142,6 +198,9 @@
     transition: width 0.25s ease;
 }
 
+/* ------------------------------------------
+   META / TIME
+------------------------------------------ */
 .ozi-audio__meta {
     display: flex;
     align-items: center;
@@ -170,6 +229,9 @@
     white-space: nowrap;
 }
 
+/* ------------------------------------------
+   VOLUME
+------------------------------------------ */
 .ozi-audio__volume {
     display: flex;
     align-items: center;
@@ -182,10 +244,10 @@
 .ozi-audio__volume-btn {
     background: transparent;
     color: var(--ozi-audio-color);
-    font-size: 18px;
-    line-height: 1;
     padding: 0;
     min-width: 20px;
+    width: 20px;
+    height: 20px;
 }
 
 .ozi-audio__volume-btn:hover:not(:disabled) {
@@ -201,7 +263,7 @@
 }
 
 .ozi-audio__volume-btn.is-off .ozi-audio__volume-off {
-    display: inline;
+    display: inline-flex;
     color: var(--ozi-audio-color-secondary);
 }
 
@@ -227,6 +289,9 @@
     transition: width 0.25s ease;
 }
 
+/* ------------------------------------------
+   SPEED
+------------------------------------------ */
 .ozi-audio__speed {
     width: 40px;
     min-width: 40px;
@@ -245,6 +310,9 @@
     background: var(--ozi-audio-speed-bg-hover);
 }
 
+/* ------------------------------------------
+   RECORD
+------------------------------------------ */
 .ozi-audio__record {
     width: 40px;
     min-width: 40px;
@@ -272,9 +340,12 @@
 }
 
 .ozi-audio__record.is-recording .ozi-audio__record-stop-icon {
-    display: inline;
+    display: inline-flex;
 }
 
+/* ------------------------------------------
+   SAVE
+------------------------------------------ */
 .ozi-audio__save {
     min-width: 64px;
     height: 28px;
@@ -286,12 +357,16 @@
     font-weight: 700;
     line-height: 1;
     margin-top: 4px;
+    gap: 4px;
 }
 
 .ozi-audio__save:hover:not(:disabled) {
     background: var(--ozi-audio-save-bg-hover);
 }
 
+/* ------------------------------------------
+   PREVIEW
+------------------------------------------ */
 .ozi-audio__preview-wrap {
     margin-top: 8px;
 }
@@ -302,6 +377,9 @@
     display: block;
 }
 
+/* ------------------------------------------
+   MODOS
+------------------------------------------ */
 .ozi-audio-player .ozi-audio__main,
 .ozi-audio-full .ozi-audio__main {
     align-items: flex-start;
@@ -316,6 +394,9 @@
     text-align: right;
 }
 
+/* ------------------------------------------
+   RESPONSIVO
+------------------------------------------ */
 @media (max-width: 480px) {
     .ozi-audio {
         min-width: 100%;

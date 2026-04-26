@@ -55,3 +55,5 @@
 .ozi-autocomplete-input {
     autocomplete: off;
 }
+.ozi-autocomplete-wrap { position: relative; }
+.ozi-autocomplete-input.is-loading { /* indicador opcional */ }

@@ -1,14 +1,252 @@
-.ozi-auth-summary {
-    font-weight: 500;
+:root {
+    --ozi-auth-border-color: #ced4da;
+    --ozi-auth-focus-color: #86b7fe;
+    --ozi-auth-focus-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.15);
+    --ozi-auth-radius: 0.375rem;
+
+    --ozi-auth-toggle-bg: #fff;
+    --ozi-auth-toggle-border: #ced4da;
+    --ozi-auth-toggle-color: #495057;
+    --ozi-auth-toggle-hover-bg: #f8f9fa;
+    --ozi-auth-toggle-hover-border: #adb5bd;
+
+    --ozi-auth-dropdown-bg: #fff;
+    --ozi-auth-dropdown-border: #dee2e6;
+    --ozi-auth-dropdown-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+    --ozi-auth-dropdown-z: 1055;
+    --ozi-auth-dropdown-min-width: 100%;
+
+    --ozi-auth-alert-bg: #fff;
+    --ozi-auth-alert-border: #dee2e6;
+    --ozi-auth-alert-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+    --ozi-auth-alert-radius: 0.375rem;
+    --ozi-auth-alert-title-color: #495057;
+
+    --ozi-auth-valid-color: #198754;
+    --ozi-auth-invalid-color: #dc3545;
+    --ozi-auth-muted-opacity: 0.7;
+
+    --ozi-auth-icon-width: 16px;
+    --ozi-auth-rule-gap: 6px;
+
+    /* ícones padrão via content — substituídos quando data-ozi-auth-check presente */
+    --ozi-auth-icon-invalid-content: '•';
+    --ozi-auth-icon-valid-content: '✓';
+
+    --ozi-auth-badge-bg: #eee;
+    --ozi-auth-badge-color: #555;
 }
 
-.ozi-auth-rule-icon,
+/* ------------------------------------------
+   INPUT GROUP
+------------------------------------------ */
+.ozi-auth-input-group {
+    display: flex;
+    align-items: stretch;
+    width: 100%;
+    position: relative;
+}
+
+.ozi-auth-input-group input {
+    flex: 1 1 auto;
+    min-width: 0;
+    border-right: 0;
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+.ozi-auth-input-group input:focus {
+    z-index: 3;
+}
+
+/* ------------------------------------------
+   BOTÃO TOGGLE
+------------------------------------------ */
+.ozi-auth-btn-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 0.75rem;
+    background-color: var(--ozi-auth-toggle-bg);
+    border: 1px solid var(--ozi-auth-toggle-border);
+    border-left: 0;
+    border-radius: 0 var(--ozi-auth-radius) var(--ozi-auth-radius) 0;
+    color: var(--ozi-auth-toggle-color);
+    cursor: pointer;
+    line-height: 1;
+    transition: background-color 0.15s ease-in-out, border-color 0.15s ease-in-out;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.ozi-auth-btn-toggle:hover {
+    background-color: var(--ozi-auth-toggle-hover-bg);
+    border-color: var(--ozi-auth-toggle-hover-border);
+}
+
+.ozi-auth-btn-toggle:focus {
+    outline: 0;
+    box-shadow: var(--ozi-auth-focus-shadow);
+    border-color: var(--ozi-auth-focus-color);
+    z-index: 3;
+}
+
+/* ------------------------------------------
+   DROPDOWN WRAP + MENU
+------------------------------------------ */
+.ozi-auth-dropdown-wrap {
+    position: relative;
+    width: 100%;
+}
+
+.ozi-auth-dropdown-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    min-width: var(--ozi-auth-dropdown-min-width);
+    z-index: var(--ozi-auth-dropdown-z);
+    background-color: var(--ozi-auth-dropdown-bg);
+    border: 1px solid var(--ozi-auth-dropdown-border);
+    border-radius: var(--ozi-auth-radius);
+    box-shadow: var(--ozi-auth-dropdown-shadow);
+    padding: 8px;
+}
+
+.ozi-auth-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: var(--ozi-auth-rule-gap);
+    padding: 3px 4px;
+    font-size: 0.875rem;
+    line-height: 1.4;
+    border-radius: 0.25rem;
+}
+
+.ozi-auth-dropdown-item--valid {
+    color: var(--ozi-auth-valid-color);
+}
+
+.ozi-auth-dropdown-item--invalid {
+    color: var(--ozi-auth-invalid-color);
+    opacity: var(--ozi-auth-muted-opacity);
+}
+
 .ozi-auth-dd-icon {
-    display: inline-block;
-    width: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--ozi-auth-icon-width);
+    flex-shrink: 0;
     text-align: center;
 }
 
+.ozi-auth-dd-text {
+    flex: 1;
+}
+
+/* ------------------------------------------
+   ÍCONES PADRÃO (sem data-ozi-auth-check)
+------------------------------------------ */
+.ozi-auth-icon-invalid::before {
+    content: var(--ozi-auth-icon-invalid-content);
+}
+
+.ozi-auth-icon-valid::before {
+    content: var(--ozi-auth-icon-valid-content);
+}
+
+
+/* ------------------------------------------
+   ALERT / LIST BOX — FLUTUANTE
+------------------------------------------ */
+
+
+.ozi-auth-alert {
+    background-color: var(--ozi-auth-alert-bg);
+    border: 1px solid var(--ozi-auth-alert-border);
+    border-radius: var(--ozi-auth-alert-radius);
+    box-shadow: var(--ozi-auth-alert-shadow);
+    padding: 12px 14px;
+}
+
+.ozi-auth-alert-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--ozi-auth-alert-title-color);
+    margin-bottom: 8px;
+}
+
+.ozi-auth-list-rules {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
 .ozi-auth-list-item {
-    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: var(--ozi-auth-rule-gap);
+    font-size: 0.875rem;
+    line-height: 1.4;
+}
+
+.ozi-auth-list-item--valid {
+    color: var(--ozi-auth-valid-color);
+}
+
+.ozi-auth-list-item--invalid {
+    color: var(--ozi-auth-invalid-color);
+    opacity: var(--ozi-auth-muted-opacity);
+}
+
+.ozi-auth-rule-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--ozi-auth-icon-width);
+    flex-shrink: 0;
+    text-align: center;
+}
+
+.ozi-auth-rule-text {
+    flex: 1;
+}
+
+/* ------------------------------------------
+   SUMMARY
+------------------------------------------ */
+.ozi-auth-summary {
+    font-size: 0.8rem;
+    font-weight: 500;
+    margin-top: 8px;
+}
+
+.ozi-auth-summary--valid {
+    color: var(--ozi-auth-valid-color);
+}
+
+.ozi-auth-summary--invalid {
+    color: var(--ozi-auth-invalid-color);
+}
+
+/* ------------------------------------------
+   ÍCONE NO BOTÃO SUBMIT
+------------------------------------------ */
+.ozi-auth-btn-check-icon {
+    margin-right: 6px;
+    line-height: 1;
+}
+.ozi-badge-count {
+    display: inline-block;
+    background: var(--ozi-auth-badge-bg, #eee);
+    color: var(--ozi-auth-badge-color, #555);
+    padding: 1px 7px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.6;
+    vertical-align: middle;
+    margin-left: 4px;
+    font-variant-numeric: tabular-nums;
 }
