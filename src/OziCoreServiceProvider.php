@@ -9,10 +9,12 @@ class OziCoreServiceProvider extends ServiceProvider
 {
     public function boot(): void
     {
+        // Alterado para a tag 'ozi-ui' conforme sua preferência
         $this->publishes([
             __DIR__ . '/../public' => public_path('plugins/ozi-ui'),
-        ], 'ozi-ui-assets');
+        ], 'ozi-ui');
 
+        // Mantendo as diretivas Blade
         Blade::directive('oziStyles', function (string $expression) {
             $expr = empty(trim($expression)) ? '[]' : $expression;
             return "<?php echo app(\OziUI\Core\OziAssets::class)->styles({$expr}); ?>";
