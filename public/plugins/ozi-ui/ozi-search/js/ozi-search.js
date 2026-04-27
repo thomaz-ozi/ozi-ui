@@ -1,55 +1,10 @@
-/**
- * ------------------------------------------
- * oziSearch
- * ------------------------------------------
- * Ver: (1.5)
- * 2026-04-08
- * ------------------------------------------
- * @description
- * Realiza busca textual em listas, grupos e menus hierárquicos,
- * com suporte a filtro, múltiplas palavras e highlight.
- *
- * RECURSOS
- * busca simples         → localiza termos em itens visíveis
- * busca por palavras    → permite procurar múltiplos termos no mesmo campo
- * highlight             → destaca visualmente os termos encontrados
- * filtro opcional       → permite apenas destacar sem ocultar itens
- * grupos dinâmicos      → oculta grupos pais sem itens visíveis
- * menu hierárquico      → expande e recolhe blocos de menu conforme os resultados
- *
- * ATRIBUTOS
- * data-ozi-search           → define os itens onde a busca será aplicada
- * data-ozi-search-group     → define os grupos pais que devem ser ocultados quando não houver itens visíveis
- * data-ozi-search-menu      → define a estrutura de menu hierárquico e a classe de colapso
- *                             ex: "pesqMenu, hidden" | "pesqMenu, mm-collapse"
- * data-ozi-search-min       → define a quantidade mínima de caracteres antes de iniciar a busca
- * data-ozi-search-words     → ativa a busca por múltiplas palavras
- * data-ozi-search-highlight → ativa o highlight padrão ou recebe classes CSS para personalizar o destaque
- *                             ex: "bg-warning text-dark fw-bold"
- * data-ozi-search-no-filter → destaca os termos encontrados sem ocultar os itens
- *
- * COMPORTAMENTO
- * busca vazia           → restaura o estado original dos itens, grupos e menus
- * busca com filtro      → oculta itens não encontrados e reorganiza grupos e menus
- * busca sem filtro      → mantém todos os itens visíveis e aplica somente highlight
- * highlight padrão      → aplica classes visuais padrão quando ativado com true
- * highlight customizado → aplica as classes CSS informadas no atributo
- *
- * @example
- * <input
- *     type="text"
- *     class="form-control"
- *     data-ozi-search=".item-menu"
- *     data-ozi-search-group=".grupo-menu"
- *     data-ozi-search-menu="pesqMenu, mm-collapse"
- *     data-ozi-search-min="1"
- *     data-ozi-search-words="true"
- *     data-ozi-search-highlight="bg-dark text-white"
- * />
- */
-
-
 (function ($) {
+    'use strict';
+
+    // ------------------------------------------
+    // HELPERS
+    // ------------------------------------------
+
     function oziSearchIsTrue(value) {
         const v = String(value ?? '').trim().toLowerCase();
         return value === true || value === 1 || v === 'true' || v === '1';
@@ -80,11 +35,9 @@
         rawSelector = String(rawSelector || '').trim();
         if (!rawSelector) return $();
 
-        // 1) tenta exatamente como veio
         let $elements = $(rawSelector);
         if ($elements.length) return $elements;
 
-        // 2) se for um nome simples, tenta como classe
         const looksLikeSimpleName = !/[.#\[\]:\s,>+~]/.test(rawSelector);
         if (looksLikeSimpleName) {
             $elements = $('.' + rawSelector);
@@ -101,41 +54,6 @@
         return oziSearchResolveElements(oziSearchGetAttr($input, 'data-ozi-search-group'));
     }
 
-    function oziSearchParseMenuConfig(rawValue) {
-        rawValue = String(rawValue || '').trim();
-        if (!rawValue) return null;
-
-        const parts = rawValue
-            .split(',')
-            .map(part => String(part).trim())
-            .filter(Boolean);
-
-        if (!parts.length) return null;
-
-        let menuSelector = parts[0];
-
-        // tenta puro primeiro; se for simples, depois classe
-        if (!/[.#\[\]:\s>+~]/.test(menuSelector)) {
-            const $test = $(menuSelector);
-            if (!$test.length) {
-                menuSelector = '.' + menuSelector;
-            }
-        }
-
-        let collapseClass = parts[1] || 'hidden';
-        collapseClass = collapseClass.replace(/^\./, '').trim();
-
-        return {
-            menuSelector,
-            collapseClass
-        };
-    }
-
-    function oziSearchResolveMenuBlocks($input, menuConfig) {
-        if (!menuConfig) return $();
-        return oziSearchResolveElements(menuConfig.menuSelector);
-    }
-
     function oziSearchBuildRegex(pattern, globalSearch) {
         return new RegExp(`(${pattern})`, globalSearch ? 'gi' : 'i');
     }
@@ -143,7 +61,6 @@
     function oziSearchStoreOriginalHtml($items) {
         $items.each(function () {
             const $item = $(this);
-
             if ($item.data('__oziSearchOriginalHtml') === undefined) {
                 $item.data('__oziSearchOriginalHtml', $item.html());
             }
@@ -154,7 +71,6 @@
         $items.each(function () {
             const $item = $(this);
             const originalHtml = $item.data('__oziSearchOriginalHtml');
-
             if (originalHtml !== undefined) {
                 $item.html(originalHtml);
             }
@@ -164,9 +80,7 @@
     function oziSearchStoreOriginalVisibility($elements) {
         $elements.each(function () {
             const $el = $(this);
-
             if ($el.data('__oziSearchOriginalVisible') !== undefined) return;
-
             $el.data('__oziSearchOriginalVisible', $el.is(':visible') ? '1' : '0');
             $el.data('__oziSearchOriginalInlineDisplay', this.style.display || '');
         });
@@ -177,7 +91,6 @@
             const $el = $(this);
             const originalVisible = $el.data('__oziSearchOriginalVisible') !== '0';
             const originalInlineDisplay = $el.data('__oziSearchOriginalInlineDisplay');
-
             this.style.display = originalVisible
                 ? (originalInlineDisplay || '')
                 : 'none';
@@ -194,21 +107,16 @@
             {
                 acceptNode(node) {
                     const parent = node.parentElement;
-
                     if (!parent) return NodeFilter.FILTER_REJECT;
-
                     if (['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEXTAREA'].includes(parent.tagName)) {
                         return NodeFilter.FILTER_REJECT;
                     }
-
                     if (parent.hasAttribute('__oziSearchMark')) {
                         return NodeFilter.FILTER_REJECT;
                     }
-
                     if (!node.nodeValue || !node.nodeValue.trim()) {
                         return NodeFilter.FILTER_REJECT;
                     }
-
                     return NodeFilter.FILTER_ACCEPT;
                 }
             }
@@ -223,10 +131,8 @@
 
         nodes.forEach(textNode => {
             const text = textNode.nodeValue;
-
             regex.lastIndex = 0;
             if (!regex.test(text)) return;
-
             regex.lastIndex = 0;
 
             const highlightedHtml = text.replace(
@@ -255,48 +161,6 @@
             .join('|');
     }
 
-    function oziSearchStoreMenuState($menuBlocks, menuConfig) {
-        if (!$menuBlocks.length || !menuConfig) return;
-
-        const $allMenuBlocks = $menuBlocks
-            .filter(menuConfig.menuSelector)
-            .add($menuBlocks.find(menuConfig.menuSelector));
-
-        oziSearchStoreOriginalVisibility($allMenuBlocks);
-
-        const collapseSelector = '.' + menuConfig.collapseClass;
-
-        $allMenuBlocks.find(collapseSelector).each(function () {
-            const $el = $(this);
-
-            if ($el.data('__oziSearchOriginalCollapsed') !== undefined) return;
-            $el.data('__oziSearchOriginalCollapsed', '1');
-        });
-    }
-
-    function oziSearchRestoreMenu($menuBlocks, menuConfig) {
-        if (!$menuBlocks.length || !menuConfig) return;
-
-        const $allMenuBlocks = $menuBlocks
-            .filter(menuConfig.menuSelector)
-            .add($menuBlocks.find(menuConfig.menuSelector));
-
-        oziSearchRestoreVisibility($allMenuBlocks);
-
-        $allMenuBlocks.find('*').each(function () {
-            const $el = $(this);
-            const originalCollapsed = $el.data('__oziSearchOriginalCollapsed');
-
-            if (originalCollapsed === undefined) return;
-
-            if (originalCollapsed === '1') {
-                $el.addClass(menuConfig.collapseClass);
-            } else {
-                $el.removeClass(menuConfig.collapseClass);
-            }
-        });
-    }
-
     function oziSearchUpdateGroups($groups, $items) {
         if (!$groups.length || !$items.length) return;
 
@@ -316,75 +180,223 @@
         });
     }
 
-    function oziSearchUpdateMenu($menuBlocks, $items, menuConfig) {
-        if (!$menuBlocks.length || !$items.length || !menuConfig) return;
+    // ------------------------------------------
+    // PAGINAÇÃO
+    // ------------------------------------------
 
-        const $allMenuBlocks = $menuBlocks
-            .filter(menuConfig.menuSelector)
-            .add($menuBlocks.find(menuConfig.menuSelector));
+    function oziSearchParsePaginationSize(raw) {
+        const parsed = parseInt(String(raw || '').trim(), 10);
+        return isNaN(parsed) || parsed < 1 ? 10 : parsed;
+    }
 
-        $allMenuBlocks.find('*').each(function () {
-            const $el = $(this);
-            const originalCollapsed = $el.data('__oziSearchOriginalCollapsed');
+    function oziSearchGetPaginationState($input) {
+        return $input.data('__oziSearchPagination') || null;
+    }
 
-            if (originalCollapsed === undefined) return;
+    function oziSearchSetPaginationState($input, state) {
+        $input.data('__oziSearchPagination', state);
+    }
 
-            if (originalCollapsed === '1') {
-                $el.addClass(menuConfig.collapseClass);
-            } else {
-                $el.removeClass(menuConfig.collapseClass);
-            }
+    function oziSearchBuildPaginationNav(totalPages, currentPage, $input) {
+        const $nav = $('<nav>', {
+            class: 'ozi-search-pagination',
+            'aria-label': 'Paginação'
         });
 
-        const orderedBlocks = $(
-            $allMenuBlocks.get().sort(function (a, b) {
-                return $(b).parents(menuConfig.menuSelector).length - $(a).parents(menuConfig.menuSelector).length;
-            })
+        const $ul = $('<ul>', { class: 'ozi-search-pagination__list' });
+
+        // botão anterior
+        const $prev = $('<li>', {
+            class: 'ozi-search-pagination__item' + (currentPage === 1 ? ' is-disabled' : '')
+        }).append(
+            $('<button>', {
+                type: 'button',
+                class: 'ozi-search-pagination__btn',
+                'data-ozi-page': currentPage - 1,
+                'aria-label': 'Página anterior',
+                disabled: currentPage === 1
+            }).html('&#8249;')
         );
 
-        orderedBlocks.each(function () {
-            const $block = $(this);
+        $ul.append($prev);
 
-            if ($block.data('__oziSearchOriginalVisible') === '0') {
-                $block.hide();
+        // páginas com reticências
+        const pages = oziSearchBuildPageWindows(totalPages, currentPage);
+
+        pages.forEach(page => {
+            if (page === '...') {
+                $ul.append(
+                    $('<li>', { class: 'ozi-search-pagination__item is-ellipsis' })
+                        .append($('<span>', { class: 'ozi-search-pagination__ellipsis' }).text('...'))
+                );
                 return;
             }
 
-            const hasVisibleItems = $items.filter(function () {
-                return $.contains($block[0], this) && $(this).is(':visible');
-            }).length > 0;
+            const isCurrent = page === currentPage;
 
-            $block.toggle(hasVisibleItems);
+            $ul.append(
+                $('<li>', {
+                    class: 'ozi-search-pagination__item' + (isCurrent ? ' is-active' : '')
+                }).append(
+                    $('<button>', {
+                        type: 'button',
+                        class: 'ozi-search-pagination__btn' + (isCurrent ? ' is-active' : ''),
+                        'data-ozi-page': page,
+                        'aria-label': 'Página ' + page,
+                        'aria-current': isCurrent ? 'page' : undefined
+                    }).text(page)
+                )
+            );
         });
 
-        const collapseSelector = '.' + menuConfig.collapseClass;
+        // botão próximo
+        const $next = $('<li>', {
+            class: 'ozi-search-pagination__item' + (currentPage === totalPages ? ' is-disabled' : '')
+        }).append(
+            $('<button>', {
+                type: 'button',
+                class: 'ozi-search-pagination__btn',
+                'data-ozi-page': currentPage + 1,
+                'aria-label': 'Próxima página',
+                disabled: currentPage === totalPages
+            }).html('&#8250;')
+        );
 
-        $items.filter(':visible').each(function () {
-            const $item = $(this);
+        $ul.append($next);
+        $nav.append($ul);
 
-            $item.parents(menuConfig.menuSelector).each(function () {
-                const $block = $(this);
-
-                if ($block.data('__oziSearchOriginalVisible') !== '0') {
-                    $block.show();
-                }
-            });
-
-            $item.parents(collapseSelector).each(function () {
-                $(this).removeClass(menuConfig.collapseClass).show();
-            });
+        // bind de clique
+        $nav.on('click', '[data-ozi-page]', function () {
+            const page = Number($(this).attr('data-ozi-page'));
+            if (!page || page < 1 || page > totalPages) return;
+            oziSearchGoToPage($input, page);
         });
+
+        return $nav;
     }
+
+    function oziSearchBuildPageWindows(totalPages, currentPage) {
+        if (totalPages <= 7) {
+            return Array.from({ length: totalPages }, (_, i) => i + 1);
+        }
+
+        const pages = [];
+        const delta = 1; // páginas ao redor da atual
+
+        const left  = Math.max(2, currentPage - delta);
+        const right = Math.min(totalPages - 1, currentPage + delta);
+
+        pages.push(1);
+
+        if (left > 2) pages.push('...');
+
+        for (let i = left; i <= right; i++) {
+            pages.push(i);
+        }
+
+        if (right < totalPages - 1) pages.push('...');
+
+        pages.push(totalPages);
+
+        return pages;
+    }
+
+    function oziSearchRenderPagination($input, $visibleItems, pageSize, currentPage) {
+        const state = oziSearchGetPaginationState($input);
+        if (!state) return;
+
+        const $container = state.$container;
+        const totalItems = $visibleItems.length;
+        const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+
+        // clamp página
+        if (currentPage > totalPages) currentPage = totalPages;
+        if (currentPage < 1) currentPage = 1;
+
+        // atualiza estado
+        state.currentPage = currentPage;
+        state.totalPages  = totalPages;
+        oziSearchSetPaginationState($input, state);
+
+        // mostra/oculta itens da página
+        $visibleItems.each(function (index) {
+            const start = (currentPage - 1) * pageSize;
+            const end   = start + pageSize;
+            $(this).toggle(index >= start && index < end);
+        });
+
+        // remove nav anterior e injeta novo
+        $container.find('.ozi-search-pagination').remove();
+
+        if (totalPages > 1) {
+            $container.append(
+                oziSearchBuildPaginationNav(totalPages, currentPage, $input)
+            );
+        }
+    }
+
+    function oziSearchGoToPage($input, page) {
+        const state = oziSearchGetPaginationState($input);
+        if (!state) return;
+
+        oziSearchRenderPagination($input, state.$currentItems, state.pageSize, page);
+    }
+
+    function oziSearchInitPagination($input, $allItems) {
+        const paginationRaw = oziSearchGetAttr($input, 'data-ozi-search-pagination');
+        if (paginationRaw === undefined) return false;
+
+        const pageSize    = oziSearchParsePaginationSize(paginationRaw);
+        const containerId = String(oziSearchGetAttr($input, 'data-ozi-search-pagination-id') || '').trim();
+
+        if (!containerId) {
+            console.warn('oziSearch| data-ozi-search-pagination-id é obrigatório com paginação.');
+            return false;
+        }
+
+        const $container = $('#' + containerId);
+        if (!$container.length) {
+            console.warn('oziSearch| container não encontrado:', containerId);
+            return false;
+        }
+
+        const state = {
+            pageSize,
+            currentPage:  1,
+            totalPages:   1,
+            $container,
+            $currentItems: $allItems
+        };
+
+        oziSearchSetPaginationState($input, state);
+        oziSearchRenderPagination($input, $allItems, pageSize, 1);
+
+        return true;
+    }
+
+    function oziSearchUpdatePagination($input, $visibleItems) {
+        const state = oziSearchGetPaginationState($input);
+        if (!state) return false;
+
+        state.$currentItems = $visibleItems;
+        oziSearchSetPaginationState($input, state);
+        oziSearchRenderPagination($input, $visibleItems, state.pageSize, 1);
+
+        return true;
+    }
+
+    // ------------------------------------------
+    // EVENTO PRINCIPAL
+    // ------------------------------------------
 
     $(document).on('input', '[data-ozi-search]', function () {
         const $input = $(this);
 
         const minLengthRaw = oziSearchGetAttr($input, 'data-ozi-search-min');
-        const minLength = Number.isNaN(parseInt(minLengthRaw, 10))
+        const minLength    = Number.isNaN(parseInt(minLengthRaw, 10))
             ? 0
             : parseInt(minLengthRaw, 10);
 
-        // compatibilidade nova + antiga
         const words = oziSearchIsTrue(
             oziSearchGetFirstAttr($input, [
                 'data-ozi-search-words',
@@ -396,65 +408,67 @@
             oziSearchGetAttr($input, 'data-ozi-search-no-filter')
         );
 
-        const highlight = oziSearchGetAttr($input, 'data-ozi-search-highlight');
-
-        const highlightEnabled =
-            highlight !== undefined &&
-            !oziSearchIsFalse(highlight);
-
-        const highlightClass =
+        const highlight        = oziSearchGetAttr($input, 'data-ozi-search-highlight');
+        const highlightEnabled = highlight !== undefined && !oziSearchIsFalse(highlight);
+        const highlightClass   =
             highlight === undefined ||
-            highlight === '' ||
+            highlight === ''        ||
             oziSearchIsTrue(highlight)
-                ? 'bg-dark text-white'
+                ? 'ozi-search-highlight'
                 : String(highlight).trim();
 
-        const menuConfig = oziSearchParseMenuConfig(
-            oziSearchGetAttr($input, 'data-ozi-search-menu')
-        );
+        const hasPagination = oziSearchGetAttr($input, 'data-ozi-search-pagination') !== undefined;
 
-        const $items = oziSearchResolveItems($input);
+        const $items  = oziSearchResolveItems($input);
         const $groups = oziSearchResolveGroups($input);
-        const $menuBlocks = oziSearchResolveMenuBlocks($input, menuConfig);
 
         if (!$items.length) return;
 
+        // init paginação na primeira execução
+        if (hasPagination && !oziSearchGetPaginationState($input)) {
+            oziSearchInitPagination($input, $items);
+        }
+
         oziSearchStoreOriginalHtml($items);
         oziSearchClearHighlights($items);
-
         oziSearchStoreOriginalVisibility($items);
         oziSearchStoreOriginalVisibility($groups);
-        oziSearchStoreMenuState($menuBlocks, menuConfig);
 
         const value = String($input.val() || '').trim();
 
+        // busca vazia — restaura
         if (value === '' || value.length < minLength) {
             oziSearchRestoreVisibility($items);
             oziSearchRestoreVisibility($groups);
-            oziSearchRestoreMenu($menuBlocks, menuConfig);
+
+            if (hasPagination) {
+                oziSearchUpdatePagination($input, $items);
+            }
+
             return;
         }
 
-        const terms = words
-            ? value.split(/\s+/).filter(Boolean)
-            : [value];
-
+        const terms   = words ? value.split(/\s+/).filter(Boolean) : [value];
         const pattern = oziSearchNormalizeTerms(terms);
 
         if (!pattern) {
             oziSearchRestoreVisibility($items);
             oziSearchRestoreVisibility($groups);
-            oziSearchRestoreMenu($menuBlocks, menuConfig);
+
+            if (hasPagination) {
+                oziSearchUpdatePagination($input, $items);
+            }
+
             return;
         }
 
-        const regexTest = oziSearchBuildRegex(pattern, false);
+        const regexTest      = oziSearchBuildRegex(pattern, false);
         const regexHighlight = oziSearchBuildRegex(pattern, true);
 
+        // modo sem filtro — só highlight
         if (noFilter) {
             oziSearchRestoreVisibility($items);
             oziSearchRestoreVisibility($groups);
-            oziSearchRestoreMenu($menuBlocks, menuConfig);
 
             if (highlightEnabled) {
                 $items.filter(':visible').each(function () {
@@ -465,6 +479,9 @@
             return;
         }
 
+        // filtra itens
+        const matched = [];
+
         $items.each(function () {
             const $item = $(this);
 
@@ -473,20 +490,73 @@
                 return;
             }
 
-            const text = $item.text();
-
-            if (regexTest.test(text)) {
+            if (regexTest.test($item.text())) {
                 $item.show();
 
                 if (highlightEnabled) {
                     oziSearchApplyHighlight($item, regexHighlight, highlightClass);
                 }
+
+                matched.push(this);
             } else {
                 $item.hide();
             }
         });
 
-        oziSearchUpdateMenu($menuBlocks, $items, menuConfig);
+        const $matched = $(matched);
         oziSearchUpdateGroups($groups, $items);
+
+        // atualiza paginação com itens filtrados
+        if (hasPagination) {
+            oziSearchUpdatePagination($input, $matched);
+        }
     });
+
+    // ------------------------------------------
+    // INIT — paginação no carregamento
+    // ------------------------------------------
+// DEPOIS
+    function oziSearchInitPaginationInScope(root) {
+        const $scope = root ? $(root) : $(document);
+
+        $scope.find('[data-ozi-search][data-ozi-search-pagination]')
+            .addBack('[data-ozi-search][data-ozi-search-pagination]')
+            .each(function () {
+                const $input = $(this);
+
+                if ($input.data('__oziSearchPaginationReady')) return;
+                $input.data('__oziSearchPaginationReady', true);
+
+                const $items = oziSearchResolveItems($input);
+                if (!$items.length) return;
+
+                $items.show();
+                oziSearchStoreOriginalVisibility($items);
+                oziSearchInitPagination($input, $items);
+            });
+    }
+
+    $(function () {
+        oziSearchInitPaginationInScope(document);
+    });
+
+// afterRender — conteúdo dinâmico via oziLoadData
+    if (
+        window.zldConf &&
+        window.zldConf.zldHooks &&
+        Array.isArray(window.zldConf.zldHooks.afterRender)
+    ) {
+        const alreadyBound = window.zldConf.zldHooks.afterRender.some(function (fn) {
+            return fn && fn.__oziSearchAfterRender === true;
+        });
+
+        if (!alreadyBound) {
+            const hook = function (root) {
+                oziSearchInitPaginationInScope(root);
+            };
+            hook.__oziSearchAfterRender = true;
+            window.zldConf.zldHooks.afterRender.push(hook);
+        }
+    }
+
 })(jQuery);

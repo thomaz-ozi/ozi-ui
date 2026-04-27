@@ -3,8 +3,8 @@
 ## Identificação
 
 - **Nome:** `oziCopy`
-- **Versão:** `2.0.0`
-- **Data:** `2026-04-12`
+- **Versão:** `2.3.1`
+- **Data:** `2026-04-25`
 
 ## Descrição
 

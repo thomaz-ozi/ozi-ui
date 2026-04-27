@@ -2,7 +2,7 @@
 
 ### Identificação
 - **Nome:** `oziSelect`
-- **Versão:** `4.3.1`
+- **Versão:** `4.3.2`
 - **Data:** `2026-04-25`
 
 

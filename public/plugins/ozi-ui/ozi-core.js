@@ -343,8 +343,8 @@
                     'ozi-loaddata/js/ozi-loaddata.js',  // ← primeiro sempre
                     'ozi-select/js/ozi-select.js',
                     'ozi-audio/js/ozi-audio.js',
-                    'ozi-autocomplete/js/ozi-autocomplete.js',
                     'ozi-editor/js/ozi-editor.js',
+                    'ozi-autocomplete/js/ozi-autocomplete.js',
                     'ozi-search/js/ozi-search.js',
                     'ozi-addons/js/ozi-addons.js',
                     'ozi-addons/js/ozi-auth.js',

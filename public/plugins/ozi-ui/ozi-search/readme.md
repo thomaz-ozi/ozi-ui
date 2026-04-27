@@ -1,83 +1,185 @@
-
 # oziSearch
 
 ### Identificação
 - **Nome:** `oziSearch`
-- **Versão:** `1.5.0`
-- **Data:** `2026-04-07`
+- **Versão:** `2.0.0`
+- **Data:** `2026-04-26`
 
-
+---
 
 ### Descrição
-`oziSearch` é um plugin de busca e filtragem em tempo real para interfaces web, desenvolvido para localizar, destacar e organizar elementos no DOM a partir da digitação do usuário. Ele permite pesquisar itens por seletor configurável, ocultar ou exibir resultados dinamicamente, destacar termos encontrados e atualizar automaticamente grupos e menus relacionados conforme o resultado da busca.
 
-O plugin foi projetado para funcionar de forma flexível em estruturas simples ou hierárquicas, oferecendo suporte a pesquisa por múltiplas palavras, controle de quantidade mínima de caracteres, modo somente highlight sem filtragem visual e integração com blocos de menu colapsáveis. Sua lógica preserva o estado original dos elementos, restaurando visibilidade, conteúdo e estrutura quando a busca é limpa ou não atende aos critérios mínimos.
+`oziSearch` é um plugin de busca, filtragem e paginação em tempo real para interfaces web. Localiza, destaca e organiza elementos no DOM a partir da digitação do usuário, permitindo pesquisar itens por seletor configurável, ocultar ou exibir resultados dinamicamente e destacar termos encontrados.
 
-Com isso, o `oziSearch` é indicado para campos de pesquisa em listas, menus laterais, catálogos, painéis administrativos e interfaces com grande volume de elementos visuais, priorizando estabilidade, compatibilidade com jQuery e boa experiência de uso.
+A partir da v2.0.0 o plugin incorpora paginação declarativa — transformando qualquer lista de elementos em uma interface estilo DataTables, porém baseada em `div` e totalmente responsiva, sem dependência de `<table>`. A paginação recalcula automaticamente ao filtrar, volta para a página 1 a cada nova busca e integra-se nativamente com conteúdo dinâmico via `oziLoadData`.
 
+---
+
+### Recursos
+
+- Busca em tempo real por seletor CSS configurável
+- Filtragem com ocultação de itens não encontrados
+- Busca por múltiplas palavras simultâneas
+- Highlight configurável via tokens CSS próprios
+- Modo somente highlight — sem ocultação de itens
+- Grupos dinâmicos — oculta grupos sem itens visíveis
+- Paginação declarativa — sem `<table>`, sem DataTables
+- Integração com `afterRender` — funciona com conteúdo dinâmico via oziLoadData
+
+---
 
 ### [1] ALVO DA BUSCA
 
-* `data-ozi-search` → define os elementos que serão pesquisados e filtrados com base no texto digitado
-
-* `data-ozi-search-group` → define grupos ou blocos relacionados aos itens pesquisados, permitindo ocultar ou exibir o grupo conforme existam itens visíveis dentro dele
-
-* `data-ozi-search-menu` → define a estrutura de menu relacionada à busca, permitindo controlar blocos de menu e classes de colapso no formato `seletor,classeCollapse`
+| Atributo | Descrição |
+|----------|-----------|
+| `data-ozi-search` | Seletor dos elementos pesquisados e filtrados |
+| `data-ozi-search-group` | Grupos relacionados — ocultados quando sem itens visíveis |
 
 ---
 
 ### [2] COMPORTAMENTO DA BUSCA
 
-* `data-ozi-search-min` → define a quantidade mínima de caracteres para que a busca comece a ser aplicada
-
-* `data-ozi-search-words` → ativa a busca por múltiplos termos separados por espaço, tratando cada palavra individualmente
-
-* `data-ozi-search-multi` → mantém compatibilidade com a configuração antiga de múltiplos termos, funcionando como alias de `data-ozi-search-words`
-
-* `data-ozi-search-no-filter` → mantém os itens visíveis sem ocultação, aplicando apenas destaque visual nos termos encontrados
-
----
-
-### [3] DESTAQUE / HIGHLIGHT
-
-* `data-ozi-search-highlight` → ativa ou configura o destaque visual dos termos encontrados durante a busca
-
-    * quando definido como `true`, `1` ou vazio → usa a classe padrão `bg-dark text-white`
-    * quando definido como `false` ou `0` → desativa o highlight
-    * quando recebe um texto → usa esse valor como classe CSS personalizada para o destaque
+| Atributo | Descrição |
+|----------|-----------|
+| `data-ozi-search-min` | Mínimo de caracteres para iniciar a busca |
+| `data-ozi-search-words` | Ativa busca por múltiplos termos separados por espaço |
+| `data-ozi-search-multi` | Alias legado de `data-ozi-search-words` |
+| `data-ozi-search-no-filter` | Mantém itens visíveis — aplica apenas highlight |
 
 ---
 
-### [4] RESOLUÇÃO DE SELETORES
+### [3] HIGHLIGHT
 
-* `data-ozi-search` → aceita seletor CSS direto ou nome simples, que também pode ser resolvido como classe automaticamente
+| Valor | Comportamento |
+|-------|--------------|
+| `true`, `1` ou vazio | Usa a classe padrão `ozi-search-highlight` |
+| `false` ou `0` | Desativa o highlight |
+| Texto qualquer | Usa o valor como classe CSS personalizada |
 
-* `data-ozi-search-group` → aceita seletor CSS ou nome simples para localizar os grupos relacionados
-
-* `data-ozi-search-menu` → aceita um seletor de menu e, opcionalmente, a classe responsável pelo colapso visual da estrutura
-
----
-
-### [5] ESTRUTURA DO MENU
-
-* `data-ozi-search-menu` → pode ser configurado apenas com o seletor do menu ou com seletor e classe de colapso
-
-#### exemplos:
-* `data-ozi-search-menu="menu-item"` → usa `menu-item` como seletor e `hidden` como classe de colapso padrão
-* `data-ozi-search-menu=".menu-item,hidden"` → usa `.menu-item` como seletor e `hidden` como classe de colapso
-* `data-ozi-search-menu="#menuLateral,collapse"` → usa `#menuLateral` como seletor e `collapse` como classe de colapso
+```html
+data-ozi-search-highlight="true"
+data-ozi-search-highlight="minha-classe-destaque"
+```
 
 ---
 
-### [6] RESUMO PRÁTICO
+### [4] PAGINAÇÃO
 
-* `data-ozi-search` → define onde a busca será aplicada
-* `data-ozi-search-group` → controla grupos de itens relacionados
-* `data-ozi-search-menu` → controla menus hierárquicos e blocos colapsáveis
-* `data-ozi-search-min` → define mínimo de caracteres para busca
-* `data-ozi-search-words` → ativa busca por várias palavras
-* `data-ozi-search-multi` → compatibilidade com configuração antiga
-* `data-ozi-search-no-filter` → destaca sem ocultar
-* `data-ozi-search-highlight` → ativa ou personaliza o highlight
+A paginação transforma qualquer lista de elementos em páginas navegáveis. O `<nav>` de controle é injetado automaticamente dentro do container, abaixo dos itens.
 
+| Atributo | Padrão | Descrição |
+|----------|--------|-----------|
+| `data-ozi-search-pagination` | `10` | Ativa paginação — valor define itens por página |
+| `data-ozi-search-pagination-id` | — | **Obrigatório** — ID do container que envolve os itens |
 
+**Comportamento:**
+- Na inicialização → pagina todos os itens
+- Ao digitar → filtra, recalcula total de páginas, volta para página 1
+- Ao limpar → restaura paginação original
+- Reticências automáticas quando há muitas páginas: `< 1 ... 4 5 6 ... 10 >`
+
+#### Exemplo completo
+```html
+<input
+    type="text"
+    class="form-control"
+    data-ozi-search=".item-card"
+    data-ozi-search-pagination="20"
+    data-ozi-search-pagination-id="listaContainer"
+    data-ozi-search-highlight="true"
+    placeholder="Pesquisar...">
+
+<div id="listaContainer">
+    <div class="item-card">Item 1</div>
+    <div class="item-card">Item 2</div>
+    <div class="item-card">Item 3</div>
+    <!-- nav de paginação injetado automaticamente aqui -->
+</div>
+```
+
+---
+
+### [5] APARÊNCIA — TOKENS CSS
+
+```css
+:root {
+    /* paginação */
+    --ozi-search-pagination-gap: 4px;
+    --ozi-search-pagination-radius: 0.375rem;
+    --ozi-search-pagination-height: 34px;
+    --ozi-search-pagination-min-width: 34px;
+    --ozi-search-pagination-font-size: 0.875rem;
+
+    --ozi-search-pagination-color: #495057;
+    --ozi-search-pagination-bg: #fff;
+    --ozi-search-pagination-border: #dee2e6;
+
+    --ozi-search-pagination-hover-bg: #f8f9fa;
+    --ozi-search-pagination-hover-border: #adb5bd;
+
+    --ozi-search-pagination-active-bg: #0d6efd;
+    --ozi-search-pagination-active-color: #fff;
+    --ozi-search-pagination-active-border: #0d6efd;
+
+    --ozi-search-pagination-disabled-color: #adb5bd;
+
+    /* highlight */
+    --ozi-search-highlight-bg: #fff3cd;
+    --ozi-search-highlight-color: #212529;
+}
+```
+
+---
+
+### [6] EXEMPLOS
+
+#### Busca simples
+```html
+<input
+    type="text"
+    data-ozi-search=".item"
+    placeholder="Pesquisar...">
+```
+
+#### Busca com múltiplas palavras e highlight
+```html
+<input
+    type="text"
+    data-ozi-search=".produto"
+    data-ozi-search-words="true"
+    data-ozi-search-highlight="true"
+    data-ozi-search-min="2"
+    placeholder="Pesquisar produtos...">
+```
+
+#### Busca com grupos
+```html
+<input
+    type="text"
+    data-ozi-search=".menu-item"
+    data-ozi-search-group=".menu-group"
+    placeholder="Pesquisar no menu...">
+```
+
+#### Busca com paginação
+```html
+<input
+    type="text"
+    data-ozi-search=".card"
+    data-ozi-search-pagination="12"
+    data-ozi-search-pagination-id="cardContainer"
+    placeholder="Pesquisar...">
+
+<div id="cardContainer">
+    <div class="card">...</div>
+    <div class="card">...</div>
+</div>
+```
+
+---
+
+### [7] ATRIBUTOS REMOVIDOS NA v2.0.0
+
+| Atributo | Motivo |
+|----------|--------|
+| `data-ozi-search-menu` | Removido — funcionalidade de menu hierárquico descontinuada |
