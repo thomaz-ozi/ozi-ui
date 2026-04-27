@@ -5,7 +5,7 @@ namespace OziUI\Core;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Blade;
 
-class OziServiceProvider extends ServiceProvider
+class OziCoreServiceProvider extends ServiceProvider
 {
     public function boot(): void
     {
