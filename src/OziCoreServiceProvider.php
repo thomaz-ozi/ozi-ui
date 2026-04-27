@@ -10,7 +10,7 @@ class OziCoreServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->publishes([
-            __DIR__ . '/../public' => public_path('plugins/ozi-ui'),
+            __DIR__ . '/../public/plugins/ozi-ui' => public_path('plugins/ozi-ui'),
         ], 'ozi-ui');
 
         Blade::directive('oziStyles', function (string $expression) {
