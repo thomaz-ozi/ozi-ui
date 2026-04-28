@@ -4,38 +4,46 @@ namespace OziUI\Core;
 
 class OziAssets
 {
-    protected string $base = '/plugins/ozi-ui/';
-    protected string $version = '0.18.1';
+    protected string $base;
+    protected string $version;
 
     protected array $availableStyles = [
-        'core'           => 'ozi-core/css/ozi-core.css',
-        'loaddata'       => 'ozi-loaddata/css/ozi-loaddata.css',
-        'select'         => 'ozi-select/css/ozi-select.css',
-        'audio'          => 'ozi-audio/css/ozi-audio.css',
-        'editor'         => 'ozi-editor/css/ozi-editor.css',
-        'auth'           => 'ozi-addons/css/ozi-auth.css',
+        'core'         => 'ozi-core/css/ozi-core.css',
+        'loaddata'     => 'ozi-loaddata/css/ozi-loaddata.css',
+        'select'       => 'ozi-select/css/ozi-select.css',
+        'audio'        => 'ozi-audio/css/ozi-audio.css',
+        'editor'       => 'ozi-editor/css/ozi-editor.css',
+        'auth'         => 'ozi-addons/css/ozi-auth.css',
     ];
 
     protected array $availableScripts = [
-        'loaddata'       => 'ozi-loaddata/js/ozi-loaddata.js',
-        'select'         => 'ozi-select/js/ozi-select.js',
-        'audio'          => 'ozi-audio/js/ozi-audio.js',
-        'autocomplete'   => 'ozi-autocomplete/js/ozi-autocomplete.js',
-        'editor'         => 'ozi-editor/js/ozi-editor.js',
-        'search'         => 'ozi-search/js/ozi-search.js',
-        'addons'         => 'ozi-addons/js/ozi-addons.js',
-        'auth'           => 'ozi-addons/js/ozi-auth.js',
-        'check'          => 'ozi-addons/js/ozi-check.js',
-        'copy'           => 'ozi-addons/js/ozi-copy.js',
-        'toggle'         => 'ozi-addons/js/ozi-toggle.js',
+        'loaddata'     => 'ozi-loaddata/js/ozi-loaddata.js',
+        'select'       => 'ozi-select/js/ozi-select.js',
+        'audio'        => 'ozi-audio/js/ozi-audio.js',
+        'autocomplete' => 'ozi-autocomplete/js/ozi-autocomplete.js',
+        'editor'       => 'ozi-editor/js/ozi-editor.js',
+        'search'       => 'ozi-search/js/ozi-search.js',
+        'addons'       => 'ozi-addons/js/ozi-addons.js',
+        'auth'         => 'ozi-addons/js/ozi-auth.js',
+        'check'        => 'ozi-addons/js/ozi-check.js',
+        'copy'         => 'ozi-addons/js/ozi-copy.js',
+        'toggle'       => 'ozi-addons/js/ozi-toggle.js',
     ];
 
-    // plugins que sempre devem ser carregados juntos
     protected array $groups = [
-        'auth'  => ['auth', 'check', 'copy', 'toggle', 'addons'],
+        'auth'  => ['addons', 'auth', 'check', 'copy', 'toggle'],
         'forms' => ['loaddata', 'select', 'autocomplete', 'auth', 'check'],
-        'full'  => [], // vazio = carrega tudo
+        'full'  => [],
     ];
+
+    public function __construct()
+    {
+        // base via asset() — resolve corretamente em local e produção
+        $this->base = rtrim(asset('plugins/ozi-ui'), '/') . '/';
+
+        // versão lida do composer.json do pacote — atualiza automaticamente
+        $this->version = $this->resolveVersion();
+    }
 
     public function styles(array $only = []): string
     {
@@ -59,7 +67,6 @@ class OziAssets
 
     protected function resolveKeys(array $available, array $only): array
     {
-        // sem filtro — retorna tudo
         if (empty($only)) {
             return array_values($available);
         }
@@ -69,11 +76,9 @@ class OziAssets
         foreach ($only as $key) {
             $key = strtolower(trim($key));
 
-            // é um grupo?
             if (isset($this->groups[$key])) {
                 $groupKeys = $this->groups[$key];
 
-                // grupo vazio = tudo
                 if (empty($groupKeys)) {
                     return array_values($available);
                 }
@@ -88,10 +93,9 @@ class OziAssets
             $keys[] = $key;
         }
 
-        // dedup mantendo ordem
-        $keys = array_unique($keys);
-
+        $keys   = array_unique($keys);
         $result = [];
+
         foreach ($keys as $key) {
             if (isset($available[$key])) {
                 $result[] = $available[$key];
@@ -104,6 +108,18 @@ class OziAssets
     protected function url(string $file): string
     {
         return $this->base . $file . '?v=' . $this->version;
+    }
+
+    protected function resolveVersion(): string
+    {
+        $composerFile = __DIR__ . '/../composer.json';
+
+        if (file_exists($composerFile)) {
+            $json = json_decode(file_get_contents($composerFile), true);
+            return $json['version'] ?? 'dev';
+        }
+
+        return 'dev';
     }
 
     public function setBase(string $base): static
