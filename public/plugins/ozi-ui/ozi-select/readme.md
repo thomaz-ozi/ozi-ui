@@ -2,7 +2,7 @@
 
 ### Identificação
 - **Nome:** `oziSelect`
-- **Versão:** `4.3.2`
+- **Versão:** `4.3.1`
 - **Data:** `2026-04-25`
 
 
@@ -77,6 +77,11 @@ Campos adicionais livres (`carro`, `moto`, `sku`, etc.) são aceitos e geram hid
 
 ### [4] PLACEHOLDERS E VISUAL
 
+* `data-ozi-select-as` → mapeia campos do JSON externo para os nomes canônicos do plugin (`value`, `label`, `image`, etc.), permitindo consumir qualquer API sem transformar os dados no back-end
+
+  * Formato: `"canônico=alias, canônico=alias"`
+  * Exemplo: `data-ozi-select-as="value=uf, label=estado, group=regiao"`
+
 * `data-ozi-select-value-placeholder` → texto exibido no campo quando nenhum item estiver selecionado
 
 * `data-ozi-select-value-icon` → ícone exibido à esquerda do valor no control, sempre visível (ex: `bi bi-cart`)
@@ -88,6 +93,8 @@ Campos adicionais livres (`carro`, `moto`, `sku`, etc.) são aceitos e geram hid
 * `data-ozi-select-list` → altura máxima visual da lista de opções
 
 * `data-ozi-select-image-dimension` → dimensões das imagens nas opções, preview e tags, no formato `largura,altura` (ex: `32px,32px`)
+
+
 
 #### Exemplo:
 ```html

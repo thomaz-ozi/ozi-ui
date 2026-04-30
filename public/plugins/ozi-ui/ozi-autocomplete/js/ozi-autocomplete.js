@@ -2,8 +2,19 @@
  * ------------------------------------------
  * oziAutocomplete
  * ------------------------------------------
- * Ver: (2.0.0)
- * 2026-04-25
+ * Ver: (2.2.1)
+ * 2026-04-29
+ * ------------------------------------------
+ * [2.1.0] data-ozi-autocomplete-as — alias de campos JSON
+ *         Normaliza chaves externas para campos canônicos
+ *         (value, label) na entrada (loadOptions + fetchRemoteOptions).
+ *         Hidden input gerado sempre segue o canônico.
+ * [2.2.0] data-ozi-autocomplete-unique — valor único
+ *         Valida no blur se o label digitado já existe na lista.
+ *         Se houver match: limpa input + hidden, aplica is-invalid,
+ *         exibe mensagem flutuante temporária e emite ozi:unique-invalid.
+ *         Se não houver match: aplica is-valid.
+ *         Companion opcional: data-ozi-autocomplete-unique-message
  * ------------------------------------------
  */
 (function ($) {
@@ -17,23 +28,18 @@
         this.key = String(this.$input.attr('data-ozi-autocomplete') || '').trim();
 
         if (!this.key) {
-            throw new Error('oziAutocomplete 1.1.0: data-ozi-autocomplete é obrigatório.');
+            throw new Error('oziAutocomplete: data-ozi-autocomplete é obrigatório.');
         }
 
         this.uid = 'ozi-autocomplete-' + (++instanceCounter);
-        this.ns = '.oziAutocomplete.' + this.uid;
+        this.ns  = '.oziAutocomplete.' + this.uid;
 
         this.hiddenName = String(
             this.$input.attr('data-ozi-autocomplete-hidden-name') || this.key
         ).trim();
 
-        this.msgEmpty = String(
-            this.$input.attr('data-ozi-autocomplete-msg-empty') || 'Nenhum resultado encontrado'
-        ).trim();
-
-        this.msgSearch = String(
-            this.$input.attr('data-ozi-autocomplete-msg-search') || 'Pesquisando...'
-        ).trim();
+        this.msgEmpty  = String(this.$input.attr('data-ozi-autocomplete-msg-empty')  || 'Nenhum resultado encontrado').trim();
+        this.msgSearch = String(this.$input.attr('data-ozi-autocomplete-msg-search') || 'Pesquisando...').trim();
 
         // busca remota
         this.zldUrl    = String(this.$input.attr('data-ozi-autocomplete-zld-url')    || '').trim();
@@ -43,22 +49,29 @@
         this.zldDelay  = this.parseIntegerAttr('data-ozi-autocomplete-zld-delay', 300);
         this.zldLog    = this.parseBooleanAttr('data-ozi-autocomplete-zld-log');
 
-        this.options = [];
-        this.initialOptions = [];
+        // unique
+        this.uniqueEnabled = this.parseBooleanAttr('data-ozi-autocomplete-unique');
+        this.uniqueMessage = String(
+            this.$input.attr('data-ozi-autocomplete-unique-message') || 'Valor já existente'
+        ).trim();
+        this.$uniqueToast  = null;
+
+        this.options         = [];
+        this.initialOptions  = [];
         this.filteredOptions = [];
-        this.selectedItem = null;
+        this.selectedItem    = null;
         this.highlightedIndex = -1;
-        this.isOpen = false;
+        this.isOpen    = false;
         this.isLoading = false;
 
-        this.remoteRequestTimer = null;
-        this.remoteAbortController = null;
-        this.remoteRequestSeq = 0;
+        this.remoteRequestTimer      = null;
+        this.remoteAbortController   = null;
+        this.remoteRequestSeq        = 0;
 
-        this.$wrap = null;
+        this.$wrap     = null;
         this.$dropdown = null;
-        this.$list = null;
-        this.$hidden = null;
+        this.$list     = null;
+        this.$hidden   = null;
 
         this.init();
     }
@@ -87,6 +100,189 @@
     };
 
     // ------------------------------------------
+    // [2.1.0] ALIAS — data-ozi-autocomplete-as
+    // ------------------------------------------
+
+    /**
+     * Lê data-ozi-autocomplete-as e devolve mapa canônico → alias.
+     *
+     * Formato do atributo:
+     *   "value=id, label=nome"
+     *
+     * Resultado:
+     *   { value: 'id', label: 'nome' }
+     */
+    OziAutocomplete.prototype.parseAliasMap = function () {
+        var raw = String(this.$input.attr('data-ozi-autocomplete-as') || '').trim();
+        var map = {};
+
+        if (!raw) return map;
+
+        raw.split(',').forEach(function (chunk) {
+            var parts     = chunk.split('=');
+            var canonical = String(parts[0] || '').trim();
+            var alias     = String(parts[1] || '').trim();
+            if (canonical && alias && canonical !== alias) {
+                map[canonical] = alias;
+            }
+        });
+
+        return map;
+    };
+
+    /**
+     * Normaliza um array de opções aplicando o aliasMap.
+     *
+     * Para cada item:
+     *  1. Copia todas as chaves originais.
+     *  2. Para cada canônico → alias:
+     *     - lê item[alias]
+     *     - escreve em item[canônico]
+     *     - remove item[alias] (não vaza para o hidden input)
+     *
+     * Campos canônicos suportados via alias:
+     *   value, label
+     */
+    OziAutocomplete.prototype.normalizeOptions = function (options) {
+        var map = this.aliasMap;
+        if (!map || !Object.keys(map).length) return options;
+
+        return (Array.isArray(options) ? options : []).map(function (item) {
+            if (!item || typeof item !== 'object') return item;
+
+            var normalized = {};
+
+            Object.keys(item).forEach(function (key) {
+                normalized[key] = item[key];
+            });
+
+            Object.keys(map).forEach(function (canonical) {
+                var alias = map[canonical];
+                if (Object.prototype.hasOwnProperty.call(item, alias)) {
+                    normalized[canonical] = item[alias];
+                    delete normalized[alias];
+                }
+            });
+
+            return normalized;
+        });
+    };
+
+    // ------------------------------------------
+    // [2.2.0] UNIQUE — data-ozi-autocomplete-unique
+    // ------------------------------------------
+
+    /**
+     * Verifica se o label digitado já existe na lista de opções.
+     * Comparação normalizada (sem acento, case-insensitive).
+     * Retorna o item encontrado ou null.
+     */
+    OziAutocomplete.prototype.findDuplicateByLabel = function (text) {
+        var self           = this;
+        var normalizedText = this.normalize(String(text || '').trim());
+
+        if (!normalizedText) return null;
+
+        for (var i = 0; i < this.options.length; i++) {
+            if (this.normalize(this.options[i].label) === normalizedText) {
+                return this.options[i];
+            }
+        }
+
+        return null;
+    };
+
+    /**
+     * Exibe mensagem flutuante temporária posicionada abaixo do input.
+     * Some após ~2500ms com fade.
+     */
+    OziAutocomplete.prototype.showUniqueToast = function () {
+        var self = this;
+
+        // remove toast anterior se existir
+        if (this.$uniqueToast) {
+            this.$uniqueToast.remove();
+            this.$uniqueToast = null;
+        }
+
+        var offset = this.$input.offset();
+        var height = this.$input.outerHeight();
+
+        this.$uniqueToast = $('<div>', {
+            class: 'ozi-autocomplete-unique-toast',
+            text:  this.uniqueMessage,
+            css: {
+                position:  'fixed',
+                top:       (offset.top + height + 6) + 'px',
+                left:      offset.left + 'px',
+                zIndex:    9999,
+                opacity:   1
+            }
+        });
+
+        $('body').append(this.$uniqueToast);
+
+        var $toast = this.$uniqueToast;
+
+        setTimeout(function () {
+            $toast.animate({ opacity: 0 }, 400, function () {
+                $toast.remove();
+                if (self.$uniqueToast && self.$uniqueToast[0] === $toast[0]) {
+                    self.$uniqueToast = null;
+                }
+            });
+        }, 2500);
+    };
+
+    /**
+     * Executa a validação unique no blur.
+     * - Match encontrado  → limpa input + hidden, is-invalid, toast, ozi:unique-invalid
+     * - Sem match + valor → is-valid
+     * - Campo vazio       → remove classes, sem toast
+     */
+    OziAutocomplete.prototype.validateUnique = function () {
+        if (!this.uniqueEnabled) return;
+
+        var text = String(this.$input.val() || '').trim();
+
+        this.$input.removeClass('is-valid is-invalid');
+
+        if (!text) return;
+
+        var duplicate = this.findDuplicateByLabel(text);
+
+        if (duplicate) {
+            // limpa tudo
+            this.selectedItem = null;
+            this.$input.val('');
+            this.syncHidden();
+            this.$input.addClass('is-invalid');
+            this.showUniqueToast();
+            this.emitUniqueInvalid(duplicate);
+            return;
+        }
+
+        this.$input.addClass('is-valid');
+    };
+
+    OziAutocomplete.prototype.emitUniqueInvalid = function (duplicate) {
+        var detail = {
+            key:       this.key,
+            duplicate: duplicate,
+            instance:  this
+        };
+
+        this.$input.trigger('ozi:unique-invalid', [duplicate, this, detail]);
+
+        if (this.$input[0] && typeof CustomEvent === 'function') {
+            this.$input[0].dispatchEvent(new CustomEvent('ozi:unique-invalid', {
+                bubbles: true,
+                detail:  detail
+            }));
+        }
+    };
+
+    // ------------------------------------------
     // INIT
     // ------------------------------------------
 
@@ -94,7 +290,9 @@
         if (this.$input.data('ozi-autocomplete-initialized')) return;
         this.$input.data('ozi-autocomplete-initialized', true);
 
-        this.options = this.loadOptions();
+        // [2.1.0] aliasMap antes de loadOptions
+        this.aliasMap       = this.parseAliasMap();
+        this.options        = this.normalizeOptions(this.loadOptions());
         this.initialOptions = this.cloneOptions(this.options);
         this.filteredOptions = this.options.slice();
 
@@ -117,7 +315,7 @@
 
     OziAutocomplete.prototype.loadOptions = function () {
         var selector = 'script[data-ozi-autocomplete-options="' + this.key + '"]';
-        var $script = this.$input.nextAll(selector).first();
+        var $script  = this.$input.nextAll(selector).first();
 
         if (!$script.length) $script = this.$input.parent().find(selector).first();
         if (!$script.length) $script = $(selector).first();
@@ -127,7 +325,7 @@
             var parsed = JSON.parse($script.text().trim() || '[]');
             return Array.isArray(parsed) ? parsed : [];
         } catch (error) {
-            console.error('oziAutocomplete 1.1.0: erro ao parsear JSON de "' + this.key + '".', error);
+            console.error('oziAutocomplete: erro ao parsear JSON de "' + this.key + '".', error);
             return [];
         }
     };
@@ -150,9 +348,7 @@
             style: 'display:none;'
         });
 
-        this.$list = $('<div>', {
-            class: 'ozi-autocomplete-list'
-        });
+        this.$list = $('<div>', { class: 'ozi-autocomplete-list' });
 
         this.$dropdown.append(this.$list);
         this.$wrap.append(this.$dropdown);
@@ -180,12 +376,10 @@
 
         this.$input.on('input' + this.ns, function () {
             var text = $(this).val() || '';
-
             if (self.selectedItem && text !== String(self.selectedItem.label || '')) {
                 self.selectedItem = null;
                 self.syncHidden();
             }
-
             self.handleInput(text);
         });
 
@@ -196,16 +390,15 @@
         this.$input.on('blur' + this.ns, function () {
             setTimeout(function () {
                 self.syncInputToSelectionOrExactMatch();
+                self.validateUnique();
                 self.close();
             }, 120);
         });
 
         this.$dropdown.on('mousedown' + this.ns, '.ozi-autocomplete-option', function (e) {
             e.preventDefault();
-
             var index = Number($(this).attr('data-index'));
-            var item = self.filteredOptions[index];
-
+            var item  = self.filteredOptions[index];
             if (!item) return;
             self.selectItem(item);
         });
@@ -223,26 +416,22 @@
     // ------------------------------------------
 
     OziAutocomplete.prototype.handleInput = function (text) {
-        // sempre filtra local primeiro — resposta imediata
         this.filterAndRender(text);
         this.open();
 
         if (!this.isRemoteEnabled()) return;
 
-        // cancela timer anterior
         if (this.remoteRequestTimer) {
             clearTimeout(this.remoteRequestTimer);
             this.remoteRequestTimer = null;
         }
 
-        // abaixo do mínimo — volta para opções iniciais
         if (!text.length || text.length < this.zldMin) {
             this.abortRemoteRequest();
             this.resetToInitialOptions();
             return;
         }
 
-        // debounce
         var self = this;
         this.remoteRequestTimer = setTimeout(function () {
             self.fetchRemoteOptions(text);
@@ -258,7 +447,6 @@
             clearTimeout(this.remoteRequestTimer);
             this.remoteRequestTimer = null;
         }
-
         if (this.remoteAbortController) {
             this.remoteAbortController.abort();
             this.remoteAbortController = null;
@@ -296,22 +484,16 @@
 
         this.setLoading(true);
 
-        var csrf = $('meta[name="csrf-token"]').attr('content');
-        var method = this.zldMethod === 'GET' ? 'GET' : 'POST';
-
-        var headers = {
-            'X-Requested-With': 'XMLHttpRequest',
-            'Accept': 'application/json'
-        };
+        var csrf    = $('meta[name="csrf-token"]').attr('content');
+        var method  = this.zldMethod === 'GET' ? 'GET' : 'POST';
+        var headers = { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' };
 
         if (csrf) headers['X-CSRF-TOKEN'] = csrf;
 
-        var url = this.zldUrl;
+        var url         = this.zldUrl;
         var fetchConfig = { method: method, headers: headers };
 
-        if (this.remoteAbortController) {
-            fetchConfig.signal = this.remoteAbortController.signal;
-        }
+        if (this.remoteAbortController) fetchConfig.signal = this.remoteAbortController.signal;
 
         if (method === 'GET') {
             var joiner = url.indexOf('?') >= 0 ? '&' : '?';
@@ -319,20 +501,13 @@
         } else {
             var formData = new FormData();
             formData.append(this.zldParam, query);
-
-            if (csrf && !formData.has('_token')) {
-                formData.append('_token', csrf);
-            }
-
+            if (csrf && !formData.has('_token')) formData.append('_token', csrf);
             fetchConfig.body = formData;
         }
 
         if (this.zldLog) {
-            console.log('oziAutocomplete| remote request', {
-                key: this.key,
-                method: method,
-                url: url,
-                query: query
+            console.log('oziAutocomplete | remote request', {
+                key: this.key, method: method, url: url, query: query
             });
         }
 
@@ -348,11 +523,8 @@
                 var response = result.response;
                 var json     = result.json;
 
-                if (self.zldLog) {
-                    console.log('oziAutocomplete| remote json', json);
-                }
+                if (self.zldLog) console.log('oziAutocomplete | remote json', json);
 
-                // integra zldActions se disponível
                 if (json && Array.isArray(json.actions) && typeof window.zldActions === 'function') {
                     window.zldActions(json.actions, {
                         loadData: { zldUrl: self.zldUrl, zldApi: true, zldExpectJson: true },
@@ -363,7 +535,9 @@
 
                 if (!response.ok) return;
 
-                var options = self.extractOptions(json);
+                // [2.1.0] normalizeOptions aplicado antes de salvar
+                var raw     = self.extractOptions(json);
+                var options = self.normalizeOptions(raw);
                 self.options = self.cloneOptions(options);
 
                 var liveQuery = String(self.$input.val() || '').trim();
@@ -371,10 +545,7 @@
             })
             .catch(function (err) {
                 if (err && err.name === 'AbortError') return;
-
-                if (self.zldLog) {
-                    console.error('oziAutocomplete| erro remoto', err);
-                }
+                if (self.zldLog) console.error('oziAutocomplete | erro remoto', err);
             })
             .finally(function () {
                 if (requestId !== self.remoteRequestSeq) return;
@@ -392,13 +563,8 @@
             e.preventDefault();
             this.filterAndRender(this.$input.val() || '');
             this.open();
-
-            if (e.key === 'ArrowDown') {
-                this.highlightNext();
-            } else {
-                this.highlightPrev();
-            }
-
+            if (e.key === 'ArrowDown') this.highlightNext();
+            else this.highlightPrev();
             return;
         }
 
@@ -407,33 +573,25 @@
                 e.preventDefault();
                 this.highlightNext();
                 break;
-
             case 'ArrowUp':
                 e.preventDefault();
                 this.highlightPrev();
                 break;
-
             case 'Enter':
                 if (!this.isOpen) return;
                 e.preventDefault();
-
-                if (
-                    this.highlightedIndex >= 0 &&
-                    this.filteredOptions[this.highlightedIndex]
-                ) {
+                if (this.highlightedIndex >= 0 && this.filteredOptions[this.highlightedIndex]) {
                     this.selectItem(this.filteredOptions[this.highlightedIndex]);
                 } else {
                     this.syncInputToSelectionOrExactMatch();
                     this.close();
                 }
                 break;
-
             case 'Escape':
                 e.preventDefault();
                 this.abortRemoteRequest();
                 this.close();
                 break;
-
             case 'Tab':
                 this.syncInputToSelectionOrExactMatch();
                 this.close();
@@ -453,7 +611,7 @@
     };
 
     OziAutocomplete.prototype.filterOptions = function (query) {
-        var self = this;
+        var self            = this;
         var normalizedQuery = this.normalize(query);
 
         if (!normalizedQuery) return this.options.slice();
@@ -466,7 +624,7 @@
     };
 
     OziAutocomplete.prototype.filterAndRender = function (query) {
-        this.filteredOptions = this.filterOptions(query);
+        this.filteredOptions  = this.filterOptions(query);
         this.highlightedIndex = -1;
         this.renderList();
     };
@@ -490,8 +648,7 @@
 
         if (!this.filteredOptions.length) {
             this.$list.append(
-                $('<div>', { class: 'ozi-autocomplete-empty' })
-                    .text(this.msgEmpty)
+                $('<div>', { class: 'ozi-autocomplete-empty' }).text(this.msgEmpty)
             );
             return;
         }
@@ -538,10 +695,7 @@
     OziAutocomplete.prototype.highlightOption = function (index) {
         var $options = this.$list.find('.ozi-autocomplete-option');
 
-        if (!$options.length) {
-            this.highlightedIndex = -1;
-            return;
-        }
+        if (!$options.length) { this.highlightedIndex = -1; return; }
 
         if (index < 0) index = 0;
         if (index >= $options.length) index = $options.length - 1;
@@ -550,7 +704,6 @@
         $options.removeClass('is-highlighted');
 
         var $current = $options.eq(index).addClass('is-highlighted');
-
         var listEl   = this.$dropdown[0];
         var optionEl = $current[0];
 
@@ -559,12 +712,8 @@
             var optionBottom = optionTop + optionEl.offsetHeight;
             var listTop      = listEl.scrollTop;
             var listBottom   = listTop + listEl.clientHeight;
-
-            if (optionTop < listTop) {
-                listEl.scrollTop = optionTop;
-            } else if (optionBottom > listBottom) {
-                listEl.scrollTop = optionBottom - listEl.clientHeight;
-            }
+            if (optionTop < listTop)          listEl.scrollTop = optionTop;
+            else if (optionBottom > listBottom) listEl.scrollTop = optionBottom - listEl.clientHeight;
         }
     };
 
@@ -575,12 +724,7 @@
 
     OziAutocomplete.prototype.highlightPrev = function () {
         if (!this.isOpen || !this.filteredOptions.length) return;
-
-        if (this.highlightedIndex <= 0) {
-            this.highlightOption(this.filteredOptions.length - 1);
-            return;
-        }
-
+        if (this.highlightedIndex <= 0) { this.highlightOption(this.filteredOptions.length - 1); return; }
         this.highlightOption(this.highlightedIndex - 1);
     };
 
@@ -590,9 +734,9 @@
 
     OziAutocomplete.prototype.selectItem = function (item) {
         if (!item) return;
-
         this.selectedItem = item;
         this.$input.val(item.label || '');
+        this.$input.removeClass('is-valid is-invalid');
         this.syncHidden();
         this.filterAndRender(this.$input.val() || '');
         this.close();
@@ -600,34 +744,23 @@
     };
 
     OziAutocomplete.prototype.syncHidden = function () {
-        if (!this.selectedItem) {
-            this.$hidden.val('');
-            return;
-        }
-
+        if (!this.selectedItem) { this.$hidden.val(''); return; }
         this.$hidden.val(this.selectedItem.value == null ? '' : String(this.selectedItem.value));
     };
 
     OziAutocomplete.prototype.findExactMatchByLabel = function (text) {
         var normalizedText = this.normalize(text);
         if (!normalizedText) return null;
-
         for (var i = 0; i < this.options.length; i++) {
-            if (this.normalize(this.options[i].label) === normalizedText) {
-                return this.options[i];
-            }
+            if (this.normalize(this.options[i].label) === normalizedText) return this.options[i];
         }
-
         return null;
     };
 
     OziAutocomplete.prototype.syncInputToSelectionOrExactMatch = function () {
         var text = String(this.$input.val() || '').trim();
 
-        if (!text) {
-            this.clearSelection(false);
-            return;
-        }
+        if (!text) { this.clearSelection(false); return; }
 
         if (this.selectedItem && text === String(this.selectedItem.label || '')) {
             this.syncHidden();
@@ -651,7 +784,7 @@
     OziAutocomplete.prototype.syncInitialFromHidden = function () {
         var hiddenValue = String(this.$hidden.val() || '').trim();
         var inputValue  = String(this.$input.val()  || '').trim();
-        var self = this;
+        var self        = this;
 
         if (hiddenValue) {
             var byValue = this.options.filter(function (item) {
@@ -686,12 +819,10 @@
     OziAutocomplete.prototype.clearSelection = function (emitChange) {
         this.selectedItem = null;
         this.$input.val('');
+        this.$input.removeClass('is-valid is-invalid');
         this.syncHidden();
         this.filterAndRender('');
-
-        if (emitChange !== false) {
-            this.emitChange();
-        }
+        if (emitChange !== false) this.emitChange();
     };
 
     // ------------------------------------------
@@ -710,22 +841,15 @@
         var found = null;
 
         for (var i = 0; i < this.options.length; i++) {
-            if (String(this.options[i].value) === String(value)) {
-                found = this.options[i];
-                break;
-            }
+            if (String(this.options[i].value) === String(value)) { found = this.options[i]; break; }
         }
 
-        if (!found) {
-            this.clearSelection(false);
-            return null;
-        }
+        if (!found) { this.clearSelection(false); return null; }
 
         this.selectedItem = found;
         this.$input.val(found.label || '');
         this.syncHidden();
         this.emitChange();
-
         return found.value;
     };
 
@@ -749,15 +873,13 @@
 
     OziAutocomplete.prototype.destroy = function () {
         this.abortRemoteRequest();
-
+        if (this.$uniqueToast) { this.$uniqueToast.remove(); this.$uniqueToast = null; }
         $(document).off(this.ns);
         this.$input.off(this.ns);
-
         if (this.$dropdown) this.$dropdown.remove();
         if (this.$hidden)   this.$hidden.remove();
-
+        this.$input.removeClass('is-valid is-invalid');
         this.$input.removeData('ozi-autocomplete-initialized');
-
         delete instances[this.key];
     };
 
@@ -773,14 +895,14 @@
     // ------------------------------------------
 
     window.OziAutocomplete = {
+
         init: function (selector) {
             var $elements = selector ? $(selector) : $('[data-ozi-autocomplete]');
             var $targets  = $elements.filter('[data-ozi-autocomplete]').add($elements.find('[data-ozi-autocomplete]'));
 
             $targets.each(function () {
-                var $el  = $(this);
-                var key  = String($el.attr('data-ozi-autocomplete') || '').trim();
-
+                var $el = $(this);
+                var key = String($el.attr('data-ozi-autocomplete') || '').trim();
                 if (!key) return;
 
                 var existing = instances[key];
@@ -788,14 +910,9 @@
                 if (existing) {
                     var sameElement   = existing.$input && existing.$input[0] === this;
                     var oldStillInDom = existing.$input && document.contains(existing.$input[0]);
-
                     if (sameElement && $el.data('ozi-autocomplete-initialized')) return;
-
-                    if (!sameElement && !oldStillInDom) {
-                        existing.destroy();
-                    } else if (!sameElement && oldStillInDom) {
-                        return;
-                    }
+                    if (!sameElement && !oldStillInDom) { existing.destroy(); }
+                    else if (!sameElement && oldStillInDom) { return; }
                 }
 
                 instances[key] = new OziAutocomplete(this);
@@ -812,14 +929,8 @@
                 mutations.forEach(function (mutation) {
                     Array.prototype.forEach.call(mutation.addedNodes || [], function (node) {
                         if (!node || node.nodeType !== 1) return;
-
                         var $node = $(node);
-
-                        if ($node.is('[data-ozi-autocomplete]')) {
-                            window.OziAutocomplete.init($node);
-                            return;
-                        }
-
+                        if ($node.is('[data-ozi-autocomplete]')) { window.OziAutocomplete.init($node); return; }
                         var $children = $node.find('[data-ozi-autocomplete]');
                         if ($children.length) window.OziAutocomplete.init($node);
                     });
@@ -832,18 +943,11 @@
 
         get: function (selectorOrKey) {
             if (!selectorOrKey) return null;
-
-            if (
-                typeof selectorOrKey === 'string' &&
-                !selectorOrKey.startsWith('#') &&
-                !selectorOrKey.startsWith('.')
-            ) {
+            if (typeof selectorOrKey === 'string' && !selectorOrKey.startsWith('#') && !selectorOrKey.startsWith('.')) {
                 return instances[selectorOrKey] || null;
             }
-
             var $el = $(selectorOrKey).first();
             if (!$el.length) return null;
-
             var key = String($el.attr('data-ozi-autocomplete') || '').trim();
             return instances[key] || null;
         },
@@ -851,9 +955,7 @@
         value: function (selectorOrKey, newValue) {
             var instance = this.get(selectorOrKey);
             if (!instance) return null;
-
             if (newValue === undefined) return instance.getValue();
-
             return instance.setValue(newValue);
         },
 

@@ -2,8 +2,8 @@
 
 ### Identificação
 - **Nome:** `oziAutocomplete`
-- **Versão:** `2.0.1`
-- **Data:** `2026-04-25`
+- **Versão:** `2.2.1`
+- **Data:** `2026-04-29`
 
 ---
 
@@ -35,6 +35,7 @@ Suporta dois modos de operação: **local** — filtrando opções definidas via
 | `data-ozi-autocomplete` | ✔ | Chave do campo — vincula ao JSON e define o `name` do hidden |
 | `data-ozi-autocomplete-hidden-name` | — | Nome alternativo para o `<input hidden>` — padrão: mesma chave |
 
+
 ---
 
 ### [2] MENSAGENS
@@ -44,6 +45,21 @@ Suporta dois modos de operação: **local** — filtrando opções definidas via
 | `data-ozi-autocomplete-msg-empty` | `Nenhum resultado encontrado` | Exibida quando nenhuma opção corresponde |
 | `data-ozi-autocomplete-msg-search` | `Pesquisando...` | Exibida durante carregamento remoto |
 
+
+#### Nova ferramenta
+
+* `data-ozi-autocomplete-as` → mapeia campos do JSON externo para os nomes canônicos do plugin (`value`, `label`), permitindo consumir qualquer API sem transformar os dados no back-end
+
+  Formato: `"canônico=alias, canônico=alias"`
+  Exemplo: `data-ozi-autocomplete-as="value=id, label=nome"`
+* `data-ozi-autocomplete-unique` → ativa validação de valor único no blur.
+  Se o label digitado já existir na lista: limpa o campo, aplica is-invalid
+  e exibe mensagem flutuante temporária (~2500ms).
+  Se não existir: aplica is-valid.
+  Evento disparado: ozi:unique-invalid
+
+* `data-ozi-autocomplete-unique-message` → mensagem exibida no toast quando
+  o valor já existe. Padrão: "Valor já existente"
 ---
 
 ### [3] OPÇÕES LOCAIS
