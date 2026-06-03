@@ -49,7 +49,6 @@ class OziAssets
         $this->base    = rtrim(asset('plugins/ozi-ui'), '/') . '/';
         $this->version = $this->resolveVersion();
     }
-
     public function styles(array $only = []): string
     {
         $map = $this->resolveKeys($this->availableStyles, $only);
