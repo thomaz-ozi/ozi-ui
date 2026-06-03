@@ -1,0 +1,89 @@
+/**
+ * themes/tailwind/tokens.css
+ * Versão: 1.0.0
+ *
+ * Mapeia tokens --ozi-* para valores compatíveis com Tailwind CSS.
+ * Usa valores do design system padrão do Tailwind.
+ * Carregue APÓS Tailwind base/components/utilities.
+ */
+
+:root {
+    /* cores mapeadas para paleta Tailwind */
+    --ozi-color-primary:        #3b82f6;  /* blue-500 */
+    --ozi-color-primary-hover:  #2563eb;  /* blue-600 */
+    --ozi-color-primary-light:  #eff6ff;  /* blue-50  */
+
+    --ozi-color-secondary:      #6b7280;  /* gray-500 */
+    --ozi-color-success:        #22c55e;  /* green-500 */
+    --ozi-color-success-light:  #f0fdf4;  /* green-50  */
+    --ozi-color-danger:         #ef4444;  /* red-500   */
+    --ozi-color-danger-light:   #fef2f2;  /* red-50    */
+    --ozi-color-warning:        #f59e0b;  /* amber-500 */
+    --ozi-color-warning-light:  #fffbeb;  /* amber-50  */
+    --ozi-color-info:           #06b6d4;  /* cyan-500  */
+    --ozi-color-info-light:     #ecfeff;  /* cyan-50   */
+
+    --ozi-color-white:          #ffffff;
+    --ozi-color-gray-50:        #f9fafb;
+    --ozi-color-gray-100:       #f3f4f6;
+    --ozi-color-gray-200:       #e5e7eb;
+    --ozi-color-gray-300:       #d1d5db;
+    --ozi-color-gray-400:       #9ca3af;
+    --ozi-color-gray-500:       #6b7280;
+    --ozi-color-gray-600:       #4b5563;
+    --ozi-color-gray-700:       #374151;
+    --ozi-color-gray-800:       #1f2937;
+    --ozi-color-gray-900:       #111827;
+
+    --ozi-font-family:          ui-sans-serif, system-ui, sans-serif;
+    --ozi-font-size-xs:         0.75rem;
+    --ozi-font-size-sm:         0.875rem;
+    --ozi-font-size-base:       1rem;
+    --ozi-font-size-lg:         1.125rem;
+
+    --ozi-border-width:         1px;
+    --ozi-border-color:         #e5e7eb;   /* gray-200 */
+    --ozi-border-color-focus:   #3b82f6;   /* blue-500 */
+
+    --ozi-radius-sm:            0.125rem;  /* rounded-sm */
+    --ozi-radius-md:            0.375rem;  /* rounded    */
+    --ozi-radius-lg:            0.5rem;    /* rounded-lg */
+    --ozi-radius-xl:            0.75rem;   /* rounded-xl */
+    --ozi-radius-full:          9999px;    /* rounded-full */
+
+    --ozi-shadow-sm:            0 1px 2px 0 rgba(0,0,0,0.05);
+    --ozi-shadow-md:            0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+    --ozi-shadow-lg:            0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+
+    --ozi-transition-fast:      150ms ease;
+    --ozi-transition-base:      250ms ease;
+    --ozi-transition-slow:      400ms ease;
+
+    --ozi-z-dropdown:           1000;
+    --ozi-z-modal:              1050;
+    --ozi-z-toast:              1100;
+
+    --ozi-select-bg:            #ffffff;
+    --ozi-select-border:        #e5e7eb;
+    --ozi-select-border-focus:  #3b82f6;
+    --ozi-select-radius:        0.375rem;
+    --ozi-select-option-hover-bg:   #f3f4f6;
+    --ozi-select-option-selected-bg:#eff6ff;
+
+    --ozi-editor-toolbar-bg:    #f9fafb;
+    --ozi-editor-content-bg:    #ffffff;
+    --ozi-audio-bg:             #f9fafb;
+    --ozi-auth-dropdown-bg:     #ffffff;
+    --ozi-auth-dropdown-shadow: var(--ozi-shadow-md);
+
+    --ozi-progress-height:      3px;
+    --ozi-progress-color:       #3b82f6;
+    --ozi-progress-success-color:#22c55e;
+    --ozi-progress-error-color: #ef4444;
+
+    --ozi-invalid-color:        #ef4444;
+    --ozi-invalid-border:       #ef4444;
+    --ozi-valid-color:          #22c55e;
+    --ozi-valid-border:         #22c55e;
+    --ozi-feedback-font-size:   0.875rem;
+}

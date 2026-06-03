@@ -1,0 +1,64 @@
+/**
+ * shared/css/ozi-reset.css
+ * Versão: 1.0.1
+ *
+ * Reset mínimo do OZI-UI.
+ * Normaliza apenas os elementos usados pelos componentes OZI.
+ * Não interfere com Bootstrap, Tailwind ou CSS existente.
+ *
+ * Changelog:
+ *   - v1.0.1: [FIX] Box-sizing corrigido — seletores atualizados de
+ *     '.ozi-select-wrap', '.ozi-autocomplete-wrap', '.ozi-editor-wrap', '.ozi-audio__main'
+ *     (v0.x, inexistentes) para '[class*="ozi-"] *' (genérico, cobre todos os componentes).
+ *     Também resolve futuros componentes automaticamente.
+ */
+
+/* ─── BOX SIZING ────────────────────────────────────── */
+
+/* Cobre todos os elementos dentro de qualquer componente OZI */
+[class*="ozi-"] *,
+[class*="ozi-"] *::before,
+[class*="ozi-"] *::after {
+    box-sizing: border-box;
+}
+
+/* ─── BUTTONS ───────────────────────────────────────── */
+
+[class*="ozi-"] button,
+[class*="ozi-"] [role="button"] {
+    font-family: inherit;
+    font-size:   inherit;
+    line-height: inherit;
+    cursor:      pointer;
+    border:      none;
+    background:  transparent;
+    padding:     0;
+    margin:      0;
+}
+
+/* ─── INPUTS ────────────────────────────────────────── */
+
+[class*="ozi-"] input,
+[class*="ozi-"] textarea,
+[class*="ozi-"] select {
+    font-family: inherit;
+    font-size:   inherit;
+    line-height: inherit;
+}
+
+/* ─── LISTS ─────────────────────────────────────────── */
+
+[class*="ozi-"] ul,
+[class*="ozi-"] ol {
+    list-style: none;
+    margin:     0;
+    padding:    0;
+}
+
+/* ─── SVG ───────────────────────────────────────────── */
+
+[class*="ozi-"] svg {
+    display:        inline-block;
+    vertical-align: middle;
+    overflow:       hidden;
+}

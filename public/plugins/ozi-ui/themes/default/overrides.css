@@ -1,0 +1,200 @@
+/**
+ * themes/default/overrides.css
+ * Versão: 1.0.1
+ *
+ * Estilos base dos componentes OZI-UI para o tema default.
+ * Usa exclusivamente tokens --ozi-* — sem valores hardcoded.
+ * Sem dependência de Bootstrap ou Tailwind.
+ *
+ * Changelog:
+ *   - v1.0.1: [FIX-A] .ozi-feedback sincronizado — adicionado display:block
+ *     para .ozi-select-feedback.is-visible (sistema do ozi-select.js).
+ *     Antes só .ozi-validated .ozi-feedback mostrava — o select usa .is-visible.
+ *   - v1.0.1: [FIX-B] Removidas .ozi-hidden e .ozi-sr-only duplicadas
+ *     (já definidas em shared/css/ozi-utilities.css).
+ *   - v1.0.1: [FIX-D] .ozi-disabled removida deste arquivo
+ *     (definida em ozi-utilities.css com valor correto).
+ */
+
+/* ─── ESTADOS DE VALIDAÇÃO ──────────────────────────── */
+
+.ozi-invalid {
+    border-color: var(--ozi-invalid-border) !important;
+    color:        var(--ozi-invalid-color);
+}
+
+.ozi-valid {
+    border-color: var(--ozi-valid-border) !important;
+    color:        var(--ozi-valid-color);
+}
+
+/* feedback genérico — via .ozi-validated no form */
+.ozi-feedback {
+    display:    none;
+    font-size:  var(--ozi-feedback-font-size);
+    color:      var(--ozi-invalid-color);
+    margin-top: var(--ozi-spacing-1);
+}
+.ozi-validated .ozi-feedback { display: block; }
+
+/* [FIX-A] feedback do ozi-select — via .is-visible no elemento */
+.ozi-select-feedback.is-visible {
+    display:    block;
+    font-size:  var(--ozi-feedback-font-size, 0.875rem);
+    color:      var(--ozi-invalid-color, var(--ozi-color-danger));
+    margin-top: var(--ozi-spacing-1, 0.25rem);
+}
+
+/* ─── PROGRESS BAR (loaddata) ───────────────────────── */
+
+.ozi-progress {
+    position:       fixed;
+    top:            0;
+    left:           0;
+    width:          100%;
+    height:         var(--ozi-progress-height);
+    z-index:        var(--ozi-z-toast);
+    pointer-events: none;
+}
+.ozi-progress-bar {
+    height:     100%;
+    width:      0;
+    background: var(--ozi-progress-color);
+    transition: width var(--ozi-transition-slow);
+}
+.ozi-progress-loading .ozi-progress-bar { width: 70%; }
+.ozi-progress-success .ozi-progress-bar {
+    width:      100%;
+    background: var(--ozi-progress-success-color);
+    transition: width var(--ozi-transition-fast);
+}
+.ozi-progress-error .ozi-progress-bar {
+    width:      100%;
+    background: var(--ozi-progress-error-color);
+    transition: width var(--ozi-transition-fast);
+}
+
+/* ─── ALERT (loaddata feedback) ─────────────────────── */
+
+.ozi-alert {
+    padding:       var(--ozi-spacing-3) var(--ozi-spacing-4);
+    border-radius: var(--ozi-radius-md);
+    margin-bottom: var(--ozi-spacing-3);
+    font-size:     var(--ozi-font-size-sm);
+    border:        1px solid transparent;
+}
+.ozi-alert-danger  {
+    background:   var(--ozi-color-danger-light);
+    color:        var(--ozi-color-danger);
+    border-color: var(--ozi-color-danger);
+}
+.ozi-alert-warning {
+    background:   var(--ozi-color-warning-light);
+    color:        var(--ozi-color-warning);
+    border-color: var(--ozi-color-warning);
+}
+
+/* ─── TOAST (actions) ───────────────────────────────── */
+
+.ozi-toast {
+    position:      fixed;
+    bottom:        var(--ozi-spacing-4);
+    right:         var(--ozi-spacing-4);
+    padding:       var(--ozi-spacing-3) var(--ozi-spacing-4);
+    border-radius: var(--ozi-radius-md);
+    box-shadow:    var(--ozi-shadow-lg);
+    font-size:     var(--ozi-font-size-sm);
+    z-index:       var(--ozi-z-toast);
+    max-width:     320px;
+    animation:     ozi-toast-in var(--ozi-transition-base) ease;
+}
+.ozi-toast-success { background: var(--ozi-color-success); color: var(--ozi-color-white); }
+.ozi-toast-error   { background: var(--ozi-color-danger);  color: var(--ozi-color-white); }
+.ozi-toast-warning { background: var(--ozi-color-warning); color: var(--ozi-color-white); }
+.ozi-toast-info    { background: var(--ozi-color-info);    color: var(--ozi-color-white); }
+
+@keyframes ozi-toast-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── COPY — feedback ───────────────────────────────── */
+
+.ozi-copy-feedback {
+    display:       inline-flex;
+    align-items:   center;
+    gap:           var(--ozi-spacing-1);
+    font-size:     var(--ozi-font-size-xs);
+    padding:       var(--ozi-spacing-1) var(--ozi-spacing-2);
+    border-radius: var(--ozi-radius-sm);
+    margin-left:   var(--ozi-spacing-2);
+}
+.ozi-copy-feedback--success { background: var(--ozi-color-success-light); color: var(--ozi-color-success); }
+.ozi-copy-feedback--error   { background: var(--ozi-color-danger-light);  color: var(--ozi-color-danger); }
+
+/* ─── SEARCH — highlight ────────────────────────────── */
+
+.ozi-search-highlight {
+    background:    var(--ozi-color-warning-light);
+    color:         var(--ozi-color-gray-900);
+    padding:       0 2px;
+    border-radius: 2px;
+}
+
+/* ─── SEARCH — paginação ────────────────────────────── */
+
+.ozi-search-pagination {
+    display:    flex;
+    gap:        var(--ozi-spacing-1);
+    list-style: none;
+    padding:    0;
+    margin:     var(--ozi-spacing-4) 0 0;
+    flex-wrap:  wrap;
+}
+.ozi-search-page-btn {
+    padding:       var(--ozi-spacing-1) var(--ozi-spacing-3);
+    border:        var(--ozi-border-width) solid var(--ozi-border-color);
+    border-radius: var(--ozi-radius-sm);
+    background:    var(--ozi-color-white);
+    cursor:        pointer;
+    font-size:     var(--ozi-font-size-sm);
+    transition:    background var(--ozi-transition-fast);
+}
+.ozi-search-page-btn:hover { background: var(--ozi-color-gray-100); }
+.ozi-search-active   .ozi-search-page-btn {
+    background:   var(--ozi-color-primary);
+    color:        var(--ozi-color-white);
+    border-color: var(--ozi-color-primary);
+}
+.ozi-search-disabled .ozi-search-page-btn { opacity: 0.4; cursor: not-allowed; }
+
+/* ─── AUTH — regras de senha ────────────────────────── */
+
+.ozi-auth-rules { list-style: none; padding: 0; margin: var(--ozi-spacing-2) 0 0; }
+.ozi-auth-rule {
+    display:     flex;
+    align-items: center;
+    gap:         var(--ozi-spacing-2);
+    font-size:   var(--ozi-font-size-sm);
+    padding:     var(--ozi-spacing-1) 0;
+    transition:  color var(--ozi-transition-fast);
+}
+.ozi-auth-rule--valid   { color: var(--ozi-auth-rule-valid-color); }
+.ozi-auth-rule--invalid { color: var(--ozi-auth-rule-invalid-color); }
+.ozi-auth-rule--pending { color: var(--ozi-auth-rule-pending-color); }
+
+.ozi-auth-dropdown {
+    background:    var(--ozi-auth-dropdown-bg);
+    border:        var(--ozi-border-width) solid var(--ozi-border-color);
+    border-radius: var(--ozi-radius-md);
+    box-shadow:    var(--ozi-auth-dropdown-shadow);
+    padding:       var(--ozi-spacing-3);
+    margin-top:    var(--ozi-spacing-1);
+}
+
+/* ─── CHECK — estado disabled ───────────────────────── */
+
+.ozi-check-disabled {
+    opacity:        0.5;
+    pointer-events: none;
+}

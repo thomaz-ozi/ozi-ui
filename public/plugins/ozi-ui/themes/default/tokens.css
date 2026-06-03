@@ -1,0 +1,166 @@
+/**
+ * themes/default/tokens.css
+ * Versão: 1.0.0
+ *
+ * Tokens CSS neutros do OZI-UI.
+ * Sem dependência de Bootstrap, Tailwind ou qualquer framework UI.
+ * Usado como base para todos os outros temas.
+ *
+ * Convenção de nomenclatura:
+ *   --ozi-{categoria}-{variante}
+ */
+
+:root {
+
+    /* ─── CORES ─────────────────────────────────────── */
+
+    --ozi-color-primary:        #3b82f6;
+    --ozi-color-primary-hover:  #2563eb;
+    --ozi-color-primary-light:  #eff6ff;
+
+    --ozi-color-secondary:      #6b7280;
+    --ozi-color-secondary-hover:#4b5563;
+
+    --ozi-color-success:        #22c55e;
+    --ozi-color-success-light:  #f0fdf4;
+
+    --ozi-color-danger:         #ef4444;
+    --ozi-color-danger-light:   #fef2f2;
+
+    --ozi-color-warning:        #f59e0b;
+    --ozi-color-warning-light:  #fffbeb;
+
+    --ozi-color-info:           #06b6d4;
+    --ozi-color-info-light:     #ecfeff;
+
+    /* ─── NEUTROS ───────────────────────────────────── */
+
+    --ozi-color-white:          #ffffff;
+    --ozi-color-black:          #000000;
+
+    --ozi-color-gray-50:        #f9fafb;
+    --ozi-color-gray-100:       #f3f4f6;
+    --ozi-color-gray-200:       #e5e7eb;
+    --ozi-color-gray-300:       #d1d5db;
+    --ozi-color-gray-400:       #9ca3af;
+    --ozi-color-gray-500:       #6b7280;
+    --ozi-color-gray-600:       #4b5563;
+    --ozi-color-gray-700:       #374151;
+    --ozi-color-gray-800:       #1f2937;
+    --ozi-color-gray-900:       #111827;
+
+    /* ─── TIPOGRAFIA ────────────────────────────────── */
+
+    --ozi-font-family:          system-ui, -apple-system, sans-serif;
+    --ozi-font-size-xs:         0.75rem;
+    --ozi-font-size-sm:         0.875rem;
+    --ozi-font-size-base:       1rem;
+    --ozi-font-size-lg:         1.125rem;
+
+    --ozi-font-weight-normal:   400;
+    --ozi-font-weight-medium:   500;
+    --ozi-font-weight-semibold: 600;
+    --ozi-font-weight-bold:     700;
+
+    --ozi-line-height-base:     1.5;
+
+    /* ─── ESPAÇAMENTO ───────────────────────────────── */
+
+    --ozi-spacing-1:            0.25rem;
+    --ozi-spacing-2:            0.5rem;
+    --ozi-spacing-3:            0.75rem;
+    --ozi-spacing-4:            1rem;
+    --ozi-spacing-5:            1.25rem;
+    --ozi-spacing-6:            1.5rem;
+    --ozi-spacing-8:            2rem;
+
+    /* ─── BORDAS ────────────────────────────────────── */
+
+    --ozi-border-width:         1px;
+    --ozi-border-color:         var(--ozi-color-gray-300);
+    --ozi-border-color-focus:   var(--ozi-color-primary);
+
+    --ozi-radius-sm:            0.25rem;
+    --ozi-radius-md:            0.375rem;
+    --ozi-radius-lg:            0.5rem;
+    --ozi-radius-xl:            0.75rem;
+    --ozi-radius-full:          9999px;
+
+    /* ─── SOMBRAS ───────────────────────────────────── */
+
+    --ozi-shadow-sm:            0 1px 2px 0 rgba(0,0,0,0.05);
+    --ozi-shadow-md:            0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+    --ozi-shadow-lg:            0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+
+    /* ─── TRANSIÇÕES ────────────────────────────────── */
+
+    --ozi-transition-fast:      150ms ease;
+    --ozi-transition-base:      250ms ease;
+    --ozi-transition-slow:      400ms ease;
+
+    /* ─── Z-INDEX ───────────────────────────────────── */
+
+    --ozi-z-dropdown:           1000;
+    --ozi-z-modal:              1050;
+    --ozi-z-toast:              1100;
+
+    /* ─── COMPONENTES — SELECT ──────────────────────── */
+
+    --ozi-select-bg:                var(--ozi-color-white);
+    --ozi-select-border:            var(--ozi-border-color);
+    --ozi-select-border-focus:      var(--ozi-color-primary);
+    --ozi-select-radius:            var(--ozi-radius-md);
+    --ozi-select-padding:           var(--ozi-spacing-2) var(--ozi-spacing-3);
+    --ozi-select-dropdown-shadow:   var(--ozi-shadow-md);
+    --ozi-select-option-hover-bg:   var(--ozi-color-gray-100);
+    --ozi-select-option-selected-bg:var(--ozi-color-primary-light);
+    --ozi-select-option-selected-color: var(--ozi-color-primary);
+    --ozi-select-tag-bg:            var(--ozi-color-primary-light);
+    --ozi-select-tag-color:         var(--ozi-color-primary);
+
+    /* ─── COMPONENTES — EDITOR ──────────────────────── */
+
+    --ozi-editor-toolbar-bg:        var(--ozi-color-gray-50);
+    --ozi-editor-toolbar-border:    var(--ozi-border-color);
+    --ozi-editor-btn-hover-bg:      var(--ozi-color-gray-200);
+    --ozi-editor-btn-active-bg:     var(--ozi-color-primary-light);
+    --ozi-editor-btn-active-color:  var(--ozi-color-primary);
+    --ozi-editor-content-border:    var(--ozi-border-color);
+    --ozi-editor-content-bg:        var(--ozi-color-white);
+    --ozi-editor-placeholder-color: var(--ozi-color-gray-400);
+
+    /* ─── COMPONENTES — AUDIO ───────────────────────── */
+
+    --ozi-audio-bg:                 var(--ozi-color-gray-50);
+    --ozi-audio-border:             var(--ozi-border-color);
+    --ozi-audio-radius:             var(--ozi-radius-lg);
+    --ozi-audio-btn-color:          var(--ozi-color-primary);
+    --ozi-audio-btn-hover-bg:       var(--ozi-color-primary-light);
+    --ozi-audio-progress-track:     var(--ozi-color-gray-200);
+    --ozi-audio-progress-fill:      var(--ozi-color-primary);
+    --ozi-audio-record-color:       var(--ozi-color-danger);
+    --ozi-audio-record-active-bg:   var(--ozi-color-danger-light);
+
+    /* ─── COMPONENTES — AUTH ────────────────────────── */
+
+    --ozi-auth-rule-valid-color:    var(--ozi-color-success);
+    --ozi-auth-rule-invalid-color:  var(--ozi-color-danger);
+    --ozi-auth-rule-pending-color:  var(--ozi-color-gray-400);
+    --ozi-auth-dropdown-bg:         var(--ozi-color-white);
+    --ozi-auth-dropdown-shadow:     var(--ozi-shadow-md);
+
+    /* ─── COMPONENTES — LOADDATA ────────────────────── */
+
+    --ozi-progress-height:          3px;
+    --ozi-progress-color:           var(--ozi-color-primary);
+    --ozi-progress-success-color:   var(--ozi-color-success);
+    --ozi-progress-error-color:     var(--ozi-color-danger);
+
+    /* ─── ESTADOS DE VALIDAÇÃO ──────────────────────── */
+
+    --ozi-invalid-color:            var(--ozi-color-danger);
+    --ozi-invalid-border:           var(--ozi-color-danger);
+    --ozi-valid-color:              var(--ozi-color-success);
+    --ozi-valid-border:             var(--ozi-color-success);
+    --ozi-feedback-font-size:       var(--ozi-font-size-sm);
+}

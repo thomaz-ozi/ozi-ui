@@ -1,0 +1,104 @@
+/**
+ * modules/ozi-loaddata/css/ozi-loaddata.css
+ * Versão: 1.0.0
+ *
+ * Responsabilidade:
+ *   - Progress bar global (topo da página)
+ *   - Alert de erro/aviso injetado no destino
+ *   - Busy state do form durante envio
+ *
+ * O que NÃO está aqui:
+ *   - Validação de campos (ozi-invalid, ozi-valid, ozi-feedback)
+ *     → pertence a modules/ozi-validate/css/ozi-validate.css
+ *
+ * Usa tokens --ozi-* do tema ativo (default/tokens.css).
+ * Sem dependência de Bootstrap ou Tailwind.
+ */
+
+
+/* ─── PROGRESS BAR ───────────────────────────────────────────────────────────── */
+
+.ozi-progress {
+    position:   fixed;
+    top:        0;
+    left:       0;
+    width:      100%;
+    height:     var(--ozi-progress-height, 3px);
+    z-index:    var(--ozi-z-toast, 1100);
+    pointer-events: none;
+}
+
+.ozi-progress-bar {
+    height:     100%;
+    width:      0;
+    background: var(--ozi-progress-color, var(--ozi-color-primary, #3b82f6));
+    transition: width var(--ozi-transition-slow, 400ms ease);
+}
+
+.ozi-progress-loading .ozi-progress-bar {
+    width: 70%;
+}
+
+.ozi-progress-success .ozi-progress-bar {
+    width:      100%;
+    background: var(--ozi-progress-success-color, var(--ozi-color-success, #22c55e));
+    transition: width var(--ozi-transition-fast, 150ms ease);
+}
+
+.ozi-progress-error .ozi-progress-bar {
+    width:      100%;
+    background: var(--ozi-progress-error-color, var(--ozi-color-danger, #ef4444));
+    transition: width var(--ozi-transition-fast, 150ms ease);
+}
+
+
+/* ─── ALERT — feedback de erro/aviso no destino ──────────────────────────────── */
+
+.ozi-alert {
+    padding:       var(--ozi-spacing-3, 0.75rem) var(--ozi-spacing-4, 1rem);
+    border-radius: var(--ozi-radius-md, 0.375rem);
+    margin-bottom: var(--ozi-spacing-3, 0.75rem);
+    font-size:     var(--ozi-font-size-sm, 0.875rem);
+    line-height:   var(--ozi-line-height-base, 1.5);
+    border:        1px solid transparent;
+}
+
+.ozi-alert b,
+.ozi-alert strong {
+    font-weight: var(--ozi-font-weight-semibold, 600);
+}
+
+.ozi-alert-danger {
+    background:   var(--ozi-color-danger-light,  #fef2f2);
+    color:        var(--ozi-color-danger,         #ef4444);
+    border-color: var(--ozi-color-danger,         #ef4444);
+}
+
+.ozi-alert-warning {
+    background:   var(--ozi-color-warning-light,  #fffbeb);
+    color:        var(--ozi-color-warning,         #f59e0b);
+    border-color: var(--ozi-color-warning,         #f59e0b);
+}
+
+.ozi-alert-meta {
+    margin-top:  var(--ozi-spacing-1, 0.25rem);
+    font-size:   var(--ozi-font-size-xs, 0.75rem);
+    opacity:     0.8;
+}
+
+
+/* ─── BUSY STATE — desabilita form durante envio ─────────────────────────────── */
+
+.ozi-form-busy {
+    position:       relative;
+    pointer-events: none;
+}
+
+.ozi-form-busy::after {
+    content:    '';
+    position:   absolute;
+    inset:      0;
+    background: rgba(255, 255, 255, 0.5);
+    z-index:    1;
+    border-radius: inherit;
+}

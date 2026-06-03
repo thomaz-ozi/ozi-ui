@@ -1,0 +1,94 @@
+/**
+ * themes/bootstrap5/tokens.css
+ * Versão: 1.0.0
+ *
+ * Mapeia tokens --ozi-* para variáveis CSS do Bootstrap 5.
+ * Carregue APÓS o CSS do Bootstrap e o default/tokens.css.
+ *
+ * Requer Bootstrap 5 com suas variáveis CSS (--bs-*) disponíveis.
+ */
+
+:root {
+
+    /* ─── CORES — mapeia para Bootstrap 5 ──────────── */
+
+    --ozi-color-primary:        var(--bs-primary,        #0d6efd);
+    --ozi-color-primary-hover:  var(--bs-primary,        #0b5ed7);
+    --ozi-color-primary-light:  var(--bs-primary-bg-subtle, #cfe2ff);
+
+    --ozi-color-secondary:      var(--bs-secondary,      #6c757d);
+    --ozi-color-secondary-hover:var(--bs-secondary,      #5c636a);
+
+    --ozi-color-success:        var(--bs-success,        #198754);
+    --ozi-color-success-light:  var(--bs-success-bg-subtle, #d1e7dd);
+
+    --ozi-color-danger:         var(--bs-danger,         #dc3545);
+    --ozi-color-danger-light:   var(--bs-danger-bg-subtle,  #f8d7da);
+
+    --ozi-color-warning:        var(--bs-warning,        #ffc107);
+    --ozi-color-warning-light:  var(--bs-warning-bg-subtle, #fff3cd);
+
+    --ozi-color-info:           var(--bs-info,           #0dcaf0);
+    --ozi-color-info-light:     var(--bs-info-bg-subtle, #cff4fc);
+
+    /* ─── NEUTROS — Bootstrap não tem vars css para todos ── */
+
+    --ozi-color-white:          #ffffff;
+    --ozi-color-black:          #000000;
+
+    --ozi-color-gray-50:        #f8f9fa;
+    --ozi-color-gray-100:       #f8f9fa;
+    --ozi-color-gray-200:       #e9ecef;
+    --ozi-color-gray-300:       #dee2e6;
+    --ozi-color-gray-400:       #ced4da;
+    --ozi-color-gray-500:       #adb5bd;
+    --ozi-color-gray-600:       #6c757d;
+    --ozi-color-gray-700:       #495057;
+    --ozi-color-gray-800:       #343a40;
+    --ozi-color-gray-900:       #212529;
+
+    /* ─── TIPOGRAFIA ────────────────────────────────── */
+
+    --ozi-font-family:          var(--bs-body-font-family, system-ui, sans-serif);
+    --ozi-font-size-base:       var(--bs-body-font-size,   1rem);
+    --ozi-font-size-sm:         var(--bs-font-size-sm,     0.875rem);
+    --ozi-font-size-xs:         0.75rem;
+    --ozi-font-size-lg:         var(--bs-font-size-lg,     1.25rem);
+
+    --ozi-line-height-base:     var(--bs-body-line-height, 1.5);
+
+    /* ─── BORDAS ────────────────────────────────────── */
+
+    --ozi-border-width:         var(--bs-border-width,    1px);
+    --ozi-border-color:         var(--bs-border-color,    #dee2e6);
+    --ozi-border-color-focus:   var(--bs-primary,         #0d6efd);
+
+    --ozi-radius-sm:            var(--bs-border-radius-sm,  0.25rem);
+    --ozi-radius-md:            var(--bs-border-radius,     0.375rem);
+    --ozi-radius-lg:            var(--bs-border-radius-lg,  0.5rem);
+    --ozi-radius-xl:            var(--bs-border-radius-xl,  1rem);
+    --ozi-radius-full:          50rem;
+
+    /* ─── SOMBRAS ───────────────────────────────────── */
+
+    --ozi-shadow-sm:            var(--bs-box-shadow-sm,   0 .125rem .25rem rgba(0,0,0,.075));
+    --ozi-shadow-md:            var(--bs-box-shadow,      0 .5rem 1rem rgba(0,0,0,.15));
+    --ozi-shadow-lg:            var(--bs-box-shadow-lg,   0 1rem 3rem rgba(0,0,0,.175));
+
+    /* ─── COMPONENTES — ajustes para BS5 ───────────── */
+
+    --ozi-select-bg:                var(--bs-body-bg,      #ffffff);
+    --ozi-select-border:            var(--bs-border-color, #dee2e6);
+    --ozi-select-border-focus:      var(--bs-primary,      #0d6efd);
+    --ozi-select-radius:            var(--ozi-radius-md);
+    --ozi-select-option-hover-bg:   var(--ozi-color-gray-100);
+    --ozi-select-option-selected-bg:var(--ozi-color-primary-light);
+
+    --ozi-editor-toolbar-bg:        var(--bs-tertiary-bg,  #f8f9fa);
+    --ozi-editor-content-bg:        var(--bs-body-bg,      #ffffff);
+
+    --ozi-audio-bg:                 var(--bs-tertiary-bg,  #f8f9fa);
+
+    --ozi-auth-dropdown-bg:         var(--bs-body-bg,      #ffffff);
+    --ozi-auth-dropdown-shadow:     var(--ozi-shadow-md);
+}

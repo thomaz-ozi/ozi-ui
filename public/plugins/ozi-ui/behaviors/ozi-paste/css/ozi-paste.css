@@ -1,0 +1,70 @@
+/**
+ * ozi-paste.css
+ * Versão: 1.0.0
+ * 2026-06-01
+ */
+
+/* ---------------------------------------------
+   Variáveis locais — consomem tokens globais
+--------------------------------------------- */
+
+:root {
+    --ozi-paste-color-text:    var(--ozi-color-white,   #fff);
+    --ozi-paste-color-success: var(--ozi-color-success, #198754);
+    --ozi-paste-color-error:   var(--ozi-color-danger,  #dc3545);
+}
+
+
+/* ---------------------------------------------
+   Trigger
+--------------------------------------------- */
+
+[data-ozi-paste-value] {
+    cursor: pointer;
+    position: relative;
+}
+
+
+/* ---------------------------------------------
+   Feedback — tooltip lateral (padrão ozi-copy)
+--------------------------------------------- */
+
+.ozi-paste-feedback {
+    position: absolute;
+    z-index: var(--ozi-z-tooltip, 1070);
+    top: 50%;
+    left: calc(100% + 8px);
+    transform: translateY(-50%);
+    white-space: nowrap;
+    pointer-events: none;
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--ozi-radius-sm, 0.25rem);
+    font-size: var(--ozi-font-size-xs, 11px);
+    line-height: 1.2;
+    color: var(--ozi-paste-color-text);
+}
+
+.ozi-paste-feedback-success {
+    background-color: var(--ozi-paste-color-success);
+}
+
+.ozi-paste-feedback-error {
+    background-color: var(--ozi-paste-color-error);
+}
+
+
+/* ---------------------------------------------
+   Dark mode
+--------------------------------------------- */
+
+[data-ozi-theme="dark"] {
+    --ozi-paste-color-success: var(--ozi-color-success-dark, #25a866);
+    --ozi-paste-color-error:   var(--ozi-color-danger-dark,  #e8505b);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --ozi-paste-color-success: var(--ozi-color-success-dark, #25a866);
+        --ozi-paste-color-error:   var(--ozi-color-danger-dark,  #e8505b);
+    }
+}

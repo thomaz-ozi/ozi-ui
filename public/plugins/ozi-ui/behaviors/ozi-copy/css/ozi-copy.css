@@ -1,0 +1,91 @@
+/**
+ * ozi-copy.css
+ * Versão: 1.1.0
+ * 2026-05-31
+ *
+ * Changelog v1.1.0:
+ *   - Variáveis renomeadas: --copy-* → --ozi-copy-* (padrão OZI)
+ *   - Tokens consomem --ozi-* globais (sem valores hardcoded)
+ *   - position: absolute movido para .ozi-copy-feedback (era classe BS5 no JS)
+ *   - border-radius → var(--ozi-radius-sm)
+ *   - font-size → var(--ozi-font-size-xs)
+ *   - z-index → var(--ozi-z-tooltip)
+ *   - Adicionado: .ozi-copy-icon com margin-right via var(--ozi-spacer-1)
+ *   - Dark mode via [data-ozi-theme="dark"] + @media
+ */
+
+/* ---------------------------------------------
+   Variáveis locais — consomem tokens globais
+--------------------------------------------- */
+
+:root {
+    --ozi-copy-color-text:    var(--ozi-color-white,    #fff);
+    --ozi-copy-color-success: var(--ozi-color-success,  #198754);
+    --ozi-copy-color-error:   var(--ozi-color-danger,   #dc3545);
+}
+
+
+/* ---------------------------------------------
+   Trigger — position: relative para o
+   tooltip absolute funcionar corretamente
+--------------------------------------------- */
+
+[data-ozi-copy-value],
+[data-ozi-copy] {
+    cursor: pointer;
+    position: relative;
+}
+
+
+/* ---------------------------------------------
+   Feedback — tooltip lateral direito
+   position: absolute aqui (não mais no JS)
+   fadeOut controlado pelo jQuery
+--------------------------------------------- */
+
+.ozi-copy-feedback {
+    position: absolute;
+    z-index: var(--ozi-z-tooltip, 1070);
+    top: 50%;
+    left: calc(100% + 8px);
+    transform: translateY(-50%);
+    white-space: nowrap;
+    pointer-events: none;
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--ozi-radius-sm, 0.25rem);
+    font-size: var(--ozi-font-size-xs, 11px);
+    line-height: 1.2;
+    color: var(--ozi-copy-color-text);
+}
+
+.ozi-copy-feedback-success {
+    background-color: var(--ozi-copy-color-success);
+}
+
+.ozi-copy-feedback-error {
+    background-color: var(--ozi-copy-color-error);
+}
+
+
+/* ---------------------------------------------
+   Ícone — margin sem dependência Bootstrap
+--------------------------------------------- */
+
+.ozi-copy-icon {
+    margin-right: var(--ozi-spacer-1, 0.25rem);
+}
+
+
+/* ---------------------------------------------
+   Dark mode
+--------------------------------------------- */
+
+[data-ozi-theme="dark"] {
+    --ozi-copy-color-success: var(--ozi-color-success-dark, #25a866);
+    --ozi-copy-color-error:   var(--ozi-color-danger-dark,  #e8505b);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --ozi-copy-color-success: var(--ozi-color-success-dark, #25a866);
+        --ozi-copy-co

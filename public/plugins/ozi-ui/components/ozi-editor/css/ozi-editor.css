@@ -1,0 +1,554 @@
+/**
+ * components/ozi-editor/css/ozi-editor.css
+ * Versão: 2.2.2
+ *
+ * [2.0.3] FIX-C  Auto-referência circular em --ozi-editor-toolbar-bg corrigida
+ * [2.0.4] FIX    --ozi-editor-btn-bg: #ffffff direto (sem depender de --ozi-color-white)
+ * [2.1.0] FEAT-2 Estilos h1-h6 dentro do content
+ * [2.1.0] FEAT-3 Dropdown de classes customizadas
+ * [2.2.0] FEAT-4 Dropdown de headings
+ * [2.2.1] UX     Dropdown de classes: check → checkbox visual (☑/☐)
+ * [2.2.2] UX     toolbar-group: botões unidos (btn-group style) — borda colapsada, sem gap
+ *         - .ozi-editor-btn-caret REMOVIDO
+ *         - .ozi-editor-btn-icon mantém 18×18 em todos os botões dropdown
+ */
+
+
+/* ─── TOKENS ────────────────────────────────────────────── */
+
+:root {
+    --ozi-editor-radius:          var(--ozi-radius-lg,          0.5rem);
+    --ozi-editor-shadow:          var(--ozi-shadow-md,          0 4px 6px -1px rgba(0,0,0,0.1));
+
+    --ozi-editor-bg:              var(--ozi-color-white,        #ffffff);
+    --ozi-editor-border:          var(--ozi-border-color,       #d1d5db);
+    --ozi-editor-text:            var(--ozi-color-gray-900,     #111827);
+    --ozi-editor-muted:           var(--ozi-color-gray-500,     #6b7280);
+    --ozi-editor-placeholder:     var(--ozi-color-gray-400,     #9ca3af);
+    --ozi-editor-invalid:         var(--ozi-color-danger,       #ef4444);
+
+    --ozi-editor-toolbar-bg:      var(--ozi-color-gray-50,      #f9fafb);
+    --ozi-editor-toolbar-border:  var(--ozi-border-color,       #d1d5db);
+
+    /* btn-bg: #ffffff direto — não depende de --ozi-color-white */
+    --ozi-editor-btn-bg:          #ffffff;
+    --ozi-editor-btn-border:      var(--ozi-color-gray-300,     #d1d5db);
+    --ozi-editor-btn-hover-bg:    var(--ozi-color-gray-100,     #f3f4f6);
+    --ozi-editor-btn-hover-color: var(--ozi-color-gray-900,     #111827);
+
+    --ozi-editor-active-bg:       var(--ozi-color-primary-light, #eff6ff);
+    --ozi-editor-active-color:    var(--ozi-color-primary,       #3b82f6);
+    --ozi-editor-uicolor:         var(--ozi-color-primary,       #3b82f6);
+}
+
+
+/* ─── DARK MODE ─────────────────────────────────────────── */
+
+[data-ozi-theme="dark"],
+[data-bs-theme="dark"] {
+    --ozi-editor-bg:              var(--ozi-color-gray-100,     #1f2937);
+    --ozi-editor-border:          var(--ozi-border-color,       #374151);
+    --ozi-editor-shadow:          0 8px 20px rgba(0, 0, 0, 0.3);
+    --ozi-editor-toolbar-bg:      var(--ozi-color-gray-50,      #111827);
+    --ozi-editor-toolbar-border:  var(--ozi-border-color,       #374151);
+    --ozi-editor-btn-bg:          var(--ozi-color-gray-100,     #1f2937);
+    --ozi-editor-btn-border:      var(--ozi-color-gray-300,     #4b5563);
+    --ozi-editor-btn-hover-bg:    var(--ozi-color-gray-200,     #374151);
+    --ozi-editor-btn-hover-color: var(--ozi-color-gray-900,     #f9fafb);
+    --ozi-editor-active-bg:       rgba(59, 130, 246, 0.15);
+    --ozi-editor-active-color:    var(--ozi-color-primary,      #60a5fa);
+    --ozi-editor-placeholder:     var(--ozi-color-gray-400,     #6b7280);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-ozi-theme="light"]):not([data-bs-theme="light"]) {
+        --ozi-editor-bg:              #1f2937;
+        --ozi-editor-border:          #374151;
+        --ozi-editor-shadow:          0 8px 20px rgba(0, 0, 0, 0.3);
+        --ozi-editor-toolbar-bg:      #111827;
+        --ozi-editor-toolbar-border:  #374151;
+        --ozi-editor-btn-bg:          #1f2937;
+        --ozi-editor-btn-border:      #4b5563;
+        --ozi-editor-btn-hover-bg:    #374151;
+        --ozi-editor-btn-hover-color: #f9fafb;
+        --ozi-editor-active-bg:       rgba(59, 130, 246, 0.15);
+        --ozi-editor-active-color:    #60a5fa;
+        --ozi-editor-placeholder:     #6b7280;
+    }
+}
+
+
+/* ─── WRAP ──────────────────────────────────────────────── */
+
+.ozi-editor-wrap {
+    border:        1px solid var(--ozi-editor-border);
+    border-radius: var(--ozi-editor-radius);
+    background:    var(--ozi-editor-bg);
+    box-shadow:    var(--ozi-editor-shadow);
+    overflow:      hidden;
+    color:         var(--ozi-editor-text);
+}
+
+.ozi-editor-wrap.ozi-editor--disabled,
+.ozi-editor-wrap.is-disabled {
+    opacity:        0.75;
+    pointer-events: none;
+}
+
+.ozi-editor-wrap.ozi-invalid {
+    border-color: var(--ozi-editor-invalid);
+}
+
+.ozi-editor-wrap.ozi-invalid .ozi-editor-content,
+.ozi-editor-wrap.ozi-invalid .ozi-editor-source {
+    box-shadow: inset 0 0 0 1px var(--ozi-editor-invalid);
+}
+
+.ozi-editor-wrap.ozi-valid {
+    border-color: var(--ozi-color-success, #22c55e);
+}
+
+
+/* ─── TOOLBAR ───────────────────────────────────────────── */
+
+.ozi-editor-toolbar {
+    display:        flex;
+    flex-direction: column;
+    gap:            8px;
+    padding:        10px;
+    background:     var(--ozi-editor-toolbar-bg);
+    border-bottom:  1px solid var(--ozi-editor-toolbar-border);
+}
+
+.ozi-editor--disabled .ozi-editor-toolbar,
+.is-disabled .ozi-editor-toolbar {
+    opacity:        0.6;
+    pointer-events: none;
+}
+
+.ozi-editor-toolbar-row {
+    display:     flex;
+    flex-wrap:   wrap;
+    gap:         8px;
+    align-items: center;
+}
+
+.ozi-editor-toolbar-group {
+    display:     inline-flex;
+    flex-wrap:   nowrap;
+    align-items: stretch;
+    /* sem gap — botões colapsam as bordas entre si */
+}
+
+/*
+ * Botões dentro do group: unidos estilo btn-group do Bootstrap.
+ * Margem negativa colapsa a borda duplicada entre botões adjacentes.
+ */
+.ozi-editor-toolbar-group > .ozi-editor-btn {
+    border-radius: 0 !important;
+    margin-left:   -1px;
+    position:      relative;
+    z-index:       1;
+}
+
+/* hover e ativo sobem o z-index para a borda colorida ficar visível */
+.ozi-editor-toolbar-group > .ozi-editor-btn:hover,
+.ozi-editor-toolbar-group > .ozi-editor-btn.ozi-editor-btn--active,
+.ozi-editor-toolbar-group > .ozi-editor-btn.is-active {
+    z-index: 2;
+}
+
+/* primeiro botão: arredonda apenas à esquerda */
+.ozi-editor-toolbar-group > .ozi-editor-btn:first-child {
+    border-top-left-radius:    var(--ozi-radius-md, 0.375rem) !important;
+    border-bottom-left-radius: var(--ozi-radius-md, 0.375rem) !important;
+    margin-left: 0;
+}
+
+/* último botão: arredonda apenas à direita */
+.ozi-editor-toolbar-group > .ozi-editor-btn:last-child {
+    border-top-right-radius:    var(--ozi-radius-md, 0.375rem) !important;
+    border-bottom-right-radius: var(--ozi-radius-md, 0.375rem) !important;
+}
+
+
+/* ─── BOTÕES DA TOOLBAR ─────────────────────────────────── */
+
+.ozi-editor-btn {
+    min-width:       38px;
+    height:          34px;
+    padding:         0 10px;
+    border:          1px solid var(--ozi-editor-btn-border) !important;
+    border-radius:   var(--ozi-radius-md, 0.375rem) !important;
+    background:      var(--ozi-editor-btn-bg) !important;
+    color:           var(--ozi-editor-text) !important;
+    cursor:          pointer;
+    transition:      background var(--ozi-transition-fast, 150ms ease),
+    color var(--ozi-transition-fast, 150ms ease),
+    border-color var(--ozi-transition-fast, 150ms ease);
+    font-size:       13px;
+    line-height:     1;
+    display:         inline-flex;
+    align-items:     center;
+    justify-content: center;
+    gap:             6px;
+    white-space:     nowrap;
+    user-select:     none;
+}
+
+.ozi-editor-btn:hover {
+    background:   var(--ozi-editor-btn-hover-bg) !important;
+    color:        var(--ozi-editor-btn-hover-color) !important;
+}
+
+.ozi-editor-btn.ozi-editor-btn--active,
+.ozi-editor-btn.is-active {
+    background:   var(--ozi-editor-active-bg) !important;
+    color:        var(--ozi-editor-active-color) !important;
+    border-color: var(--ozi-editor-uicolor) !important;
+}
+
+.ozi-editor-btn:disabled {
+    opacity: 0.55;
+    cursor:  not-allowed;
+}
+
+/*
+ * [2.2.0] .ozi-editor-btn-icon — 18×18 em todos os botões,
+ * incluindo os botões de dropdown (heading, classes).
+ * REMOVIDO: .ozi-editor-btn-caret
+ */
+.ozi-editor-btn-icon {
+    display:         inline-flex;
+    align-items:     center;
+    justify-content: center;
+    width:           18px;
+    height:          18px;
+    line-height:     1;
+    flex:            0 0 auto;
+}
+
+.ozi-editor-btn-icon svg {
+    width:   100%;
+    height:  100%;
+    display: block;
+}
+
+.ozi-editor-btn-label {
+    font-size:   12px;
+    line-height: 1;
+}
+
+.ozi-visually-hidden {
+    position:    absolute !important;
+    width:       1px;
+    height:      1px;
+    padding:     0;
+    margin:      -1px;
+    overflow:    hidden;
+    clip:        rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border:      0;
+}
+
+
+/* ─── ÁREA DE EDIÇÃO ────────────────────────────────────── */
+
+.ozi-editor-content {
+    padding:     14px;
+    outline:     none;
+    color:       var(--ozi-editor-text);
+    line-height: var(--ozi-line-height-base, 1.5);
+    background:  var(--ozi-editor-bg);
+    overflow-y:  auto;
+    overflow-x:  hidden;
+    min-height:  200px;
+}
+
+.ozi-editor-content:focus {
+    box-shadow: inset 0 0 0 1px var(--ozi-editor-uicolor);
+}
+
+.ozi-editor-content[contenteditable="true"]:empty::before {
+    content:        attr(data-placeholder);
+    color:          var(--ozi-editor-placeholder);
+    pointer-events: none;
+}
+
+.ozi-editor-content p          { margin: 0 0 10px; }
+
+.ozi-editor-content ul,
+.ozi-editor-content ol         { margin: 0 0 10px 18px; padding: 0; }
+
+.ozi-editor-content pre {
+    margin:        0 0 10px;
+    padding:       12px;
+    border-radius: var(--ozi-radius-md, 0.375rem);
+    background:    rgba(0, 0, 0, 0.05);
+    overflow:      auto;
+    font-family:   Consolas, Monaco, monospace;
+    font-size:     13px;
+}
+
+.ozi-editor-content pre code   { color: #800b0b; }
+
+.ozi-editor-content table      { width: 100%; border-collapse: collapse; margin: 0 0 10px; }
+
+.ozi-editor-content td,
+.ozi-editor-content th         { border: 1px solid var(--ozi-editor-border); padding: 8px; vertical-align: top; }
+
+[data-ozi-theme="dark"] .ozi-editor-content pre,
+[data-bs-theme="dark"] .ozi-editor-content pre {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+
+/* ─── HEADINGS NO CONTENT ───────────────────────────────── */
+
+.ozi-editor-content h1,
+.ozi-editor-content h2,
+.ozi-editor-content h3,
+.ozi-editor-content h4,
+.ozi-editor-content h5,
+.ozi-editor-content h6 {
+    margin:      0 0 10px;
+    line-height: 1.25;
+    font-weight: 700;
+    color:       var(--ozi-editor-text);
+}
+
+.ozi-editor-content h1 { font-size: 2em; }
+.ozi-editor-content h2 { font-size: 1.5em; }
+.ozi-editor-content h3 { font-size: 1.25em; }
+.ozi-editor-content h4 { font-size: 1.1em; }
+.ozi-editor-content h5 { font-size: 1em;   font-weight: 600; }
+.ozi-editor-content h6 { font-size: 0.9em; font-weight: 600; }
+
+
+/* ─── MODO SOURCE ───────────────────────────────────────── */
+
+.ozi-editor-source,
+.ozi-editor-source-area {
+    width:       100%;
+    border:      0;
+    outline:     none;
+    resize:      vertical;
+    padding:     14px;
+    font-family: Consolas, Monaco, monospace;
+    font-size:   13px;
+    line-height: 1.5;
+    color:       var(--ozi-editor-text);
+    background:  var(--ozi-editor-bg);
+    overflow-y:  auto;
+    overflow-x:  auto;
+    box-sizing:  border-box;
+    min-height:  200px;
+}
+
+.ozi-editor-wrap.is-source-mode .ozi-editor-content     { display: none; }
+.ozi-editor-wrap.is-source-mode .ozi-editor-source-area { display: block; }
+
+
+/* ─── FEEDBACK DE VALIDAÇÃO ─────────────────────────────── */
+
+.ozi-editor-feedback {
+    display:   none;
+    padding:   0 14px 12px;
+    color:     var(--ozi-editor-invalid);
+    font-size: var(--ozi-font-size-sm, 0.875rem);
+}
+
+.ozi-editor-feedback.is-visible { display: block; }
+
+
+/* ─── ÍCONES SVG ────────────────────────────────────────── */
+
+.ozi-icon-svg {
+    width:    18px;
+    height:   18px;
+    display:  block;
+    overflow: visible;
+}
+
+.ozi-icon-stroke {
+    fill:            none;
+    stroke:          currentColor;
+    stroke-width:    1.85;
+    stroke-linecap:  round;
+    stroke-linejoin: round;
+}
+
+.ozi-icon-fill { fill: currentColor; stroke: none; }
+
+.ozi-icon-16 { width: 16px; height: 16px; }
+.ozi-icon-18 { width: 18px; height: 18px; }
+.ozi-icon-20 { width: 20px; height: 20px; }
+.ozi-icon-24 { width: 24px; height: 24px; }
+
+
+/* ─── DROPDOWN BASE (compartilhado: heading + classes) ───── */
+
+.ozi-editor-heading-wrap,
+.ozi-editor-classes-wrap {
+    position: relative;
+    display:  inline-flex;
+}
+
+.ozi-editor-heading-dropdown,
+.ozi-editor-classes-dropdown {
+    position:       absolute;
+    top:            calc(100% + 4px);
+    left:           0;
+    z-index:        var(--ozi-z-dropdown, 1000);
+    min-width:      160px;
+    background:     var(--ozi-editor-bg);
+    border:         1px solid var(--ozi-editor-border);
+    border-radius:  var(--ozi-radius-md, 0.375rem);
+    box-shadow:     var(--ozi-shadow-md, 0 4px 12px rgba(0,0,0,0.12));
+    padding:        4px;
+    display:        flex;
+    flex-direction: column;
+    gap:            2px;
+}
+
+[data-ozi-theme="dark"] .ozi-editor-heading-dropdown,
+[data-ozi-theme="dark"] .ozi-editor-classes-dropdown,
+[data-bs-theme="dark"]  .ozi-editor-heading-dropdown,
+[data-bs-theme="dark"]  .ozi-editor-classes-dropdown {
+    background:   var(--ozi-editor-toolbar-bg);
+    border-color: var(--ozi-editor-border);
+}
+
+
+/* ─── DROPDOWN DE HEADINGS ──────────────────────────────── */
+/* [FEAT-4] */
+
+.ozi-editor-heading-item {
+    display:       flex;
+    align-items:   center;
+    gap:           8px;
+    width:         100%;
+    padding:       7px 10px;
+    border:        none;
+    border-radius: var(--ozi-radius-sm, 0.25rem);
+    background:    transparent;
+    color:         var(--ozi-editor-text);
+    text-align:    left;
+    cursor:        pointer;
+    transition:    background var(--ozi-transition-fast, 150ms ease);
+    white-space:   nowrap;
+}
+
+.ozi-editor-heading-item:hover {
+    background: var(--ozi-editor-btn-hover-bg);
+}
+
+.ozi-editor-heading-check {
+    width:      14px;
+    flex:       0 0 14px;
+    color:      var(--ozi-editor-uicolor);
+    font-size:  12px;
+    visibility: hidden;
+}
+
+.ozi-editor-heading-item--active .ozi-editor-heading-check {
+    visibility: visible;
+}
+
+.ozi-editor-heading-item--active {
+    background:  var(--ozi-editor-active-bg);
+    color:       var(--ozi-editor-active-color);
+    font-weight: 500;
+}
+
+/* tag (H1, H2...) — monoespaçado, largura fixa para alinhar labels */
+.ozi-editor-heading-tag {
+    font-family: Consolas, Monaco, monospace;
+    font-size:   12px;
+    font-weight: 700;
+    min-width:   22px;
+    color:       var(--ozi-editor-muted);
+}
+
+.ozi-editor-heading-item--active .ozi-editor-heading-tag {
+    color: var(--ozi-editor-active-color);
+}
+
+/* label (Heading 1, Heading 2...) com tamanho proporcional */
+.ozi-editor-heading-label {
+    flex:      1;
+    font-size: 13px;
+}
+
+/* tamanho visual de cada nível no label */
+.ozi-editor-heading-item[data-ozi-heading="h1"] .ozi-editor-heading-label { font-size: 16px; font-weight: 700; }
+.ozi-editor-heading-item[data-ozi-heading="h2"] .ozi-editor-heading-label { font-size: 15px; font-weight: 700; }
+.ozi-editor-heading-item[data-ozi-heading="h3"] .ozi-editor-heading-label { font-size: 14px; font-weight: 600; }
+.ozi-editor-heading-item[data-ozi-heading="h4"] .ozi-editor-heading-label { font-size: 13px; font-weight: 600; }
+.ozi-editor-heading-item[data-ozi-heading="h5"] .ozi-editor-heading-label { font-size: 12px; font-weight: 500; }
+.ozi-editor-heading-item[data-ozi-heading="h6"] .ozi-editor-heading-label { font-size: 11px; font-weight: 500; }
+
+
+/* ─── DROPDOWN DE CLASSES CUSTOMIZADAS ──────────────────── */
+/* [FEAT-3] */
+
+.ozi-editor-classes-item {
+    display:       flex;
+    align-items:   center;
+    gap:           8px;
+    width:         100%;
+    padding:       7px 10px;
+    border:        none;
+    border-radius: var(--ozi-radius-sm, 0.25rem);
+    background:    transparent;
+    color:         var(--ozi-editor-text);
+    font-size:     13px;
+    text-align:    left;
+    cursor:        pointer;
+    transition:    background var(--ozi-transition-fast, 150ms ease);
+    white-space:   nowrap;
+}
+
+.ozi-editor-classes-item:hover {
+    background: var(--ozi-editor-btn-hover-bg);
+}
+
+.ozi-editor-classes-check {
+    /* checkbox visual via CSS puro — sem <input> no DOM */
+    display:          inline-flex;
+    align-items:      center;
+    justify-content:  center;
+    flex:             0 0 16px;
+    width:            16px;
+    height:           16px;
+    border:           1.5px solid var(--ozi-editor-btn-border);
+    border-radius:    var(--ozi-radius-sm, 0.25rem);
+    background:       var(--ozi-editor-btn-bg);
+    color:            transparent;          /* ✓ oculto por padrão */
+    font-size:        11px;
+    line-height:      1;
+    transition:       background var(--ozi-transition-fast, 150ms ease),
+    border-color var(--ozi-transition-fast, 150ms ease),
+    color var(--ozi-transition-fast, 150ms ease);
+    flex-shrink:      0;
+    pointer-events:   none;
+}
+
+/* hover — mostra contorno azul no checkbox */
+.ozi-editor-classes-item:hover .ozi-editor-classes-check {
+    border-color: var(--ozi-editor-uicolor);
+}
+
+/* ativo — checkbox preenchido + ✓ visível */
+.ozi-editor-classes-item--active .ozi-editor-classes-check {
+    background:   var(--ozi-editor-uicolor);
+    border-color: var(--ozi-editor-uicolor);
+    color:        #ffffff;
+}
+
+.ozi-editor-classes-item--active {
+    color:       var(--ozi-editor-active-color);
+    font-weight: 500;
+}
+
+.ozi-editor-classes-label { flex: 1; }

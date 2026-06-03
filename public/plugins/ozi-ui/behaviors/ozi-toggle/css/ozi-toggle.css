@@ -1,0 +1,26 @@
+/**
+ * ozi-toggle.css
+ * Versão: 1.0.0
+ * 2026-05-31
+ *
+ * Responsabilidade:
+ *   - Estado inicial oculto para data-ozi-toggle-content
+ *
+ * Uso:
+ *   Adicione .ozi-toggle-d-none no content que deve começar oculto.
+ *   Sem a classe, o content começa visível.
+ *
+ *   <!-- começa oculto -->
+ *   <div data-ozi-toggle-content="id" class="ozi-toggle-d-none">...</div>
+ *
+ *   <!-- começa visível -->
+ *   <div data-ozi-toggle-content="id">...</div>
+ *
+ * Changelog v1.0.0:
+ *   - Criado: .ozi-toggle-d-none para estado inicial oculto
+ *   - Deliberadamente mínimo — aparência visual é responsabilidade do dev/tema
+ */
+
+.ozi-toggle-d-none {
+    display: none;
+}

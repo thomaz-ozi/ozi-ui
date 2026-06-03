@@ -1,0 +1,52 @@
+<!-- shared/svg/icon-close.svg -->
+<!-- Usado por: select, autocomplete, audio, editor, auth (5 plugins) -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+     width="16" height="16" aria-hidden="true">
+  <line x1="18" y1="6" x2="6" y2="18"/>
+  <line x1="6" y1="6" x2="18" y2="18"/>
+</svg>
+
+<!-- ─────────────────────────────────────────── -->
+
+<!-- shared/svg/icon-loading.svg -->
+<!-- Usado por: loaddata, select, autocomplete, audio (4 plugins) -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+     width="16" height="16" aria-hidden="true" class="ozi-spin">
+  <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+</svg>
+
+<!-- ─────────────────────────────────────────── -->
+
+<!-- shared/svg/icon-success.svg -->
+<!-- Usado por: loaddata, copy, auth (3 plugins) -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+     width="16" height="16" aria-hidden="true">
+  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+  <polyline points="22 4 12 14.01 9 11.01"/>
+</svg>
+
+<!-- ─────────────────────────────────────────── -->
+
+<!-- shared/svg/icon-error.svg -->
+<!-- Usado por: loaddata, audio, auth (3 plugins) -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+     width="16" height="16" aria-hidden="true">
+  <circle cx="12" cy="12" r="10"/>
+  <line x1="12" y1="8" x2="12" y2="12"/>
+  <line x1="12" y1="16" x2="12.01" y2="16"/>
+</svg>
+
+<!-- ─────────────────────────────────────────── -->
+
+<!-- shared/svg/icon-search.svg -->
+<!-- Usado por: select, autocomplete, search (3 plugins) -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+     width="16" height="16" aria-hidden="true">
+  <circle cx="11" cy="11" r="8"/>
+  <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+</svg>

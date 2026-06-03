@@ -1,0 +1,258 @@
+/**
+ * modules/ozi-validate/css/ozi-validate.css
+ * Versão: 1.0.0
+ *
+ * Responsabilidade:
+ *   - Visual de validação para .ozi-invalid e .ozi-valid
+ *   - Cobre: input, select, textarea, checkbox, radio, file
+ *   - Feedback text, focus state, dark mode
+ *   - Input-group e combinações comuns
+ *
+ * Uso:
+ *   Quando theme: 'default', o validate aplica .ozi-invalid/.ozi-valid.
+ *   Quando theme: 'bootstrap5', aplica .is-invalid/.is-valid (Bootstrap cuida do visual).
+ *   Quando theme: 'tailwind', aplica as classes do classMap tailwind.
+ *
+ * Seletores genéricos — sem dependência de .form-control ou .form-select (Bootstrap).
+ * Funciona com qualquer markup HTML.
+ *
+ * Usa tokens --ozi-* do tema ativo.
+ */
+
+
+/* ─── TOKENS — fallback se tokens.css não estiver presente ───────────────────── */
+
+:root {
+    --ozi-valid-color:            var(--ozi-color-success,  #22c55e);
+    --ozi-valid-border-color:     var(--ozi-color-success,  #22c55e);
+    --ozi-invalid-color:          var(--ozi-color-danger,   #ef4444);
+    --ozi-invalid-border-color:   var(--ozi-color-danger,   #ef4444);
+    --ozi-disabled-opacity:       0.5;
+
+    /* focus shadow — sem hardcode rgba */
+    --ozi-focus-shadow-valid:     0 0 0 0.25rem rgba(34, 197, 94, 0.25);
+    --ozi-focus-shadow-invalid:   0 0 0 0.25rem rgba(239, 68, 68, 0.25);
+}
+
+
+/* ─── SVG ICONS (inline) ─────────────────────────────────────────────────────── */
+
+:root {
+    --ozi-icon-invalid: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' width='12' height='12' fill='none' stroke='%23ef4444'%3e%3ccircle cx='6' cy='6' r='4.5'/%3e%3cpath stroke-linejoin='round' d='M5.8 3.6h.4L6 6.5z'/%3e%3ccircle cx='6' cy='8.2' r='.6' fill='%23ef4444' stroke='none'/%3e%3c/svg%3e");
+    --ozi-icon-valid:   url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3e%3cpath fill='%2322c55e' d='M2.3 6.73.6 4.53c-.4-1.04.46-1.4 1.1-.8l1.1 1.4 3.4-3.8c.6-.63 1.6-.27 1.2.7l-4 4.6c-.43.5-.8.4-1.1.1'/%3e%3c/svg%3e");
+}
+
+
+/* ─── INPUT / TEXTAREA ───────────────────────────────────────────────────────── */
+
+input.ozi-invalid,
+textarea.ozi-invalid {
+    border-color:        var(--ozi-invalid-border-color);
+    padding-right:       calc(1.5em + 0.75rem);
+    background-image:    var(--ozi-icon-invalid);
+    background-repeat:   no-repeat;
+    background-position: right calc(0.375em + 0.1875rem) center;
+    background-size:     calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
+}
+
+input.ozi-invalid:focus,
+textarea.ozi-invalid:focus {
+    border-color: var(--ozi-invalid-border-color);
+    box-shadow:   var(--ozi-focus-shadow-invalid);
+    outline:      0;
+}
+
+input.ozi-valid,
+textarea.ozi-valid {
+    border-color:        var(--ozi-valid-border-color);
+    padding-right:       calc(1.5em + 0.75rem);
+    background-image:    var(--ozi-icon-valid);
+    background-repeat:   no-repeat;
+    background-position: right calc(0.375em + 0.1875rem) center;
+    background-size:     calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
+}
+
+input.ozi-valid:focus,
+textarea.ozi-valid:focus {
+    border-color: var(--ozi-valid-border-color);
+    box-shadow:   var(--ozi-focus-shadow-valid);
+    outline:      0;
+}
+
+/* textarea — ícone no topo direito */
+textarea.ozi-invalid,
+textarea.ozi-valid {
+    padding-right:       0.75rem;
+    background-position: top calc(0.375em + 0.1875rem) right calc(0.375em + 0.1875rem);
+}
+
+
+/* ─── SELECT NATIVO ──────────────────────────────────────────────────────────── */
+
+select.ozi-invalid {
+    border-color: var(--ozi-invalid-border-color);
+}
+
+select.ozi-invalid:focus {
+    border-color: var(--ozi-invalid-border-color);
+    box-shadow:   var(--ozi-focus-shadow-invalid);
+    outline:      0;
+}
+
+select.ozi-valid {
+    border-color: var(--ozi-valid-border-color);
+}
+
+select.ozi-valid:focus {
+    border-color: var(--ozi-valid-border-color);
+    box-shadow:   var(--ozi-focus-shadow-valid);
+    outline:      0;
+}
+
+
+/* ─── CHECKBOX / RADIO ───────────────────────────────────────────────────────── */
+
+input[type="checkbox"].ozi-invalid,
+input[type="radio"].ozi-invalid {
+    border-color: var(--ozi-invalid-border-color);
+}
+
+input[type="checkbox"].ozi-invalid:checked,
+input[type="radio"].ozi-invalid:checked {
+    background-color: var(--ozi-invalid-border-color);
+}
+
+input[type="checkbox"].ozi-invalid:focus,
+input[type="radio"].ozi-invalid:focus {
+    box-shadow: var(--ozi-focus-shadow-invalid);
+}
+
+input[type="checkbox"].ozi-invalid ~ label,
+input[type="radio"].ozi-invalid ~ label {
+    color: var(--ozi-invalid-color);
+}
+
+input[type="checkbox"].ozi-valid,
+input[type="radio"].ozi-valid {
+    border-color: var(--ozi-valid-border-color);
+}
+
+input[type="checkbox"].ozi-valid:checked,
+input[type="radio"].ozi-valid:checked {
+    background-color: var(--ozi-valid-border-color);
+}
+
+input[type="checkbox"].ozi-valid:focus,
+input[type="radio"].ozi-valid:focus {
+    box-shadow: var(--ozi-focus-shadow-valid);
+}
+
+input[type="checkbox"].ozi-valid ~ label,
+input[type="radio"].ozi-valid ~ label {
+    color: var(--ozi-valid-color);
+}
+
+
+/* ─── FEEDBACK TEXT ──────────────────────────────────────────────────────────── */
+
+.ozi-feedback {
+    display:    none;
+    width:      100%;
+    margin-top: var(--ozi-spacing-1, 0.25rem);
+    font-size:  var(--ozi-feedback-font-size, 0.875rem);
+}
+
+/* mostra feedback quando campo tem ozi-invalid */
+input.ozi-invalid    ~ .ozi-feedback,
+select.ozi-invalid   ~ .ozi-feedback,
+textarea.ozi-invalid ~ .ozi-feedback,
+input[type="checkbox"].ozi-invalid ~ .ozi-feedback,
+input[type="radio"].ozi-invalid    ~ .ozi-feedback {
+    display: block;
+    color:   var(--ozi-invalid-color);
+}
+
+/* mostra feedback quando campo tem ozi-valid */
+input.ozi-valid    ~ .ozi-feedback,
+select.ozi-valid   ~ .ozi-feedback,
+textarea.ozi-valid ~ .ozi-feedback {
+    display: block;
+    color:   var(--ozi-valid-color);
+}
+
+/* compat Bootstrap — se o dev usar .invalid-feedback junto com .ozi-invalid */
+input.ozi-invalid    ~ .invalid-feedback,
+select.ozi-invalid   ~ .invalid-feedback,
+textarea.ozi-invalid ~ .invalid-feedback {
+    display: block;
+}
+
+input.ozi-valid    ~ .valid-feedback,
+select.ozi-valid   ~ .valid-feedback,
+textarea.ozi-valid ~ .valid-feedback {
+    display: block;
+}
+
+
+/* ─── INPUT-GROUP ────────────────────────────────────────────────────────────── */
+
+.ozi-input-group > input.ozi-invalid,
+.ozi-input-group > select.ozi-invalid {
+    z-index: 1;
+}
+
+.ozi-input-group > input.ozi-invalid:focus,
+.ozi-input-group > select.ozi-invalid:focus {
+    z-index: 3;
+}
+
+.ozi-input-group > input.ozi-valid,
+.ozi-input-group > select.ozi-valid {
+    z-index: 1;
+}
+
+.ozi-input-group > input.ozi-valid:focus,
+.ozi-input-group > select.ozi-valid:focus {
+    z-index: 3;
+}
+
+/* compat Bootstrap input-group */
+.input-group > input.ozi-invalid,
+.input-group > select.ozi-invalid { z-index: 1; }
+.input-group > input.ozi-invalid:focus,
+.input-group > select.ozi-invalid:focus { z-index: 3; }
+.input-group > input.ozi-valid,
+.input-group > select.ozi-valid { z-index: 1; }
+.input-group > input.ozi-valid:focus,
+.input-group > select.ozi-valid:focus { z-index: 3; }
+
+.input-group.ozi-invalid ~ .ozi-feedback,
+.input-group.ozi-invalid ~ .invalid-feedback {
+    display: block;
+    color:   var(--ozi-invalid-color);
+}
+
+.input-group.ozi-valid ~ .ozi-feedback,
+.input-group.ozi-valid ~ .valid-feedback {
+    display: block;
+    color:   var(--ozi-valid-color);
+}
+
+
+/* ─── DISABLED ───────────────────────────────────────────────────────────────── */
+
+.ozi-disabled {
+    opacity:        var(--ozi-disabled-opacity, 0.5);
+    pointer-events: none;
+    cursor:         not-allowed;
+}
+
+
+/* ─── DARK MODE ──────────────────────────────────────────────────────────────── */
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --ozi-icon-invalid: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' width='12' height='12' fill='none' stroke='%23f87171'%3e%3ccircle cx='6' cy='6' r='4.5'/%3e%3cpath stroke-linejoin='round' d='M5.8 3.6h.4L6 6.5z'/%3e%3ccircle cx='6' cy='8.2' r='.6' fill='%23f87171' stroke='none'/%3e%3c/svg%3e");
+        --ozi-icon-valid:   url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3e%3cpath fill='%234ade80' d='M2.3 6.73.6 4.53c-.4-1.04.46-1.4 1.1-.8l1.1 1.4 3.4-3.8c.6-.63 1.6-.27 1.2.7l-4 4.6c-.43.5-.8.4-1.1.1'/%3e%3c/svg%3e");
+    }
+}

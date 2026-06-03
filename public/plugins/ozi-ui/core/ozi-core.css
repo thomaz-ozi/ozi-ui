@@ -1,0 +1,18 @@
+/**
+* # oziCore - CSS
+* 2026-05-13
+ */
+@import url("../modules/ozi-loaddata/css/ozi-loaddata.css");
+@import url("../components/ozi-select/css/ozi-select.css");
+
+/*@import url("ozi-editor/css/ozi-editor.css");*/
+/*@import url("ozi-select/css/ozi-select.css");*/
+/*@import url("ozi-audio/css/ozi-audio.css");*/
+/*@import url("ozi-search/css/ozi-search.css");*/
+
+/*@import url("ozi-autocomplete/css/ozi-autocomplete.css");*/
+/*@import url("ozi-addons/css/ozi-copy.css");*/
+/*@import url("ozi-addons/css/ozi-check.css");*/
+/*@import url("ozi-addons/css/ozi-toggle.css");*/
+/*@import url("ozi-addons/css/ozi-auth.css");*/
+

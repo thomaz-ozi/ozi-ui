@@ -1,0 +1,193 @@
+/**
+ * themes/bootstrap5/overrides.css
+ * Versão: 1.0.1
+ *
+ * Ajustes de componentes OZI-UI para integração com Bootstrap 5.
+ * Garante que os componentes OZI se comportem visualmente
+ * como se fossem nativos do Bootstrap.
+ *
+ * Carregue APÓS bootstrap.css e default/overrides.css.
+ *
+ * Changelog:
+ *   - v1.0.1: [FIX-P5] Seletores atualizados para v1.0.0.
+ *     'ozi-select-wrap' → 'ozi-select-root' (classe raiz atual do ozi-select.js).
+ *     'ozi-editor-wrap' → 'ozi-editor-root' (alinhado com v1.0.0).
+ *     Removidos seletores '.is-invalid/.is-valid' em [data-ozi-select] —
+ *     o markInvalid() aplica .ozi-invalid diretamente no .ozi-select-control,
+ *     não no elemento raiz. O ozi-select.css já cobre esse caso.
+ */
+
+/* ─── FORM CONTROL — integração com BS5 ─────────────── */
+
+/* oziSelect visual alinhado ao .form-control do BS5 */
+.ozi-select-control,
+.ozi-autocomplete-input {
+    display:          block;
+    width:            100%;
+    padding:          .375rem .75rem;
+    font-size:        var(--ozi-font-size-base);
+    font-weight:      400;
+    line-height:      1.5;
+    color:            var(--bs-body-color, #212529);
+    background-color: var(--ozi-select-bg);
+    border:           var(--ozi-border-width) solid var(--ozi-border-color);
+    border-radius:    var(--ozi-radius-md);
+    transition:       border-color .15s ease-in-out, box-shadow .15s ease-in-out;
+    cursor:           pointer;
+}
+
+.ozi-select-control:focus,
+.ozi-autocomplete-input:focus {
+    border-color: var(--ozi-border-color-focus);
+    outline:      0;
+    box-shadow:   0 0 0 .25rem rgba(13, 110, 253, .25);
+}
+
+/* oziEditor alinhado ao .form-control */
+.ozi-editor-content,
+.ozi-editor-source {
+    display:          block;
+    width:            100%;
+    font-size:        var(--ozi-font-size-base);
+    color:            var(--bs-body-color, #212529);
+    background-color: var(--ozi-editor-content-bg);
+    border:           var(--ozi-border-width) solid var(--ozi-border-color);
+    border-radius:    0 0 var(--ozi-radius-md) var(--ozi-radius-md);
+    padding:          .375rem .75rem;
+}
+
+.ozi-editor-content:focus {
+    border-color: var(--ozi-border-color-focus);
+    outline:      0;
+    box-shadow:   0 0 0 .25rem rgba(13, 110, 253, .25);
+}
+
+/* ─── TOOLBAR DO EDITOR — alinhado ao BS5 ───────────── */
+
+.ozi-editor-toolbar {
+    background:    var(--ozi-editor-toolbar-bg);
+    border:        var(--ozi-border-width) solid var(--ozi-border-color);
+    border-bottom: none;
+    border-radius: var(--ozi-radius-md) var(--ozi-radius-md) 0 0;
+    padding:       .25rem .5rem;
+    display:       flex;
+    flex-wrap:     wrap;
+    gap:           .25rem;
+}
+
+.ozi-editor-btn {
+    padding:       .25rem .5rem;
+    background:    transparent;
+    border:        1px solid transparent;
+    border-radius: var(--ozi-radius-sm);
+    cursor:        pointer;
+    color:         var(--bs-body-color, #212529);
+    transition:    background .15s ease;
+    line-height:   1;
+}
+.ozi-editor-btn:hover    { background: var(--ozi-color-gray-200); }
+.ozi-editor-btn--active  { background: var(--ozi-color-primary-light); color: var(--ozi-color-primary); }
+.ozi-editor-btn:disabled { opacity: .65; cursor: not-allowed; }
+
+/* ─── SELECT DROPDOWN ───────────────────────────────── */
+
+.ozi-select-dropdown,
+.ozi-autocomplete-dropdown {
+    position:      absolute;
+    z-index:       var(--ozi-z-dropdown);
+    background:    var(--ozi-select-bg);
+    border:        var(--ozi-border-width) solid var(--ozi-border-color);
+    border-radius: var(--ozi-radius-md);
+    box-shadow:    var(--ozi-shadow-md);
+    min-width:     100%;
+    margin-top:    2px;
+}
+
+.ozi-select-option {
+    padding:     .375rem .75rem;
+    cursor:      pointer;
+    font-size:   var(--ozi-font-size-base);
+    transition:  background .1s ease;
+    display:     flex;
+    align-items: center;
+    gap:         .5rem;
+}
+.ozi-select-option:hover     { background: var(--ozi-color-gray-100); }
+.ozi-select-option.is-selected { background: var(--ozi-color-primary-light); color: var(--ozi-color-primary); }
+.ozi-select-option--disabled { opacity: .5; cursor: not-allowed; }
+
+.ozi-select-search {
+    width:         100%;
+    padding:       .375rem .75rem;
+    border:        none;
+    border-bottom: var(--ozi-border-width) solid var(--ozi-border-color);
+    outline:       none;
+    font-size:     var(--ozi-font-size-sm);
+}
+
+.ozi-select-tag {
+    display:       inline-flex;
+    align-items:   center;
+    gap:           .25rem;
+    padding:       .125rem .5rem;
+    background:    var(--ozi-color-primary-light);
+    color:         var(--ozi-color-primary);
+    border-radius: var(--ozi-radius-full);
+    font-size:     var(--ozi-font-size-xs);
+}
+
+/* ─── AUDIO ─────────────────────────────────────────── */
+
+.ozi-audio__main {
+    background:    var(--ozi-audio-bg);
+    border:        var(--ozi-border-width) solid var(--ozi-border-color);
+    border-radius: var(--ozi-radius-lg);
+    padding:       var(--ozi-spacing-3);
+}
+
+.ozi-audio__controls {
+    display:     flex;
+    align-items: center;
+    gap:         var(--ozi-spacing-2);
+    flex-wrap:   wrap;
+}
+
+.ozi-audio__btn {
+    background:    transparent;
+    border:        none;
+    padding:       var(--ozi-spacing-1) var(--ozi-spacing-2);
+    border-radius: var(--ozi-radius-sm);
+    cursor:        pointer;
+    color:         var(--ozi-audio-btn-color);
+    transition:    background var(--ozi-transition-fast);
+    display:       inline-flex;
+    align-items:   center;
+}
+.ozi-audio__btn:hover { background: var(--ozi-audio-btn-hover-bg); }
+
+.ozi-audio__progress,
+.ozi-audio__volume {
+    flex:         1;
+    min-width:    60px;
+    accent-color: var(--ozi-color-primary);
+}
+
+.ozi-audio__record--active { color: var(--ozi-audio-record-color); }
+
+/* ─── VALIDAÇÃO — integração com BS5 ────────────────── */
+
+/* [FIX-P5] Seletores atualizados para v1.0.0:
+ * - 'ozi-select-root' substitui 'ozi-select-wrap' (v0.x)
+ * - 'ozi-editor-root' substitui 'ozi-editor-wrap' (v0.x)
+ * - Removido [data-ozi-select].is-invalid — markInvalid() aplica
+ *   .ozi-invalid no .ozi-select-control diretamente (coberto em ozi-select.css)
+ */
+
+.ozi-select-root.ozi-invalid .ozi-select-control {
+    border-color: var(--ozi-color-danger);
+}
+
+.ozi-editor-root.ozi-invalid .ozi-editor-content,
+.ozi-editor-root.ozi-invalid .ozi-editor-toolbar {
+    border-color: var(--ozi-color-danger);
+}

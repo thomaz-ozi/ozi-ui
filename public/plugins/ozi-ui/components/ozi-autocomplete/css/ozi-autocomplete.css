@@ -1,0 +1,205 @@
+/**
+ * components/ozi-autocomplete/css/ozi-autocomplete.css
+ * Versão: 3.0.3
+ *
+ * Changelog:
+ *   - v3.0.3: [FIX-P1] Tokens locais agora consomem --ozi-* globais do tema ativo
+ *     em vez de valores hardcoded BS5 (#dee2e6, #212529, #0d6efd, #dc3545, etc.).
+ *   - v3.0.3: [FIX-P2] display:none removido de .ozi-autocomplete-dropdown —
+ *     jQuery .show()/.hide() controla visibilidade; CSS conflitava com inline style.
+ *   - v3.0.3: [FIX-P3] .ozi-autocomplete-feedback agora tem color definida via
+ *     var(--ozi-color-danger) em vez de herdar do pai silenciosamente.
+ *   - v3.0.3: [FIX-A] Dark mode adicionado via [data-ozi-theme="dark"] e
+ *     @media prefers-color-scheme — alinhado com o sistema de temas OZI.
+ *   - v3.0.3: [FIX-B] --ozi-autocomplete-dropdown-z agora usa var(--ozi-z-dropdown).
+ */
+
+:root {
+    /* — layout — */
+    --ozi-autocomplete-dropdown-top:        calc(100% + 2px);
+    /* [FIX-B] z-index via token global */
+    --ozi-autocomplete-dropdown-z:          var(--ozi-z-dropdown,       1000);
+    --ozi-autocomplete-dropdown-max-height: 260px;
+    --ozi-autocomplete-dropdown-padding:    4px 0;
+
+    /* [FIX-P1] cores via tokens globais do tema ativo */
+    --ozi-autocomplete-dropdown-border:     1px solid var(--ozi-border-color,            #d1d5db);
+    --ozi-autocomplete-dropdown-radius:     var(--ozi-radius-md,                         0.375rem);
+    --ozi-autocomplete-dropdown-bg:         var(--ozi-select-bg,        var(--ozi-color-white, #ffffff));
+    --ozi-autocomplete-dropdown-shadow:     var(--ozi-shadow-md,                         0 4px 6px -1px rgba(0,0,0,0.1));
+
+    --ozi-autocomplete-option-padding:      0.5rem 0.75rem  ;
+    --ozi-autocomplete-option-font-size:    var(--ozi-font-size-sm,     0.875rem);
+    --ozi-autocomplete-option-line-height:  1.35;
+    --ozi-autocomplete-option-color:        var(--ozi-color-gray-900,   #111827);
+    --ozi-autocomplete-option-transition:   background-color var(--ozi-transition-fast, 150ms ease),
+    color var(--ozi-transition-fast, 150ms ease);
+    --ozi-autocomplete-option-hover-bg:     var(--ozi-color-gray-100,   #f3f4f6);
+    --ozi-autocomplete-option-active-bg:    var(--ozi-color-primary-light, #eff6ff);
+    --ozi-autocomplete-option-active-color: var(--ozi-color-primary,    #3b82f6);
+
+    --ozi-autocomplete-empty-padding:       0.5rem 0.75rem;
+    --ozi-autocomplete-empty-font-size:     var(--ozi-font-size-sm,     0.875rem);
+    --ozi-autocomplete-empty-color:         var(--ozi-color-gray-500,   #6b7280);
+
+    /* [FIX-P1] toast usa token de danger */
+    --ozi-autocomplete-toast-bg:            var(--ozi-color-danger,     #ef4444);
+    --ozi-autocomplete-toast-color:         var(--ozi-color-white,      #ffffff);
+    --ozi-autocomplete-toast-padding:       6px 12px;
+    --ozi-autocomplete-toast-radius:        var(--ozi-radius-sm,        0.25rem);
+    --ozi-autocomplete-toast-font-size:     var(--ozi-font-size-sm,     0.875rem);
+}
+
+
+/* ─── DARK MODE ─────────────────────────────────────── */
+
+/* [FIX-A] tokens que não herdam automaticamente do dark.css global */
+[data-ozi-theme="dark"],
+[data-bs-theme="dark"] {
+    --ozi-autocomplete-dropdown-bg:         var(--ozi-color-gray-100,   #1f2937);
+    --ozi-autocomplete-dropdown-border:     1px solid var(--ozi-border-color, #374151);
+    --ozi-autocomplete-option-color:        var(--ozi-color-gray-900,   #f9fafb);
+    --ozi-autocomplete-option-hover-bg:     var(--ozi-color-gray-200,   #374151);
+    --ozi-autocomplete-option-active-bg:    rgba(59, 130, 246, 0.15);
+    --ozi-autocomplete-option-active-color: var(--ozi-color-primary,    #60a5fa);
+    --ozi-autocomplete-empty-color:         var(--ozi-color-gray-500,   #9ca3af);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-ozi-theme="light"]):not([data-bs-theme="light"]) {
+        --ozi-autocomplete-dropdown-bg:         #1f2937;
+        --ozi-autocomplete-dropdown-border:     1px solid #374151;
+        --ozi-autocomplete-option-color:        #f9fafb;
+        --ozi-autocomplete-option-hover-bg:     #374151;
+        --ozi-autocomplete-option-active-bg:    rgba(59, 130, 246, 0.15);
+        --ozi-autocomplete-option-active-color: #60a5fa;
+        --ozi-autocomplete-empty-color:         #9ca3af;
+    }
+}
+
+
+/* ─── WRAP ──────────────────────────────────────────── */
+
+.ozi-autocomplete-wrap {
+    position: relative;
+}
+
+
+/* ─── INPUT ─────────────────────────────────────────── */
+
+.ozi-autocomplete-input {
+    display:    block;
+    width:      100%;
+    box-sizing: border-box;
+}
+
+/* spinner de loading inline no input */
+.ozi-autocomplete-input.ozi-autocomplete-loading {
+    background-image:    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='10' fill='none' stroke='%236b7280' stroke-width='2' stroke-dasharray='60' stroke-dashoffset='0'%3E%3CanimateTransform attributeName='transform' type='rotate' from='0 12 12' to='360 12 12' dur='.8s' repeatCount='indefinite'/%3E%3C/circle%3E%3C/svg%3E");
+    background-repeat:   no-repeat;
+    background-position: right 0.75rem center;
+    background-size:     16px 16px;
+    padding-right:       2.25rem;
+}
+
+
+/* ─── DROPDOWN ──────────────────────────────────────── */
+
+/*
+ * [FIX-P2] display:none removido — jQuery .show()/.hide()
+ * controla visibilidade via style inline.
+ * Manter display:none no CSS conflitava com o inline style do jQuery.
+ */
+.ozi-autocomplete-dropdown {
+    position:      absolute;
+    top:           var(--ozi-autocomplete-dropdown-top);
+    left:          0;
+    right:         0;
+    z-index:       var(--ozi-autocomplete-dropdown-z);
+    max-height:    var(--ozi-autocomplete-dropdown-max-height);
+    overflow-y:    auto;
+    padding:       var(--ozi-autocomplete-dropdown-padding);
+    border:        var(--ozi-autocomplete-dropdown-border);
+    border-radius: var(--ozi-autocomplete-dropdown-radius);
+    background:    var(--ozi-autocomplete-dropdown-bg);
+    box-shadow:    var(--ozi-autocomplete-dropdown-shadow);
+}
+
+
+/* ─── LIST ──────────────────────────────────────────── */
+
+.ozi-autocomplete-list {
+    display:        flex;
+    flex-direction: column;
+}
+
+
+/* ─── OPTION ────────────────────────────────────────── */
+
+.ozi-autocomplete-option {
+    width:       100%;
+    border:      0;
+    background:  transparent;
+    text-align:  left;
+    padding:     var(--ozi-autocomplete-option-padding) !important;
+    font-size:   var(--ozi-autocomplete-option-font-size);
+    line-height: var(--ozi-autocomplete-option-line-height);
+    color:       var(--ozi-autocomplete-option-color);
+    cursor:      pointer;
+    transition:  var(--ozi-autocomplete-option-transition);
+    font-family: inherit;
+}
+
+.ozi-autocomplete-option:hover,
+.ozi-autocomplete-option.is-highlighted {
+    background: var(--ozi-autocomplete-option-hover-bg);
+    outline:    none;
+}
+
+.ozi-autocomplete-option.is-selected,
+.ozi-autocomplete-option.active {
+    background: var(--ozi-autocomplete-option-active-bg);
+    color:      var(--ozi-autocomplete-option-active-color);
+}
+
+.ozi-autocomplete-sublabel {
+    display:    block;
+    font-size:  0.8em;
+    opacity:    0.7;
+    margin-top: 2px;
+}
+
+
+/* ─── EMPTY / LOADING ───────────────────────────────── */
+
+.ozi-autocomplete-empty,
+.ozi-autocomplete-loading-msg {
+    padding:   var(--ozi-autocomplete-empty-padding);
+    font-size: var(--ozi-autocomplete-empty-font-size);
+    color:     var(--ozi-autocomplete-empty-color);
+}
+
+
+/* ─── FEEDBACK ──────────────────────────────────────── */
+
+.ozi-autocomplete-feedback {
+    display:    none;
+    margin-top: var(--ozi-spacing-1, 0.25rem);
+    font-size:  var(--ozi-feedback-font-size, 0.875rem);
+    /* [FIX-P3] cor explícita — não herda silenciosamente do pai */
+    color:      var(--ozi-color-danger, #ef4444);
+}
+
+
+/* ─── TOAST UNIQUE ──────────────────────────────────── */
+
+.ozi-autocomplete-unique-toast {
+    background:     var(--ozi-autocomplete-toast-bg);
+    color:          var(--ozi-autocomplete-toast-color);
+    padding:        var(--ozi-autocomplete-toast-padding);
+    border-radius:  var(--ozi-autocomplete-toast-radius);
+    font-size:      var(--ozi-autocomplete-toast-font-size);
+    pointer-events: none;
+    white-space:    nowrap;
+    box-shadow:     var(--ozi-shadow-md, 0 4px 6px -1px rgba(0,0,0,0.1));
+}

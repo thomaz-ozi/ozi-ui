@@ -1,0 +1,170 @@
+/**
+ * shared/css/ozi-utilities.css
+ * Versão: 1.0.0
+ *
+ * Classes utilitárias compartilhadas por todos os plugins OZI-UI.
+ * Sem dependência de Bootstrap ou Tailwind.
+ * Usa tokens --ozi-* do tema ativo.
+ */
+
+/* ─── VISIBILIDADE ──────────────────────────────────── */
+
+.ozi-hidden          { display: none !important; }
+.ozi-invisible       { visibility: hidden !important; }
+.ozi-visible         { visibility: visible !important; }
+
+/* Acessibilidade — visível para screen readers */
+.ozi-sr-only {
+    position:   absolute;
+    width:      1px;
+    height:     1px;
+    padding:    0;
+    margin:     -1px;
+    overflow:   hidden;
+    clip:       rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border:     0;
+}
+
+/* ─── ESTADOS ───────────────────────────────────────── */
+
+.ozi-loading {
+    opacity:        0.6;
+    pointer-events: none;
+    cursor:         wait;
+}
+
+.ozi-disabled {
+    opacity:        0.5;
+    cursor:         not-allowed;
+}
+
+.ozi-active {
+    font-weight: var(--ozi-font-weight-semibold, 600);
+}
+
+/* ─── FORM — estados de validação ───────────────────── */
+
+.ozi-invalid {
+    border-color: var(--ozi-invalid-border, #ef4444) !important;
+}
+
+.ozi-valid {
+    border-color: var(--ozi-valid-border, #22c55e) !important;
+}
+
+.ozi-feedback {
+    display:    none;
+    width:      100%;
+    margin-top: var(--ozi-spacing-1, 0.25rem);
+    font-size:  var(--ozi-feedback-font-size, 0.875rem);
+    color:      var(--ozi-invalid-color, #ef4444);
+}
+
+.ozi-validated .ozi-feedback { display: block; }
+
+/* ─── FORM — busy state ─────────────────────────────── */
+
+.ozi-form-busy {
+    position: relative;
+    pointer-events: none;
+}
+
+.ozi-form-busy::after {
+    content:  '';
+    position: absolute;
+    inset:    0;
+    background: rgba(255, 255, 255, 0.5);
+    z-index:  1;
+}
+
+/* ─── BADGE ─────────────────────────────────────────── */
+
+.ozi-badge {
+    display:       inline-flex;
+    align-items:   center;
+    padding:       0.2em 0.6em;
+    font-size:     var(--ozi-font-size-xs, 0.75rem);
+    font-weight:   var(--ozi-font-weight-semibold, 600);
+    border-radius: var(--ozi-radius-full, 9999px);
+    white-space:   nowrap;
+}
+
+.ozi-badge-primary { background: var(--ozi-color-primary-light); color: var(--ozi-color-primary); }
+.ozi-badge-success { background: var(--ozi-color-success-light); color: var(--ozi-color-success); }
+.ozi-badge-danger  { background: var(--ozi-color-danger-light);  color: var(--ozi-color-danger); }
+.ozi-badge-warning { background: var(--ozi-color-warning-light); color: var(--ozi-color-warning); }
+
+/* ─── BUTTON BASE ───────────────────────────────────── */
+
+.ozi-btn {
+    display:        inline-flex;
+    align-items:    center;
+    justify-content:center;
+    gap:            var(--ozi-spacing-2, 0.5rem);
+    padding:        var(--ozi-spacing-2, 0.5rem) var(--ozi-spacing-4, 1rem);
+    font-size:      var(--ozi-font-size-base, 1rem);
+    font-weight:    var(--ozi-font-weight-medium, 500);
+    line-height:    var(--ozi-line-height-base, 1.5);
+    border-radius:  var(--ozi-radius-md, 0.375rem);
+    border:         var(--ozi-border-width, 1px) solid transparent;
+    cursor:         pointer;
+    transition:     background var(--ozi-transition-fast, 150ms ease),
+                    border-color var(--ozi-transition-fast, 150ms ease),
+                    color var(--ozi-transition-fast, 150ms ease);
+    text-decoration: none;
+    white-space:    nowrap;
+    user-select:    none;
+}
+
+.ozi-btn:disabled,
+.ozi-btn.ozi-disabled {
+    opacity:        0.5;
+    cursor:         not-allowed;
+    pointer-events: none;
+}
+
+.ozi-btn-primary {
+    background: var(--ozi-color-primary);
+    color:      var(--ozi-color-white, #fff);
+    border-color: var(--ozi-color-primary);
+}
+.ozi-btn-primary:hover {
+    background:   var(--ozi-color-primary-hover);
+    border-color: var(--ozi-color-primary-hover);
+}
+
+.ozi-btn-secondary {
+    background:   var(--ozi-color-gray-200, #e5e7eb);
+    color:        var(--ozi-color-gray-700, #374151);
+    border-color: var(--ozi-color-gray-200, #e5e7eb);
+}
+.ozi-btn-secondary:hover {
+    background:   var(--ozi-color-gray-300, #d1d5db);
+    border-color: var(--ozi-color-gray-300, #d1d5db);
+}
+
+.ozi-btn-danger {
+    background:   var(--ozi-color-danger);
+    color:        var(--ozi-color-white, #fff);
+    border-color: var(--ozi-color-danger);
+}
+
+/* ─── ANIMAÇÕES COMPARTILHADAS ──────────────────────── */
+
+@keyframes ozi-spin {
+    to { transform: rotate(360deg); }
+}
+
+@keyframes ozi-fade-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+@keyframes ozi-slide-down {
+    from { opacity: 0; transform: translateY(-8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.ozi-spin    { animation: ozi-spin    0.8s linear infinite; }
+.ozi-fade-in { animation: ozi-fade-in var(--ozi-transition-base, 250ms ease); }

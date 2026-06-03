@@ -1,0 +1,52 @@
+/**
+ * themes/bootstrap5/dark.css
+ * Versão: 1.0.0
+ *
+ * Dark mode para tema Bootstrap 5.
+ * Bootstrap 5.3+ suporta data-bs-theme="dark" nativamente.
+ * Este arquivo ajusta os tokens --ozi-* para o contexto dark do BS5.
+ */
+
+/* Bootstrap 5.3+ dark mode via data-bs-theme */
+[data-bs-theme="dark"],
+[data-ozi-theme="dark"] {
+    --ozi-color-white:          var(--bs-body-bg,         #212529);
+    --ozi-color-gray-50:        var(--bs-tertiary-bg,     #2b3035);
+    --ozi-color-gray-100:       var(--bs-secondary-bg,    #343a40);
+    --ozi-color-gray-200:       var(--bs-tertiary-color,  #495057);
+    --ozi-color-gray-300:       var(--bs-border-color,    #495057);
+    --ozi-color-gray-900:       var(--bs-body-color,      #dee2e6);
+
+    --ozi-border-color:         var(--bs-border-color,    #495057);
+
+    --ozi-select-bg:            var(--bs-body-bg,         #212529);
+    --ozi-editor-toolbar-bg:    var(--bs-tertiary-bg,     #2b3035);
+    --ozi-editor-content-bg:    var(--bs-body-bg,         #212529);
+    --ozi-audio-bg:             var(--bs-tertiary-bg,     #2b3035);
+    --ozi-auth-dropdown-bg:     var(--bs-body-bg,         #212529);
+
+    --ozi-color-primary-light:  rgba(13, 110, 253, 0.15);
+    --ozi-color-success-light:  rgba(25, 135, 84, 0.15);
+    --ozi-color-danger-light:   rgba(220, 53, 69, 0.15);
+    --ozi-color-warning-light:  rgba(255, 193, 7, 0.15);
+}
+
+/* auto — respeita preferência do sistema (sem BS5 data-attribute) */
+@media (prefers-color-scheme: dark) {
+    :root:not([data-bs-theme="light"]):not([data-ozi-theme="light"]) {
+        --ozi-color-white:         #212529;
+        --ozi-color-gray-50:       #2b3035;
+        --ozi-color-gray-100:      #343a40;
+        --ozi-color-gray-200:      #495057;
+        --ozi-color-gray-300:      #495057;
+        --ozi-color-gray-900:      #dee2e6;
+        --ozi-border-color:        #495057;
+        --ozi-select-bg:           #212529;
+        --ozi-editor-toolbar-bg:   #2b3035;
+        --ozi-editor-content-bg:   #212529;
+        --ozi-audio-bg:            #2b3035;
+        --ozi-auth-dropdown-bg:    #212529;
+        --ozi-color-primary-light: rgba(13, 110, 253, 0.15);
+        --ozi-color-danger-light:  rgba(220, 53, 69, 0.15);
+    }
+}

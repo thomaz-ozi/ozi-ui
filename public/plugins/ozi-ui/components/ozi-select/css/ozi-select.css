@@ -1,0 +1,349 @@
+/**
+ * components/ozi-select/css/ozi-select.css
+ * Versão: 1.0.1
+ *
+ * Changelog:
+ *   - v1.0.1: [FIX-P3/P4] Tokens locais --ozi-select-* agora consomem
+ *     os tokens globais --ozi-* do tema ativo em vez de valores hardcoded BS5.
+ *     Ex: --ozi-select-border-color: var(--ozi-border-color) em vez de #ced4da.
+ *     Cor danger do focus-shadow usa var(--ozi-color-danger) em vez de rgba hardcoded.
+ *     O tema bootstrap5/tokens.css já mapeia --ozi-border-color → --bs-border-color,
+ *     garantindo compatibilidade total sem hardcode.
+ */
+
+:root {
+    /* — layout — */
+    --ozi-select-control-height:    38px;
+    --ozi-select-list-max-height:   220px;
+    --ozi-select-z-index:           var(--ozi-z-dropdown, 1000);
+
+    /* — cores — consume tokens globais do tema ativo — */
+    --ozi-select-border-color:      var(--ozi-border-color,          #d1d5db);
+    --ozi-select-focus-color:       var(--ozi-border-color-focus,    #3b82f6);
+    --ozi-select-focus-shadow:      0 0 0 0.2rem rgba(59, 130, 246, 0.15);
+    --ozi-select-shadow:            var(--ozi-shadow-md,             0 8px 24px rgba(0,0,0,0.08));
+    --ozi-select-text-color:        var(--ozi-color-gray-700,        #374151);
+    --ozi-select-placeholder-color: var(--ozi-color-gray-500,        #6b7280);
+    --ozi-select-clear-color:       var(--ozi-color-gray-500,        #6b7280);
+    --ozi-select-toggle-color:      var(--ozi-color-gray-700,        #374151);
+    --ozi-select-hover-bg:          var(--ozi-color-gray-100,        #f3f4f6);
+    --ozi-select-selected-bg:       var(--ozi-color-primary-light,   #eff6ff);
+    --ozi-select-selected-color:    var(--ozi-color-primary,         #3b82f6);
+    --ozi-select-highlight-bg:      var(--ozi-color-primary-light,   #eff6ff);
+    --ozi-select-search-bg:         var(--ozi-select-bg,             #ffffff);
+    --ozi-select-radius:            var(--ozi-radius-md,             0.375rem);
+
+    /* — tags — */
+    --ozi-select-tag-bg:            var(--ozi-color-gray-100,        #f3f4f6);
+    --ozi-select-tag-border:        var(--ozi-color-gray-300,        #d1d5db);
+
+    /* — estados — */
+    --ozi-select-invalid-color:     var(--ozi-color-danger,          #ef4444);
+    --ozi-select-invalid-shadow:    0 0 0 0.25rem rgba(239, 68, 68, 0.2);
+    --ozi-select-disabled-bg:       var(--ozi-color-gray-100,        #f3f4f6);
+    --ozi-select-disabled-border:   var(--ozi-color-gray-200,        #e5e7eb);
+    --ozi-select-disabled-text:     var(--ozi-color-gray-500,        #6b7280);
+
+    --ozi-select-icon-color:        currentColor;
+}
+
+[data-ozi-select] { display: block; width: 100%; }
+.ozi-select-hidden-container { display: none !important; }
+
+.ozi-select-ui {
+    position: relative; display: block; width: 100%;
+    font-family: inherit; font-size: 1rem; line-height: 1.5; box-sizing: border-box;
+}
+.ozi-select-ui,
+.ozi-select-ui *,
+.ozi-select-ui *::before,
+.ozi-select-ui *::after { box-sizing: border-box; }
+
+/* ─── CONTROL ───────────────────────────────────────── */
+
+.ozi-select-control {
+    position:         relative;
+    display:          flex;
+    align-items:      center;
+    gap:              0.5rem;
+    min-height:       var(--ozi-select-control-height);
+    padding:          0.375rem 0.75rem;
+    background-color: var(--ozi-select-bg, #fff);
+    border:           1px solid var(--ozi-select-border-color);
+    border-radius:    var(--ozi-select-radius);
+    box-shadow:       0 0.125rem 0.25rem rgba(0,0,0,0.075);
+    cursor:           pointer;
+    transition:       border-color 0.15s ease-in-out,
+    box-shadow   0.15s ease-in-out,
+    background-color 0.15s ease-in-out;
+}
+
+.ozi-select-control:focus,
+.ozi-select-ui.is-open .ozi-select-control {
+    border-color: var(--ozi-select-focus-color);
+    box-shadow:   var(--ozi-select-focus-shadow);
+    outline:      0;
+}
+
+/* [FIX-P4] usa var(--ozi-select-invalid-shadow) em vez de rgba BS5 hardcoded */
+.ozi-select-control.ozi-invalid {
+    border-color: var(--ozi-select-invalid-color);
+    box-shadow:   var(--ozi-select-invalid-shadow);
+}
+
+.ozi-select-control.is-disabled {
+    background-color: var(--ozi-select-disabled-bg);
+    border-color:     var(--ozi-select-disabled-border);
+    box-shadow:       none;
+    cursor:           not-allowed;
+}
+
+.ozi-select-control.is-disabled .ozi-select-value-label,
+.ozi-select-control.is-disabled .ozi-select-tag-label {
+    color: var(--ozi-select-disabled-text);
+}
+
+.ozi-select-control.is-disabled .ozi-select-clear,
+.ozi-select-control.is-disabled .ozi-select-toggle,
+.ozi-select-control.is-disabled .ozi-select-tag-remove {
+    pointer-events: none;
+    opacity: 0.45;
+}
+
+/* ─── VALUE ─────────────────────────────────────────── */
+
+.ozi-select-value {
+    flex: 1 1 auto; min-width: 0; display: flex; align-items: center;
+}
+.ozi-select-value.is-placeholder .ozi-select-value-label {
+    color: var(--ozi-select-placeholder-color);
+}
+.ozi-select-value-content {
+    display: flex; align-items: center; gap: 10px; min-width: 0; width: 100%;
+}
+.ozi-select-value-image,
+.ozi-select-option-image,
+.ozi-select-tag-image {
+    flex: 0 0 auto; object-fit: contain; border-radius: 6px; display: block;
+    background-color: var(--ozi-color-gray-100, #f3f4f6); padding: 2px;
+}
+.ozi-select-value-image.is-no-image,
+.ozi-select-option-image.is-no-image { display: none; }
+
+.ozi-select-value-label {
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    color: var(--ozi-select-text-color);
+}
+
+/* ─── ACTIONS (clear + toggle) ──────────────────────── */
+
+.ozi-select-actions {
+    display: inline-flex; align-items: center; flex: 0 0 auto;
+}
+.ozi-select-clear,
+.ozi-select-toggle,
+.ozi-select-tag-remove {
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 0; background: transparent; border: 0; cursor: pointer;
+}
+.ozi-select-clear,
+.ozi-select-toggle {
+    width: 1.75rem; height: 1.75rem; border-radius: 0.25rem;
+}
+.ozi-select-clear { margin-left: 0.25rem; color: var(--ozi-select-clear-color); }
+.ozi-select-clear:hover, .ozi-select-clear:focus,
+.ozi-select-toggle:hover, .ozi-select-toggle:focus,
+.ozi-select-tag-remove:hover, .ozi-select-tag-remove:focus {
+    background-color: var(--ozi-select-hover-bg); outline: 0;
+}
+.ozi-select-toggle {
+    margin-left: 0.25rem; color: var(--ozi-select-toggle-color);
+    transition: transform 0.15s ease-in-out, color 0.15s ease-in-out;
+}
+.ozi-select-ui.is-open .ozi-select-toggle { transform: rotate(180deg); }
+
+/* ─── DROPDOWN ──────────────────────────────────────── */
+
+.ozi-select-dropdown {
+    position:         absolute;
+    top:              calc(100% + 2px);
+    left:             0;
+    right:            0;
+    z-index:          var(--ozi-select-z-index);
+    display:          none;
+    background-color: var(--ozi-select-bg, #fff);
+    border:           1px solid var(--ozi-select-border-color);
+    border-radius:    var(--ozi-select-radius);
+    box-shadow:       var(--ozi-select-shadow);
+    overflow:         hidden;
+}
+.ozi-select-ui.is-open .ozi-select-dropdown { display: block; }
+
+/* ─── SEARCH ────────────────────────────────────────── */
+
+.ozi-select-search-wrap {
+    position:         sticky;
+    top:              0;
+    z-index:          2;
+    padding:          10px;
+    background-color: var(--ozi-select-search-bg);
+    border-bottom:    1px solid var(--ozi-color-gray-200, #e5e7eb);
+    display:          flex;
+    align-items:      center;
+    gap:              0.5rem;
+}
+.ozi-select-search-wrap .ozi-select-search { flex: 1; min-width: 0; }
+
+.ozi-select-search-icon,
+.ozi-select-value-icon {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 24px; width: 24px; height: 24px; line-height: 1;
+    flex-shrink: 0; opacity: 0.75; pointer-events: none;
+    color: var(--ozi-select-icon-color, currentColor);
+}
+
+.ozi-select-search {
+    display:          block;
+    width:            100%;
+    margin:           0;
+    padding:          0.375rem 0.75rem;
+    font:             inherit;
+    line-height:      inherit;
+    color:            var(--ozi-select-text-color);
+    background-color: var(--ozi-select-bg, #fff);
+    border:           1px solid var(--ozi-select-border-color);
+    border-radius:    var(--ozi-select-radius);
+    outline:          0;
+}
+.ozi-select-search:disabled {
+    background-color: var(--ozi-select-disabled-bg); cursor: not-allowed;
+}
+.ozi-select-search::placeholder {
+    color: var(--ozi-select-placeholder-color); opacity: 1;
+}
+.ozi-select-search:focus {
+    border-color: var(--ozi-select-focus-color);
+    box-shadow:   var(--ozi-select-focus-shadow);
+}
+
+/* ─── LIST ──────────────────────────────────────────── */
+
+.ozi-select-list {
+    margin:         0;
+    padding:        4px 0;
+    max-height:     var(--ozi-select-list-max-height);
+    overflow-y:     auto;
+    overflow-x:     hidden;
+    scrollbar-gutter: stable;
+}
+
+/* ─── OPTIONS ───────────────────────────────────────── */
+
+.ozi-select-option {
+    display:    block;
+    padding:    0.5rem 0.75rem;
+    cursor:     pointer;
+    color:      var(--ozi-select-text-color);
+    transition: background-color 0.15s ease-in-out, color 0.15s ease-in-out;
+}
+.ozi-select-option:hover          { background-color: var(--ozi-select-hover-bg); }
+.ozi-select-option.is-highlighted { background-color: var(--ozi-select-highlight-bg); }
+.ozi-select-option.is-selected    {
+    background-color: var(--ozi-select-selected-bg);
+    color:            var(--ozi-select-selected-color);
+    font-weight:      500;
+}
+
+.ozi-select-option-content {
+    display: flex; align-items: center; gap: 10px; min-width: 0;
+}
+.ozi-select-option-texts {
+    min-width: 0; flex: 1 1 auto; display: flex; flex-direction: column;
+}
+.ozi-select-option-label {
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ozi-select-option-sublabel {
+    margin-top: 2px; font-size: 0.875rem; line-height: 1.25;
+    color: var(--ozi-select-placeholder-color);
+}
+.ozi-select-empty {
+    padding: 0.75rem; text-align: center;
+    color: var(--ozi-select-placeholder-color); font-style: italic;
+}
+
+/* ─── TAGS (multi) ──────────────────────────────────── */
+
+.ozi-select-tags {
+    display: flex; flex-wrap: wrap; gap: 0.375rem; width: 100%;
+}
+.ozi-select-tag {
+    display:          inline-flex;
+    align-items:      center;
+    gap:              0.375rem;
+    min-width:        0;
+    max-width:        100%;
+    padding:          0.2rem 0.45rem;
+    border:           1px solid var(--ozi-select-tag-border);
+    border-radius:    var(--ozi-radius-full, 9999px);
+    background-color: var(--ozi-select-tag-bg);
+}
+.ozi-select-tag-label {
+    max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-size: 0.92rem; color: var(--ozi-select-text-color);
+}
+.ozi-select-tag-remove {
+    width: 1.25rem; height: 1.25rem; border-radius: var(--ozi-radius-full, 9999px);
+    color: var(--ozi-select-clear-color); flex: 0 0 auto;
+}
+
+/* ─── FEEDBACK ──────────────────────────────────────── */
+
+.ozi-select-feedback { display: none; }
+.ozi-select-feedback.is-visible {
+    display:    block;
+    font-size:  var(--ozi-feedback-font-size, 0.875rem);
+    color:      var(--ozi-select-invalid-color);
+    margin-top: var(--ozi-spacing-1, 0.25rem);
+}
+
+/* ─── GROUPS ────────────────────────────────────────── */
+
+.ozi-select-group { padding: 4px 0; }
+.ozi-select-group-label {
+    padding:          0.4rem 0.75rem;
+    font-size:        0.78rem;
+    font-weight:      700;
+    text-transform:   uppercase;
+    letter-spacing:   0.03em;
+    color:            var(--ozi-color-gray-500, #6b7280);
+    background-color: var(--ozi-color-gray-50,  #f9fafb);
+    user-select:      none;
+}
+.ozi-select-group .ozi-select-option { padding-left: 1.25rem; }
+.ozi-select-group-label[data-ozi-group-toggle] { cursor: pointer; }
+.ozi-select-group-label[data-ozi-group-toggle]:hover {
+    background-color: var(--ozi-color-gray-100, #f3f4f6);
+}
+.ozi-select-group-label.is-group-selected {
+    color:            var(--ozi-color-primary,       #3b82f6);
+    background-color: var(--ozi-color-primary-light, #eff6ff);
+}
+.ozi-select-group-label.is-group-partial {
+    color:            var(--ozi-color-gray-700, #374151);
+    background-color: var(--ozi-color-gray-100, #f3f4f6);
+}
+
+/* ─── MISC ──────────────────────────────────────────── */
+
+.ozi-select-ui .form-control,
+.ozi-select-ui input,
+.ozi-select-ui button { font-family: inherit; }
+
+/* ─── RESPONSIVE ────────────────────────────────────── */
+
+@media (max-width: 768px) {
+    .ozi-select-control { min-height: 40px; padding: 0.5rem 0.75rem; }
+    .ozi-select-option  { padding: 0.75rem; }
+    .ozi-select-tag-label { max-width: 120px; }
+}

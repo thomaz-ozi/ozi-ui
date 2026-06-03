@@ -1,0 +1,79 @@
+/**
+ * ozi-check.css
+ * Versão: 1.0.2
+ *
+ * Changelog v1.0.2:
+ *   - Renomeados: data-ozi-check-enabled → switch, data-ozi-check-all → group
+ *   - Corrigido: dupla opacidade composta quando label envolve o input
+ *   - Corrigido: transition movida para seletor base — anima entrada e saída
+ *   - Corrigido: seletor + label removido — frágil, não cobre label wrapper
+ *   - Adicionado: tokens --ozi-* para opacidade e transição
+ *   - Adicionado: dark mode via [data-ozi-theme="dark"] + @media
+ *
+ * Changelog v1.0.1:
+ *   - Classe .ozi-check-disabled conectada ao JS em setGroupEnabledState
+ *   - Adicionado: transição suave na opacidade para melhor UX
+ *   - Adicionado: cursor not-allowed no label pai quando grupo desabilitado
+ */
+
+/* ─────────────────────────────────────────────
+   Tokens locais — consomem globals do tema ativo
+───────────────────────────────────────────── */
+
+:root {
+    --ozi-check-disabled-opacity:    var(--ozi-opacity-disabled, .45);
+    --ozi-check-disabled-transition: opacity .15s ease;
+}
+
+
+/* ─────────────────────────────────────────────
+   Transição base — cobre entrada E saída do
+   estado disabled em inputs e labels
+───────────────────────────────────────────── */
+
+[data-ozi-check-switch],
+[data-ozi-check-group],
+[data-ozi-check-item] {
+    transition: var(--ozi-check-disabled-transition);
+}
+
+label:has([data-ozi-check-switch]),
+label:has([data-ozi-check-group]),
+label:has([data-ozi-check-item]) {
+    transition: var(--ozi-check-disabled-transition);
+}
+
+
+/* ─────────────────────────────────────────────
+   Estado desabilitado — aplicado via JS
+   (.ozi-check-disabled em $group e $items)
+───────────────────────────────────────────── */
+
+.ozi-check-disabled {
+    opacity: var(--ozi-check-disabled-opacity);
+    pointer-events: none;
+    cursor: not-allowed;
+}
+
+/*
+   Label que ENVOLVE um input desabilitado.
+   Não aplica opacity — o input já está opaco
+   e o label herdaria, causando dupla composição.
+   Aplica apenas cursor e pointer-events.
+*/
+label:has(.ozi-check-disabled) {
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+
+/* ─────────────────────────────────────────────
+   Dark mode
+───────────────────────────────────────────── */
+
+[data-ozi-theme="dark"],
+@media (prefers-color-scheme: dark) {
+    :root {
+        --ozi-check-disabled-opacity: .35;
+    }
+}
