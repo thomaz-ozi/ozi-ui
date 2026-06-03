@@ -8,40 +8,45 @@ class OziAssets
     protected string $version;
 
     protected array $availableStyles = [
-        'core'         => 'ozi-core/css/ozi-core.css',
-        'loaddata'     => 'ozi-loaddata/css/ozi-loaddata.css',
-        'select'       => 'ozi-select/css/ozi-select.css',
-        'audio'        => 'ozi-audio/css/ozi-audio.css',
-        'editor'       => 'ozi-editor/css/ozi-editor.css',
-        'auth'         => 'ozi-addons/css/ozi-auth.css',
+        'reset'        => 'shared/css/ozi-reset.css',
+        'utilities'    => 'shared/css/ozi-utilities.css',
+        'validate'     => 'modules/ozi-validate/css/ozi-validate.css',
+        'loaddata'     => 'modules/ozi-loaddata/css/ozi-loaddata.css',
+        'select'       => 'components/ozi-select/css/ozi-select.css',
+        'autocomplete' => 'components/ozi-autocomplete/css/ozi-autocomplete.css',
+        'audio'        => 'components/ozi-audio/css/ozi-audio.css',
+        'editor'       => 'components/ozi-editor/css/ozi-editor.css',
+        'auth'         => 'components/ozi-auth/css/ozi-auth.css',
+        'search'       => 'components/ozi-search/css/ozi-search.css',
+        'copy'         => 'behaviors/ozi-copy/css/ozi-copy.css',
     ];
 
     protected array $availableScripts = [
-        'loaddata'     => 'ozi-loaddata/js/ozi-loaddata.js',
-        'select'       => 'ozi-select/js/ozi-select.js',
-        'audio'        => 'ozi-audio/js/ozi-audio.js',
-        'autocomplete' => 'ozi-autocomplete/js/ozi-autocomplete.js',
-        'editor'       => 'ozi-editor/js/ozi-editor.js',
-        'search'       => 'ozi-search/js/ozi-search.js',
-        'addons'       => 'ozi-addons/js/ozi-addons.js',
-        'auth'         => 'ozi-addons/js/ozi-auth.js',
-        'check'        => 'ozi-addons/js/ozi-check.js',
-        'copy'         => 'ozi-addons/js/ozi-copy.js',
-        'toggle'       => 'ozi-addons/js/ozi-toggle.js',
+        'loaddata'     => 'modules/ozi-loaddata/js/ozi-loaddata.js',
+        'validate'     => 'modules/ozi-validate/js/ozi-validate.js',
+        'actions'      => 'modules/ozi-actions/js/ozi-actions.js',
+        'suggest'      => 'modules/ozi-suggest/js/ozi-suggest.js',
+        'password'     => 'modules/ozi-password-rules/js/ozi-password-rules.js',
+        'select'       => 'components/ozi-select/js/ozi-select.js',
+        'autocomplete' => 'components/ozi-autocomplete/js/ozi-autocomplete.js',
+        'audio'        => 'components/ozi-audio/js/ozi-audio.js',
+        'editor'       => 'components/ozi-editor/js/ozi-editor.js',
+        'auth'         => 'components/ozi-auth/js/ozi-auth.js',
+        'check'        => 'components/ozi-check/js/ozi-check.js',
+        'search'       => 'components/ozi-search/js/ozi-search.js',
+        'copy'         => 'behaviors/ozi-copy/js/ozi-copy.js',
+        'toggle'       => 'behaviors/ozi-toggle/js/ozi-toggle.js',
     ];
 
     protected array $groups = [
-        'auth'  => ['addons', 'auth', 'check', 'copy', 'toggle'],
-        'forms' => ['loaddata', 'select', 'autocomplete', 'auth', 'check'],
-        'full'  => [],
+        'auth'  => ['validate', 'password', 'auth', 'check', 'copy', 'toggle'],
+        'forms' => ['validate', 'actions', 'loaddata', 'select', 'autocomplete'],
+        'full'  => [], // array vazio = todos
     ];
 
     public function __construct()
     {
-        // base via asset() — resolve corretamente em local e produção
-        $this->base = rtrim(asset('plugins/ozi-ui'), '/') . '/';
-
-        // versão lida do composer.json do pacote — atualiza automaticamente
+        $this->base    = rtrim(asset('plugins/ozi-ui'), '/') . '/';
         $this->version = $this->resolveVersion();
     }
 
