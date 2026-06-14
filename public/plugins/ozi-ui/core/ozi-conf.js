@@ -5,7 +5,7 @@
  *  ------------------------------------------
  *  Ver: 2.0.3
  *  2026-05-27
- * update
+ * update envio 5
  * Responsabilidade:
  *   - Define todos os valores default do OZI-UI
  *   - Recebe e aplica customizações via oziConf()
