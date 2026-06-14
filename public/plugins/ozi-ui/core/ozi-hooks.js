@@ -2,8 +2,8 @@
  ------------------------------------------
  ozi-hooks
  ------------------------------------------
- Ver: 1.0.1
- 2026-05-27
+ Ver: 1.0.2
+ 2026-06-13
 
 
  *
@@ -221,6 +221,9 @@
 
         try {
             window.Livewire.hook('commit', function (component, succeed) {
+                // Em Livewire 4 o callback recebe um unico objeto {component, succeed, ...}
+                // como primeiro arg — succeed fica undefined. Guard evita TypeError.
+                if (typeof succeed !== 'function') return;
                 succeed(function () {
                     var el = component && component.el ? component.el : null;
                     channel.run(el, { source: 'livewire3', component: component });
@@ -232,8 +235,14 @@
     });
 
     // — Fonte: Livewire 4 —
-    // Usa eventos de documento: livewire:navigated e livewire:initialized.
-    // Corrigido v1.0.1: removido hook 'morph.updated' — nao existe no Livewire 4.
+    // livewire:navigated  — pos-navegacao (wire:navigate)
+    // livewire:initialized — inicializacao
+    // Livewire.hook('commit') — pos-update de componente (wire:click, wire:model, etc.)
+    //
+    // v1.0.2: adicionado hook 'commit' no formato Livewire 4.
+    //   Livewire 4 passa um unico objeto {component, commit, respond, succeed, fail}
+    //   em vez dos dois args separados do Livewire 3 (component, succeed).
+    //   Sem esse hook, re-renders de componente (wire:click) nao disparavam afterRender.
     afterRender.registerSource('livewire4', function (channel) {
         if (typeof window.Livewire === 'undefined') return;
 
@@ -246,7 +255,25 @@
                 channel.run(document, { source: 'livewire4', event: 'initialized' });
             });
         } catch (e) {
-            // nao e Livewire 4 — silencioso
+            // silencioso
+        }
+
+        // hook de commit — formato exclusivo Livewire 4
+        // (payload unico; Livewire 3 usava dois args separados — tratado pela fonte livewire3)
+        if (typeof window.Livewire.hook === 'function') {
+            try {
+                window.Livewire.hook('commit', function (payload) {
+                    var succeed   = payload && payload.succeed;
+                    var component = payload && payload.component;
+                    if (typeof succeed !== 'function') return;
+                    succeed(function () {
+                        var el = component && component.el ? component.el : null;
+                        channel.run(el, { source: 'livewire4', event: 'commit', component: component });
+                    });
+                });
+            } catch (e) {
+                // silencioso
+            }
         }
     });
 

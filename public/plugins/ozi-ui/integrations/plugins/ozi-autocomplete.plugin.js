@@ -28,7 +28,8 @@
 
     function _register() {
         var integrations   = window.OZI && window.OZI.integrations;
-        var autocomplete   = window.OZI && window.OZI.components && window.OZI.components.autocomplete;
+        var autocomplete   = (window.OZI && window.OZI.components && window.OZI.components.autocomplete)
+                          || window.OziAutocomplete;
 
         if (!integrations || !integrations.registerPlugin) return;
         if (!autocomplete) {

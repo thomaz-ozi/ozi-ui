@@ -3,7 +3,7 @@
  *  ------------------------------------------
  *  ozi-conf
  *  ------------------------------------------
- *  Ver: 2.0.1
+ *  Ver: 2.0.3
  *  2026-05-27
  *
  * Responsabilidade:
@@ -233,6 +233,78 @@
             js:   'behaviors/ozi-toggle/js/ozi-toggle.js',
             css:  'behaviors/ozi-toggle/css/ozi-toggle.css',
             lang: null
+        },
+
+        // ── integrations ───────────────────────────
+
+        'select-plugin': {
+            deps: ['select'],
+            js:   'integrations/plugins/ozi-select.plugin.js',
+            css:  null,
+            lang: null
+        },
+
+        'autocomplete-plugin': {
+            deps: ['autocomplete'],
+            js:   'integrations/plugins/ozi-autocomplete.plugin.js',
+            css:  null,
+            lang: null
+        },
+
+        'editor-plugin': {
+            deps: ['editor'],
+            js:   'integrations/plugins/ozi-editor.plugin.js',
+            css:  null,
+            lang: null
+        },
+
+        'audio-plugin': {
+            deps: ['audio'],
+            js:   'integrations/plugins/ozi-audio.plugin.js',
+            css:  null,
+            lang: null
+        },
+
+        'auth-plugin': {
+            deps: ['auth'],
+            js:   'integrations/plugins/ozi-auth.plugin.js',
+            css:  null,
+            lang: null
+        },
+
+        'check-plugin': {
+            deps: ['check'],
+            js:   'integrations/plugins/ozi-check.plugin.js',
+            css:  null,
+            lang: null
+        },
+
+        'copy-plugin': {
+            deps: ['copy'],
+            js:   'integrations/plugins/ozi-copy.plugin.js',
+            css:  null,
+            lang: null
+        },
+
+        'search-plugin': {
+            deps: ['search'],
+            js:   'integrations/plugins/ozi-search.plugin.js',
+            css:  null,
+            lang: null
+        },
+
+        'toggle-plugin': {
+            deps: ['toggle'],
+            js:   'integrations/plugins/ozi-toggle.plugin.js',
+            css:  null,
+            lang: null
+        },
+
+        'livewire': {
+            deps: [],
+            js:   'integrations/adapters/ozi-livewire.adapter.js',
+            css:  null,
+            lang: null
         }
     };
 
@@ -253,7 +325,17 @@
         'search',
         'copy',
         'paste',
-        'toggle'
+        'toggle',
+        'editor-plugin',
+        'autocomplete-plugin',
+        'audio-plugin',
+        'auth-plugin',
+        'check-plugin',
+        'copy-plugin',
+        'search-plugin',
+        'toggle-plugin',
+        'select-plugin',
+        'livewire'
     ];
 
     /* ─────────────────────────────────────────────

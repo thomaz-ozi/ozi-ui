@@ -32,7 +32,8 @@
 
     function _register() {
         var integrations = window.OZI && window.OZI.integrations;
-        var copy         = window.OZI && window.OZI.behaviors && window.OZI.behaviors.copy;
+        var copy         = (window.OZI && window.OZI.behaviors && window.OZI.behaviors.copy)
+                        || window.OziCopy;
 
         if (!integrations || !integrations.registerPlugin) return;
         if (!copy) {

@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="5cc201af-d274-4e97-bf50-809eef478b58" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/.idea/.gitignore" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/.name" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/public/plugins/ozi-ui/components/ozi-editor/js/ozi-editor.js" beforeDir="false" afterPath="$PROJECT_DIR$/public/plugins/ozi-ui/components/ozi-editor/js/ozi-editor.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/public/plugins/ozi-ui/core/ozi-conf.js" beforeDir="false" afterPath="$PROJECT_DIR$/public/plugins/ozi-ui/core/ozi-conf.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/public/plugins/ozi-ui/core/ozi-hooks.js" beforeDir="false" afterPath="$PROJECT_DIR$/public/plugins/ozi-ui/core/ozi-hooks.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/public/plugins/ozi-ui/integrations/plugins/ozi-audio.plugin.js" beforeDir="false" afterPath="$PROJECT_DIR$/public/plugins/ozi-ui/integrations/plugins/ozi-audio.plugin.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/public/plugins/ozi-ui/integrations/plugins/ozi-auth.plugin.js" beforeDir="false" afterPath="$PROJECT_DIR$/public/plugins/ozi-ui/integrations/plugins/ozi-auth.plugin.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/public/plugins/ozi-ui/integrations/plugins/ozi-autocomplete.plugin.js" beforeDir="false" afterPath="$PROJECT_DIR$/public/plugins/ozi-ui/integrations/plugins/ozi-autocomplete.plugin.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/public/plugins/ozi-ui/integrations/plugins/ozi-copy.plugin.js" beforeDir="false" afterPath="$PROJECT_DIR$/public/plugins/ozi-ui/integrations/plugins/ozi-copy.plugin.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/public/plugins/ozi-ui/integrations/plugins/ozi-search.plugin.js" beforeDir="false" afterPath="$PROJECT_DIR$/public/plugins/ozi-ui/integrations/plugins/ozi-search.plugin.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/public/plugins/ozi-ui/integrations/plugins/ozi-select.plugin.js" beforeDir="false" afterPath="$PROJECT_DIR$/public/plugins/ozi-ui/integrations/plugins/ozi-select.plugin.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/public/plugins/ozi-ui/integrations/plugins/ozi-toggle.plugin.js" beforeDir="false" afterPath="$PROJECT_DIR$/public/plugins/ozi-ui/integrations/plugins/ozi-toggle.plugin.js" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="ComposerSettings" synchronizationState="SYNCHRONIZE">
+    <pharConfigPath>$PROJECT_DIR$/composer.json</pharConfigPath>
+    <execution />
+  </component>
+  <component name="CopilotPersistence">
+    <persistenceIdMap>
+      <entry key="_E:/xampp/www/ozi/ozi-ui" value="3F3nEjNXifd3ZoBuDLstcMkhVuf" />
+    </persistenceIdMap>
+  </component>
+  <component name="EmbeddingIndexingInfo">
+    <option name="cachedIndexableFilesCount" value="161" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="McpProjectServerCommands">
+    <commands />
+    <urls />
+  </component>
+  <component name="PhpWorkspaceProjectConfiguration" interpreter_name="PHP 8.4" />
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 1,
+  &quot;fromUser&quot;: false
+}</component>
+  <component name="ProjectId" id="3F3nEjNXifd3ZoBuDLstcMkhVuf" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.MCP Project settings loaded": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
+    "codeWithMe.voiceChat.enabledByDefault": "false",
+    "com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1": "true",
+    "git-widget-placeholder": "master",
+    "junie.onboarding.icon.badge.shown": "true",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "to.speed.mode.migration.done": "true",
+    "vue.rearranger.settings.migration": "true"
+  }
+}]]></component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-js-predefined-d6986cc7102b-3bd3a6803838-JavaScript-PS-261.22158.283" />
+        <option value="bundled-php-predefined-a98d8de5180a-a9a4ea3ee0f4-com.jetbrains.php.sharedIndexes-PS-261.22158.283" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="5cc201af-d274-4e97-bf50-809eef478b58" name="Changes" comment="" />
+      <created>1781312510783</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1781312510783</updated>
+      <workItem from="1781312511900" duration="3112000" />
+      <workItem from="1781401503706" duration="643000" />
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+</project>

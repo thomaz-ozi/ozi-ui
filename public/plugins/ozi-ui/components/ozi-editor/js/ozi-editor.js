@@ -2,7 +2,7 @@
  * ------------------------------------------
  * ozi-editor
  * ------------------------------------------
- * Ver: 3.1.0
+ * Ver: 3.1.1
  * 2026-06-01
  *
  * [3.1.0] FEAT-7  Atributo unificado — type integrado ao identificador
@@ -1543,6 +1543,16 @@
         destroy: editorAPI.destroy,
         reload:  editorAPI.reload
     };
+
+    /* expoe OZI.components.editor sincronamente — ozi-editor.plugin.js e ozi-editor-md.js
+     * podem ser executados via OZI.ready() antes de $(fn){_boot()} rodar (jQuery 3.x async) */
+    (function () {
+        var OZI = window.OZI;
+        if (OZI) {
+            if (!OZI.components) OZI.components = {};
+            OZI.components.editor = editorAPI;
+        }
+    }());
 
     $(function () { _boot(); });
 

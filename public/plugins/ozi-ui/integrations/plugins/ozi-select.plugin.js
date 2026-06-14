@@ -35,7 +35,8 @@
 
     function _register() {
         var integrations = window.OZI && window.OZI.integrations;
-        var select       = window.OZI && window.OZI.components && window.OZI.components.select;
+        var select       = (window.OZI && window.OZI.components && window.OZI.components.select)
+                        || window.OziSelect;
 
         if (!integrations || !integrations.registerPlugin) return;
         if (!select) {

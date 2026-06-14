@@ -40,7 +40,8 @@
 
     function _register() {
         var integrations = window.OZI && window.OZI.integrations;
-        var toggle       = window.OZI && window.OZI.behaviors && window.OZI.behaviors.toggle;
+        var toggle       = (window.OZI && window.OZI.behaviors && window.OZI.behaviors.toggle)
+                        || window.OziToggle;
 
         if (!integrations || !integrations.registerPlugin) return;
         if (!toggle) {

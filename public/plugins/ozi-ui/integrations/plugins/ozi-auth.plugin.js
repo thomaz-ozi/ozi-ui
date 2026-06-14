@@ -28,7 +28,8 @@
 
     function _register() {
         var integrations = window.OZI && window.OZI.integrations;
-        var auth         = window.OZI && window.OZI.components && window.OZI.components.auth;
+        var auth         = (window.OZI && window.OZI.components && window.OZI.components.auth)
+                        || window.OziAuth;
 
         if (!integrations || !integrations.registerPlugin) return;
         if (!auth) {

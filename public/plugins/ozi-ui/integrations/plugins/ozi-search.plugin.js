@@ -32,7 +32,8 @@
 
     function _register() {
         var integrations = window.OZI && window.OZI.integrations;
-        var search       = window.OZI && window.OZI.components && window.OZI.components.search;
+        var search       = (window.OZI && window.OZI.components && window.OZI.components.search)
+                        || window.OziSearch;
 
         if (!integrations || !integrations.registerPlugin) return;
         if (!search) {
