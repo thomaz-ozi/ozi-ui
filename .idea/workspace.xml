@@ -4,10 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="5cc201af-d274-4e97-bf50-809eef478b58" name="Changes" comment="OZI-UI: 1.0.0">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/public/plugins/ozi-ui/core/ozi-conf.js" beforeDir="false" afterPath="$PROJECT_DIR$/public/plugins/ozi-ui/core/ozi-conf.js" afterDir="false" />
-    </list>
+    <list default="true" id="5cc201af-d274-4e97-bf50-809eef478b58" name="Changes" comment="OZI-UI: 1.0.0" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -92,7 +89,7 @@
       <updated>1781312510783</updated>
       <workItem from="1781312511900" duration="3112000" />
       <workItem from="1781401503706" duration="643000" />
-      <workItem from="1781452824844" duration="4145000" />
+      <workItem from="1781452824844" duration="4510000" />
     </task>
     <task id="LOCAL-00001" summary="OZI-UI: 1.0.0">
       <option name="closed" value="true" />
