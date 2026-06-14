@@ -4,19 +4,9 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="5cc201af-d274-4e97-bf50-809eef478b58" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/.gitignore" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/.name" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/public/plugins/ozi-ui/components/ozi-editor/js/ozi-editor.js" beforeDir="false" afterPath="$PROJECT_DIR$/public/plugins/ozi-ui/components/ozi-editor/js/ozi-editor.js" afterDir="false" />
+    <list default="true" id="5cc201af-d274-4e97-bf50-809eef478b58" name="Changes" comment="OZI-UI: 1.0.0">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/public/plugins/ozi-ui/core/ozi-conf.js" beforeDir="false" afterPath="$PROJECT_DIR$/public/plugins/ozi-ui/core/ozi-conf.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/public/plugins/ozi-ui/core/ozi-hooks.js" beforeDir="false" afterPath="$PROJECT_DIR$/public/plugins/ozi-ui/core/ozi-hooks.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/public/plugins/ozi-ui/integrations/plugins/ozi-audio.plugin.js" beforeDir="false" afterPath="$PROJECT_DIR$/public/plugins/ozi-ui/integrations/plugins/ozi-audio.plugin.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/public/plugins/ozi-ui/integrations/plugins/ozi-auth.plugin.js" beforeDir="false" afterPath="$PROJECT_DIR$/public/plugins/ozi-ui/integrations/plugins/ozi-auth.plugin.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/public/plugins/ozi-ui/integrations/plugins/ozi-autocomplete.plugin.js" beforeDir="false" afterPath="$PROJECT_DIR$/public/plugins/ozi-ui/integrations/plugins/ozi-autocomplete.plugin.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/public/plugins/ozi-ui/integrations/plugins/ozi-copy.plugin.js" beforeDir="false" afterPath="$PROJECT_DIR$/public/plugins/ozi-ui/integrations/plugins/ozi-copy.plugin.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/public/plugins/ozi-ui/integrations/plugins/ozi-search.plugin.js" beforeDir="false" afterPath="$PROJECT_DIR$/public/plugins/ozi-ui/integrations/plugins/ozi-search.plugin.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/public/plugins/ozi-ui/integrations/plugins/ozi-select.plugin.js" beforeDir="false" afterPath="$PROJECT_DIR$/public/plugins/ozi-ui/integrations/plugins/ozi-select.plugin.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/public/plugins/ozi-ui/integrations/plugins/ozi-toggle.plugin.js" beforeDir="false" afterPath="$PROJECT_DIR$/public/plugins/ozi-ui/integrations/plugins/ozi-toggle.plugin.js" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -38,6 +28,18 @@
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
+  <component name="GitHubPullRequestSearchHistory"><![CDATA[{
+  "lastFilter": {
+    "state": "OPEN",
+    "assignee": "thomaz-ozi"
+  }
+}]]></component>
+  <component name="GithubPullRequestsUISettings"><![CDATA[{
+  "selectedUrlAndAccountId": {
+    "url": "https://github.com/thomaz-ozi/ozi-ui.git",
+    "accountId": "662203a3-0edb-4242-94cb-d9c4164a3f2e"
+  }
+}]]></component>
   <component name="McpProjectServerCommands">
     <commands />
     <urls />
@@ -57,6 +59,7 @@
     "ModuleVcsDetector.initialDetectionPerformed": "true",
     "RunOnceActivity.MCP Project settings loaded": "true",
     "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
     "RunOnceActivity.git.unshallow": "true",
     "RunOnceActivity.typescript.service.memoryLimit.init": "true",
     "codeWithMe.voiceChat.enabledByDefault": "false",
@@ -89,10 +92,35 @@
       <updated>1781312510783</updated>
       <workItem from="1781312511900" duration="3112000" />
       <workItem from="1781401503706" duration="643000" />
+      <workItem from="1781452824844" duration="4145000" />
     </task>
+    <task id="LOCAL-00001" summary="OZI-UI: 1.0.0">
+      <option name="closed" value="true" />
+      <created>1781453061869</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1781453061869</updated>
+    </task>
+    <option name="localTasksCounter" value="2" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="OZI-UI: 1.0.0" />
+    <option name="LAST_COMMIT_MESSAGE" value="OZI-UI: 1.0.0" />
   </component>
 </project>
