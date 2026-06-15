@@ -511,6 +511,37 @@
             var $input = $(selectorOrEl);
             if (!$input.length) return null;
             return _getPaginationState($input);
+        },
+
+        setItems: function (selectorOrEl, items) {
+            var $input = $(selectorOrEl);
+            if (!$input.length) return;
+
+            var rawSelector = _getAttr($input, 'data-ozi-search') || '';
+            if (!rawSelector) return;
+
+            var itemClass = rawSelector.charAt(0) === '.' ? rawSelector.slice(1) : rawSelector;
+            var $existing = $('.' + itemClass);
+            if (!$existing.length) return;
+
+            var container = $existing[0].parentNode;
+            if (!container) return;
+
+            $existing.remove();
+
+            var list = Array.isArray(items) ? items : [];
+            for (var i = 0; i < list.length; i++) {
+                var item = list[i];
+                var text = typeof item === 'string' ? item : (item.label || item.text || String(item));
+                var div  = document.createElement('div');
+                div.className   = itemClass;
+                div.textContent = text;
+                container.appendChild(div);
+            }
+
+            $input.removeData('__oziSearchPaginationReady');
+            _initPaginationInScope($input[0]);
+            searchAPI.trigger(selectorOrEl, $input.val() || '');
         }
     };
 

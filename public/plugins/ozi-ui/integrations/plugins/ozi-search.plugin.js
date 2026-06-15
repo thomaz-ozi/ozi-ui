@@ -56,6 +56,11 @@
             setValue: function (root, value) {
                 search.trigger(root, value);
             },
+            setOptions: function (el, items) {
+                if (typeof search.setItems === 'function') {
+                    search.setItems(el, items);
+                }
+            },
             destroy: function () {
                 // behavior funcional — sem destroy
             },

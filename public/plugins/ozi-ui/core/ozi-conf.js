@@ -34,7 +34,7 @@
         plugins: 'all',           // 'all' | ['loaddata', 'select', ...]
 
         core: {
-            urlBase:  './plugins/ozi-ui/',
+            urlBase:  '/plugins/ozi-ui/',
             log:      false,
             failFast: false
         },

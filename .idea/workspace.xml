@@ -4,7 +4,9 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="5cc201af-d274-4e97-bf50-809eef478b58" name="Changes" comment="OZI-UI: 1.0.0" />
+    <list default="true" id="5cc201af-d274-4e97-bf50-809eef478b58" name="Changes" comment="OZI-UI| 1.0.0">
+      <change beforePath="$PROJECT_DIR$/public/plugins/ozi-ui/core/ozi-conf.js" beforeDir="false" afterPath="$PROJECT_DIR$/public/plugins/ozi-ui/core/ozi-conf.js" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -89,7 +91,7 @@
       <updated>1781312510783</updated>
       <workItem from="1781312511900" duration="3112000" />
       <workItem from="1781401503706" duration="643000" />
-      <workItem from="1781452824844" duration="4510000" />
+      <workItem from="1781452824844" duration="8303000" />
     </task>
     <task id="LOCAL-00001" summary="OZI-UI: 1.0.0">
       <option name="closed" value="true" />
@@ -99,7 +101,15 @@
       <option name="project" value="LOCAL" />
       <updated>1781453061869</updated>
     </task>
-    <option name="localTasksCounter" value="2" />
+    <task id="LOCAL-00002" summary="OZI-UI| 1.0.0">
+      <option name="closed" value="true" />
+      <created>1781465146798</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1781465146798</updated>
+    </task>
+    <option name="localTasksCounter" value="3" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -118,6 +128,7 @@
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="OZI-UI: 1.0.0" />
-    <option name="LAST_COMMIT_MESSAGE" value="OZI-UI: 1.0.0" />
+    <MESSAGE value="OZI-UI| 1.0.0" />
+    <option name="LAST_COMMIT_MESSAGE" value="OZI-UI| 1.0.0" />
   </component>
 </project>

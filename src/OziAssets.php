@@ -22,26 +22,37 @@ class OziAssets
     ];
 
     protected array $availableScripts = [
-        'loaddata'     => 'modules/ozi-loaddata/js/ozi-loaddata.js',
-        'validate'     => 'modules/ozi-validate/js/ozi-validate.js',
-        'actions'      => 'modules/ozi-actions/js/ozi-actions.js',
-        'suggest'      => 'modules/ozi-suggest/js/ozi-suggest.js',
-        'password'     => 'modules/ozi-password-rules/js/ozi-password-rules.js',
-        'select'       => 'components/ozi-select/js/ozi-select.js',
-        'autocomplete' => 'components/ozi-autocomplete/js/ozi-autocomplete.js',
-        'audio'        => 'components/ozi-audio/js/ozi-audio.js',
-        'editor'       => 'components/ozi-editor/js/ozi-editor.js',
-        'auth'         => 'components/ozi-auth/js/ozi-auth.js',
-        'check'        => 'components/ozi-check/js/ozi-check.js',
-        'search'       => 'components/ozi-search/js/ozi-search.js',
-        'copy'         => 'behaviors/ozi-copy/js/ozi-copy.js',
-        'toggle'       => 'behaviors/ozi-toggle/js/ozi-toggle.js',
+        'loaddata'            => 'modules/ozi-loaddata/js/ozi-loaddata.js',
+        'validate'            => 'modules/ozi-validate/js/ozi-validate.js',
+        'actions'             => 'modules/ozi-actions/js/ozi-actions.js',
+        'suggest'             => 'modules/ozi-suggest/js/ozi-suggest.js',
+        'password'            => 'modules/ozi-password-rules/js/ozi-password-rules.js',
+        'select'              => 'components/ozi-select/js/ozi-select.js',
+        'autocomplete'        => 'components/ozi-autocomplete/js/ozi-autocomplete.js',
+        'audio'               => 'components/ozi-audio/js/ozi-audio.js',
+        'editor'              => 'components/ozi-editor/js/ozi-editor.js',
+        'auth'                => 'components/ozi-auth/js/ozi-auth.js',
+        'check'               => 'components/ozi-check/js/ozi-check.js',
+        'search'              => 'components/ozi-search/js/ozi-search.js',
+        'copy'                => 'behaviors/ozi-copy/js/ozi-copy.js',
+        'toggle'              => 'behaviors/ozi-toggle/js/ozi-toggle.js',
+        'select-plugin'       => 'integrations/plugins/ozi-select.plugin.js',
+        'autocomplete-plugin' => 'integrations/plugins/ozi-autocomplete.plugin.js',
+        'audio-plugin'        => 'integrations/plugins/ozi-audio.plugin.js',
+        'auth-plugin'         => 'integrations/plugins/ozi-auth.plugin.js',
+        'check-plugin'        => 'integrations/plugins/ozi-check.plugin.js',
+        'copy-plugin'         => 'integrations/plugins/ozi-copy.plugin.js',
+        'editor-plugin'       => 'integrations/plugins/ozi-editor.plugin.js',
+        'search-plugin'       => 'integrations/plugins/ozi-search.plugin.js',
+        'toggle-plugin'       => 'integrations/plugins/ozi-toggle.plugin.js',
+        'livewire-adapter'    => 'integrations/adapters/ozi-livewire.adapter.js',
     ];
 
     protected array $groups = [
-        'auth'  => ['validate', 'password', 'auth', 'check', 'copy', 'toggle'],
-        'forms' => ['validate', 'actions', 'loaddata', 'select', 'autocomplete'],
-        'full'  => [], // array vazio = todos
+        'auth'     => ['validate', 'password', 'auth', 'check', 'copy', 'toggle'],
+        'forms'    => ['validate', 'actions', 'loaddata', 'select', 'autocomplete'],
+        'livewire' => ['select-plugin', 'autocomplete-plugin', 'audio-plugin', 'auth-plugin', 'check-plugin', 'copy-plugin', 'editor-plugin', 'search-plugin', 'toggle-plugin', 'livewire-adapter'],
+        'full'     => [], // array vazio = todos
     ];
 
     public function __construct()
@@ -63,10 +74,32 @@ class OziAssets
     {
         $map = $this->resolveKeys($this->availableScripts, $only);
 
-        return implode("\n", array_map(
+        $helpersUrl      = $this->base . 'core/helpers/ozi-helpers.js?v='  . $this->version;
+        $confUrl         = $this->base . 'core/ozi-conf.js?v='             . $this->version;
+        $integrationsUrl = $this->base . 'core/ozi-integrations.js?v='     . $this->version;
+        $hooksUrl        = $this->base . 'core/ozi-hooks.js?v='            . $this->version;
+
+        $bridge = 'window.OZI=window.OZI||{components:{},behaviors:{},modules:{},helpers:{},conf:null,lang:null};window.OZI.helpers=window.OziHelpers||{};';
+
+        // immediate: init conf + expose OZI.hooks + OZI.integrations so plugins can use them synchronously
+        $immediateBoot = 'if(window.OziConf){window.OziConf.init();window.OZI.conf=window.OziConf.get();}window.oziConf=function(c){if(window.OziConf)window.OziConf.apply(c);};window.OZI.hooks=window.OziHooks||{};window.OZI.integrations=window.OziIntegrations||{};if(window.OziIntegrations&&window.OziIntegrations._boot)window.OziIntegrations._boot([]);';
+
+        // deferred: connect Livewire hooks only after @livewireScripts runs (window.Livewire ready at DOMContentLoaded)
+        $deferredBoot = '(function(){function b(){var O=window.OZI;if(!O)return;if(O.hooks&&typeof O.hooks._boot==="function")O.hooks._boot();O.isReady=true;}document.readyState==="loading"?document.addEventListener("DOMContentLoaded",b):setTimeout(b,0);})();';
+
+        $head = '<script src="' . $helpersUrl . '"></script>' . "\n"
+              . '<script>' . $bridge . '</script>' . "\n"
+              . '<script src="' . $confUrl . '"></script>' . "\n"
+              . '<script src="' . $integrationsUrl . '"></script>' . "\n"
+              . '<script src="' . $hooksUrl . '"></script>' . "\n"
+              . '<script>' . $immediateBoot . '</script>';
+
+        $body = implode("\n", array_map(
             fn($file) => '<script src="' . $this->url($file) . '"></script>',
             $map
         ));
+
+        return $head . "\n" . $body . "\n" . '<script>' . $deferredBoot . '</script>';
     }
 
     protected function resolveKeys(array $available, array $only): array

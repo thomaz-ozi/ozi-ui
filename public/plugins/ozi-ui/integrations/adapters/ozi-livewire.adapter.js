@@ -117,54 +117,53 @@
         var optEvent   = el.getAttribute(ATTR.optionsEvent);
         var initValue  = el.getAttribute(ATTR.value);
 
-        if (!modelProp) return;
+        // suporta optionsEvent sem model (ex: ozi-search recebe novos itens sem sync de valor)
+        if (!modelProp && !optEvent) return;
 
-        // — valor inicial —
-        if (!_isBlank(initValue)) {
+        // — valor inicial — (só quando há model)
+        if (modelProp && !_isBlank(initValue)) {
             var parsed = _parseJsonSafe(initValue, initValue);
             setTimeout(function () {
                 try { plugin.setValue(el, parsed); } catch (e) {}
             }, 0);
         }
 
-        // — ozi:change → Livewire component.set() —
-        el.addEventListener(plugin.changeEvent || 'ozi:change', function (e) {
-            var inst = plugin.getInstance(el);
-            if (!inst) return;
+        // — ozi:change → Livewire component.set() — (só quando há model)
+        if (modelProp) {
+            el.addEventListener(plugin.changeEvent || 'ozi:change', function (e) {
+                var inst = plugin.getInstance(el);
+                if (!inst) return;
 
-            var value    = plugin.getValue(inst);
-            var valueStr = _stableStr(value);
+                var value    = plugin.getValue(inst);
+                var valueStr = _stableStr(value);
 
-            // evita loop: só propaga se valor realmente mudou
-            if (el.getAttribute(ATTR.lastValue) === valueStr) return;
-            el.setAttribute(ATTR.lastValue, valueStr);
+                // evita loop: só propaga se valor realmente mudou
+                if (el.getAttribute(ATTR.lastValue) === valueStr) return;
+                el.setAttribute(ATTR.lastValue, valueStr);
 
-            var comp = _getComponent(el);
-            if (!comp) return;
+                var comp = _getComponent(el);
+                if (!comp) return;
 
-            try {
-                comp.set(modelProp, value);
+                try {
+                    comp.set(modelProp, value);
 
-                // text-model (autocomplete — label além do value)
-                if (textProp && e.detail && e.detail.label !== undefined) {
-                    comp.set(textProp, e.detail.label || '');
+                    // text-model (autocomplete — label além do value)
+                    if (textProp && e.detail && e.detail.label !== undefined) {
+                        comp.set(textProp, e.detail.label || '');
+                    }
+                } catch (err) {
+                    console.warn('[OZI:livewire] component.set falhou:', err.message);
                 }
-            } catch (err) {
-                console.warn('[OZI:livewire] component.set falhou:', err.message);
-            }
-        });
+            });
+        }
 
         // — Livewire.on(optionsEvent) → atualiza opções —
         if (optEvent) {
-            var key = el.getAttribute(plugin.keyAttribute);
-            var eventKey = optEvent + ':' + key;
-
             _registerLivewireEvent(optEvent, function (payload) {
                 var options = Array.isArray(payload)
                     ? payload
                     : (payload.options || payload.data || []);
 
-                // atualiza opções no componente correto
                 var inst = plugin.getInstance(el);
                 if (inst && typeof plugin.setOptions === 'function') {
                     plugin.setOptions(el, options);
@@ -182,9 +181,12 @@
         if (!plugin || !plugin.selector) return;
         scope = scope || document;
 
-        var elements = scope.querySelectorAll
-            ? scope.querySelectorAll(plugin.selector + '[' + ATTR.model + ']')
-            : [];
+        var elements = [];
+        if (scope.querySelectorAll) {
+            var sel = plugin.selector + '[' + ATTR.model + '],' +
+                      plugin.selector + '[' + ATTR.optionsEvent + ']';
+            elements = scope.querySelectorAll(sel);
+        }
 
         Array.prototype.forEach.call(elements, function (el) {
             _bindElement(el, plugin);
