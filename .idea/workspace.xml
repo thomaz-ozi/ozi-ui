@@ -5,13 +5,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="5cc201af-d274-4e97-bf50-809eef478b58" name="Changes" comment="OZI-UI| 1.0.2">
-      <change beforePath="$PROJECT_DIR$/.idea/ozi-ui.iml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/public/plugins/ozi-ui/components/ozi-editor/js/ozi-editor.js" beforeDir="false" afterPath="$PROJECT_DIR$/public/plugins/ozi-ui/components/ozi-editor/js/ozi-editor.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/public/plugins/ozi-ui/core/ozi-conf.js" beforeDir="false" afterPath="$PROJECT_DIR$/public/plugins/ozi-ui/core/ozi-conf.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/public/plugins/ozi-ui/core/ozi-hooks.js" beforeDir="false" afterPath="$PROJECT_DIR$/public/plugins/ozi-ui/core/ozi-hooks.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/public/plugins/ozi-ui/integrations/plugins/ozi-select.plugin.js" beforeDir="false" afterPath="$PROJECT_DIR$/public/plugins/ozi-ui/integrations/plugins/ozi-select.plugin.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/OziAssets.php" beforeDir="false" afterPath="$PROJECT_DIR$/src/OziAssets.php" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -97,7 +91,7 @@
       <workItem from="1781401503706" duration="643000" />
       <workItem from="1781452824844" duration="9723000" />
       <workItem from="1781658033121" duration="624000" />
-      <workItem from="1781740622599" duration="615000" />
+      <workItem from="1781740622599" duration="1016000" />
     </task>
     <task id="LOCAL-00001" summary="OZI-UI: 1.0.0">
       <option name="closed" value="true" />
@@ -123,7 +117,15 @@
       <option name="project" value="LOCAL" />
       <updated>1781490953348</updated>
     </task>
-    <option name="localTasksCounter" value="4" />
+    <task id="LOCAL-00004" summary="OZI-UI| 1.0.2">
+      <option name="closed" value="true" />
+      <created>1781741783953</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1781741783953</updated>
+    </task>
+    <option name="localTasksCounter" value="5" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
