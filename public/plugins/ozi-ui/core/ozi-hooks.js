@@ -22,6 +22,13 @@
  * Consumido por: ozi.js (window.OziHooks)
  * Usado por: todos os plugins via OZI.hooks.afterRender.register()
  *
+ * Changelog v1.0.2:
+ *   - Corrigido: Livewire 4 — adicionado hook 'commit' no formato v4
+ *     (payload unico {component, succeed, ...}) — dispara afterRender apos
+ *     qualquer update de componente (wire:click, wire:model, etc.).
+ *     Anteriormente so disparava em livewire:navigated e livewire:initialized,
+ *     deixando re-renders de componente sem re-init dos plugins OZI.
+ *
  * Changelog v1.0.1:
  *   - Corrigido: Livewire 4 — removido hook 'morph.updated' (nao existe no LW4)
  *     Eventos corretos mantidos: livewire:navigated, livewire:initialized

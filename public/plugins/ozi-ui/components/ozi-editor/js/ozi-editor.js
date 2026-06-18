@@ -3,7 +3,12 @@
  * ozi-editor
  * ------------------------------------------
  * Ver: 3.1.1
- * 2026-06-01
+ * 2026-06-13
+ *
+ * [3.1.1] FIX-MD-BOOT  OZI.components.editor exposto sincronamente ao fim da IIFE
+ *                      (antes de qualquer DOMReady) — resolve timing quando OZI.ready
+ *                      dispara antes do _boot(). registerConverters usa $(fn) para
+ *                      diferir init(null,'md') à fila jQuery (sempre após _boot()).
  *
  * [3.1.0] FEAT-7  Atributo unificado — type integrado ao identificador
  *                 data-ozi-editor-html="key" → type=html, key=value
@@ -1487,7 +1492,9 @@
         registerConverters: function (converters) {
             if (typeof converters.mdToHtml === 'function') _converters.mdToHtml = converters.mdToHtml;
             if (typeof converters.htmlToMd  === 'function') _converters.htmlToMd  = converters.htmlToMd;
-            editorAPI.init(null, 'md');
+            /* $(fn): se OZI.ready disparar antes de _boot(), init(null,'md') entra
+             * na fila jQuery e sempre roda após _boot() (que foi enfileirado primeiro) */
+            $(function () { editorAPI.init(null, 'md'); });
         },
 
         /* constantes para inspeção/debug */
@@ -1544,8 +1551,9 @@
         reload:  editorAPI.reload
     };
 
-    /* expoe OZI.components.editor sincronamente — ozi-editor.plugin.js e ozi-editor-md.js
-     * podem ser executados via OZI.ready() antes de $(fn){_boot()} rodar (jQuery 3.x async) */
+    /* [3.1.1] FIX-MD-BOOT — expõe a API sincronamente no fim da IIFE.
+     * ozi-editor-md.js encontra OZI.components.editor imediatamente,
+     * independente de quando OZI.ready ou $(fn) disparam. */
     (function () {
         var OZI = window.OZI;
         if (OZI) {

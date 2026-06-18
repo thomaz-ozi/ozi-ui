@@ -31,6 +31,7 @@ class OziAssets
         'autocomplete'        => 'components/ozi-autocomplete/js/ozi-autocomplete.js',
         'audio'               => 'components/ozi-audio/js/ozi-audio.js',
         'editor'              => 'components/ozi-editor/js/ozi-editor.js',
+        'editor-md'           => 'components/ozi-editor/js/ozi-editor-md.js',
         'auth'                => 'components/ozi-auth/js/ozi-auth.js',
         'check'               => 'components/ozi-check/js/ozi-check.js',
         'search'              => 'components/ozi-search/js/ozi-search.js',
@@ -82,7 +83,7 @@ class OziAssets
         $bridge = 'window.OZI=window.OZI||{components:{},behaviors:{},modules:{},helpers:{},conf:null,lang:null};window.OZI.helpers=window.OziHelpers||{};';
 
         // immediate: init conf + expose OZI.hooks + OZI.integrations so plugins can use them synchronously
-        $immediateBoot = 'if(window.OziConf){window.OziConf.init();window.OZI.conf=window.OziConf.get();}window.oziConf=function(c){if(window.OziConf)window.OziConf.apply(c);};window.OZI.hooks=window.OziHooks||{};window.OZI.integrations=window.OziIntegrations||{};if(window.OziIntegrations&&window.OziIntegrations._boot)window.OziIntegrations._boot([]);';
+        $immediateBoot = 'if(window.OziConf){window.OziConf.init();window.OziConf.apply({core:{urlBase:"' . $this->base . '"}});window.OZI.conf=window.OziConf.get();}window.oziConf=function(c){if(window.OziConf)window.OziConf.apply(c);};window.OZI.hooks=window.OziHooks||{};window.OZI.integrations=window.OziIntegrations||{};if(window.OziIntegrations&&window.OziIntegrations._boot)window.OziIntegrations._boot([]);';
 
         // deferred: connect Livewire hooks only after @livewireScripts runs (window.Livewire ready at DOMContentLoaded)
         $deferredBoot = '(function(){function b(){var O=window.OZI;if(!O)return;if(O.hooks&&typeof O.hooks._boot==="function")O.hooks._boot();O.isReady=true;}document.readyState==="loading"?document.addEventListener("DOMContentLoaded",b):setTimeout(b,0);})();';

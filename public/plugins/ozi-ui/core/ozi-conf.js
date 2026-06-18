@@ -4,8 +4,8 @@
  *  ozi-conf
  *  ------------------------------------------
  *  Ver: 2.0.3
- *  2026-05-27
- * update envio 5
+ *  2026-06-13
+ *
  * Responsabilidade:
  *   - Define todos os valores default do OZI-UI
  *   - Recebe e aplica customizações via oziConf()
@@ -34,7 +34,7 @@
         plugins: 'all',           // 'all' | ['loaddata', 'select', ...]
 
         core: {
-            urlBase:  '/plugins/ozi-ui/',
+            urlBase:  './plugins/ozi-ui/',
             log:      false,
             failFast: false
         },
