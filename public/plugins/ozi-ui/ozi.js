@@ -308,9 +308,7 @@
                     throw new Error('ozi-conf.js não carregou corretamente.');
                 }
 
-                if (window.OziConf._setUrlBase) {
-                    window.OziConf._setUrlBase(_urlBase);
-                }
+                var _userSetUrlBase = _pendingConf && _pendingConf.core && _pendingConf.core.urlBase;
 
                 var conf = window.OziConf.init();
 
@@ -320,7 +318,7 @@
                     _pendingConf = null;
                 }
 
-                if (!conf.core || !conf.core.urlBase || conf.core.urlBase === './plugins/ozi-ui/') {
+                if (!_userSetUrlBase) {
                     if (!conf.core) conf.core = {};
                     conf.core.urlBase = _urlBase;
                 }
