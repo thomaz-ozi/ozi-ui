@@ -4,7 +4,9 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="5cc201af-d274-4e97-bf50-809eef478b58" name="Changes" comment="OZI-UI| 1.0.3" />
+    <list default="true" id="5cc201af-d274-4e97-bf50-809eef478b58" name="Changes" comment="OZI-UI| 1.0.4">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -90,6 +92,7 @@
       <workItem from="1781452824844" duration="9723000" />
       <workItem from="1781658033121" duration="624000" />
       <workItem from="1781740622599" duration="3047000" />
+      <workItem from="1781966858051" duration="795000" />
     </task>
     <task id="LOCAL-00001" summary="OZI-UI: 1.0.0">
       <option name="closed" value="true" />
@@ -155,7 +158,15 @@
       <option name="project" value="LOCAL" />
       <updated>1781747007740</updated>
     </task>
-    <option name="localTasksCounter" value="9" />
+    <task id="LOCAL-00009" summary="OZI-UI| 1.0.4">
+      <option name="closed" value="true" />
+      <created>1781966890279</created>
+      <option name="number" value="00009" />
+      <option name="presentableId" value="LOCAL-00009" />
+      <option name="project" value="LOCAL" />
+      <updated>1781966890279</updated>
+    </task>
+    <option name="localTasksCounter" value="10" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -177,6 +188,7 @@
     <MESSAGE value="OZI-UI| 1.0.0" />
     <MESSAGE value="OZI-UI| 1.0.2" />
     <MESSAGE value="OZI-UI| 1.0.3" />
-    <option name="LAST_COMMIT_MESSAGE" value="OZI-UI| 1.0.3" />
+    <MESSAGE value="OZI-UI| 1.0.4" />
+    <option name="LAST_COMMIT_MESSAGE" value="OZI-UI| 1.0.4" />
   </component>
 </project>
