@@ -2,8 +2,8 @@
  * ------------------------------------------
  * ozi-validate
  * ------------------------------------------
- * Ver: 1.0.2
- * 2026-05-30
+ * Ver: 1.0.3
+ * 2026-06-26
  *
  * Responsabilidade:
  *   - Motor generico de validacao de campos por container
@@ -21,6 +21,11 @@
  * Expoe: OZI.modules.validate, window.oziValidateContainer (compat)
  *
  * Changelog:
+ *   - v1.0.3: [FIX-P3] Coleta passa a preservar hidden gerado por componentes OZI.
+ *     Antes, _collectFields/$elements descartavam TODO [type="hidden"], jogando fora
+ *     o valor de componentes que submetem via hidden (ex: ozi-select em form ZLD).
+ *     Agora hidden so e descartado se NAO estiver dentro de [data-ozi-component-hidden],
+ *     preservando _token/_method/flags de infraestrutura. Ver _isInfraHidden().
  *   - v1.0.2: [FIX-P2] Removido fallback Bootstrap5 hardcoded de _classMap().
  *     O fallback anterior ('is-invalid', 'is-valid', 'invalid-feedback') forcava
  *     classes BS5 em projetos com tema 'default' ou 'tailwind' quando OZI.conf
@@ -222,11 +227,20 @@
     // [7] COLETA DE CAMPOS DO CONTAINER
     // ---------------------------------------------
 
+    // hidden de infraestrutura (_token, _method, flags) deve ser descartado,
+    // mas hidden gerado por um componente OZI (ex: ozi-select) carrega o valor
+    // real da selecao — esse precisa ser coletado. O componente marca seu
+    // container com [data-ozi-component-hidden].
+    function _isInfraHidden(el) {
+        return el.type === 'hidden'
+            && $(el).closest('[data-ozi-component-hidden]').length === 0;
+    }
+
     function _collectFields($scope) {
         return $scope
             .find('input, select, textarea, [data-ozi-required]')
-            .not('[type="hidden"]')
-            .not('.select2-search__field');
+            .not('.select2-search__field')
+            .not(function () { return _isInfraHidden(this); });
     }
 
 
@@ -250,8 +264,8 @@
         var $fields;
         if (config.$elements && config.$elements.length) {
             $fields = config.$elements.filter('input, select, textarea, [data-ozi-required]')
-                .not('[type="hidden"]')
-                .not('.select2-search__field');
+                .not('.select2-search__field')
+                .not(function () { return _isInfraHidden(this); });
         } else {
             var $scope = config.$container ? $(config.$container) : $(document);
             $fields = _collectFields($scope);

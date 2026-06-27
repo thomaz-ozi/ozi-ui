@@ -2,8 +2,8 @@
  * ------------------------------------------
  * ozi-loaddata
  * ------------------------------------------
- * Ver: 4.0.4
- * 2026-05-30
+ * Ver: 4.0.5
+ * 2026-06-26
  *
  * Responsabilidade:
  *   - Orquestra fetch, UI, progress bar, busy state, actions
@@ -23,6 +23,10 @@
  * Expoe: window.oziLoadData, window.__zldConf
  *
  * Changelog:
+ *   - v4.0.5: [FIX-HOOKS] zldRenderDependencies passa a disparar OZI.hooks apos
+ *     os hooks do zldConf. Garante que plugins registrados em OZI.hooks.afterRender
+ *     (ex: component:select) re-inicializam em conteudo carregado por fetch,
+ *     sem depender da ponte instalada pelo ozi.js em _bridgeHooks().
  *   - v4.0.4: [FIX-CSS] zldResponseValidClass/InvalidClass defaults corrigidos
  *     de 'is-valid'/'is-invalid' (BS5) para 'ozi-valid'/'ozi-invalid' (neutro OZI).
  *     Adicionado _zldClassMap() — le OZI.conf.classMap primeiro, com zldConf
@@ -238,21 +242,43 @@
 
         var hooks = (zldConf && zldConf.zldHooks) || {};
         var list  = phase === 'before' ? hooks.beforeRender : hooks.afterRender;
-        if (!Array.isArray(list)) return;
 
         _renderRunning[phase] = true;
         try {
-            list.forEach(function (fn) {
-                try {
-                    if (typeof fn === 'function') fn(root, loadData);
-                } catch (e) {
-                    if (loadData && loadData.zldLog) {
-                        console.warn('[oziLoadData] Hook erro (' + phase + ')', e);
+            if (Array.isArray(list)) {
+                list.forEach(function (fn) {
+                    try {
+                        if (typeof fn === 'function') fn(root, loadData);
+                    } catch (e) {
+                        if (loadData && loadData.zldLog) {
+                            console.warn('[oziLoadData] Hook erro (' + phase + ')', e);
+                        }
                     }
-                }
-            });
+                });
+            }
         } finally {
             _renderRunning[phase] = false;
+        }
+
+        // ── ponte OZI.hooks ───────────────────────────────────────────
+        // Re-inicializa componentes OZI (ozi-select, ozi-editor, etc.) no
+        // conteudo recem-injetado. Quando o boot e feito via @oziScripts
+        // (OziAssets), a ponte zldConf.zldHooks -> OZI.hooks que o ozi.js
+        // instala em _bridgeHooks() nao existe; sem isto, plugins registrados
+        // em OZI.hooks.afterRender (ex: 'component:select') nunca disparam em
+        // conteudo carregado por fetch — o ozi-select nao inicializa no offcanvas.
+        var OZI     = window.OZI;
+        var channel = OZI && OZI.hooks &&
+            (phase === 'before' ? OZI.hooks.beforeRender : OZI.hooks.afterRender);
+
+        if (channel && typeof channel.run === 'function') {
+            try {
+                channel.run(root, loadData);
+            } catch (e) {
+                if (loadData && loadData.zldLog) {
+                    console.warn('[oziLoadData] OZI.hooks.run erro (' + phase + ')', e);
+                }
+            }
         }
     }
 

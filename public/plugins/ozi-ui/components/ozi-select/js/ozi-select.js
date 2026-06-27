@@ -2,10 +2,14 @@
  * ------------------------------------------
  * ozi-select
  * ------------------------------------------
- * Ver: 5.0.1
- * 2026-05-30
+ * Ver: 5.0.2
+ * 2026-06-26
  *
  * Changelog:
+ *   - v5.0.2: [FIX-C] Container de hidden marcado com [data-ozi-component-hidden].
+ *     Permite que o coletor do ozi-validate (v1.0.3+) preserve o valor da selecao
+ *     em forms ZLD (que antes descartavam todo [type="hidden"]). Sem isso, o valor
+ *     do select nao chegava ao backend via catch-group.
  *   - v5.0.1: [FIX-A] Fallbacks de _classMap corrigidos de BS5 para classes neutras OZI.
  *     Antes: 'invalid-feedback', 'is-invalid', 'is-valid', 'was-validated'
  *     Depois: 'ozi-feedback', 'ozi-invalid', 'ozi-valid', 'ozi-validated'
@@ -259,6 +263,9 @@
             id: this.uid + '-hidden',
             class: 'ozi-select-hidden-container',
             'data-ozi-select-generated-hidden': this.key,
+            // marcador generico: sinaliza ao coletor (ozi-validate) que os hidden
+            // aqui dentro carregam valor real e nao devem ser descartados
+            'data-ozi-component-hidden': this.key,
             'aria-hidden': 'true'
         });
         this.$root.after($c);
