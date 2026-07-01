@@ -4,9 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="5cc201af-d274-4e97-bf50-809eef478b58" name="Changes" comment="OZI-UI| 1.0.7">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-    </list>
+    <list default="true" id="5cc201af-d274-4e97-bf50-809eef478b58" name="Changes" comment="OZI-UI| 1.0.7" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -96,6 +94,7 @@
       <workItem from="1781979896440" duration="216000" />
       <workItem from="1781980132519" duration="38000" />
       <workItem from="1782575422375" duration="4788000" />
+      <workItem from="1782862620884" duration="45000" />
     </task>
     <task id="LOCAL-00001" summary="OZI-UI: 1.0.0">
       <option name="closed" value="true" />
@@ -209,7 +208,15 @@
       <option name="project" value="LOCAL" />
       <updated>1782579774784</updated>
     </task>
-    <option name="localTasksCounter" value="15" />
+    <task id="LOCAL-00015" summary="OZI-UI| 1.0.7">
+      <option name="closed" value="true" />
+      <created>1782862628896</created>
+      <option name="number" value="00015" />
+      <option name="presentableId" value="LOCAL-00015" />
+      <option name="project" value="LOCAL" />
+      <updated>1782862628896</updated>
+    </task>
+    <option name="localTasksCounter" value="16" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
