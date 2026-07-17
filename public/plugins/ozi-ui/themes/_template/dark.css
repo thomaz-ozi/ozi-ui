@@ -1,0 +1,35 @@
+/**
+ * themes/_template/dark.css
+ * Template de dark mode para um tema custom do OZI-UI.
+ *
+ * Só remapeie tokens --ozi-* — os componentes se ajustam sozinhos.
+ * Dois mecanismos (ative os dois para robustez):
+ *   1. [data-ozi-theme="dark"]  → controle manual (via JS/toggle)
+ *   2. @media (prefers-color-scheme: dark) → automático pelo SO
+ *
+ * DICA: mantenha os dois blocos com os MESMOS tokens (evita divergência —
+ * foi um bug corrigido no tailwind/dark.css na F3). Se seu framework já tem
+ * dark próprio (ex: BS5 data-bs-theme), você pode delegar mapeando os tokens
+ * para as variáveis dele: --ozi-select-bg: var(--sua-var-dark, #fallback);
+ */
+
+/* 1) Dark forçado via atributo */
+[data-ozi-theme="dark"] {
+    /* --ozi-color-white:      ;   (fundo base — vira escuro) */
+    /* --ozi-color-gray-50:    ;   inverta a escala 50↔900    */
+    /* --ozi-color-gray-900:   ;   (texto — vira claro)       */
+    /* --ozi-border-color:     ; */
+    /* --ozi-select-bg:        ; */
+    /* --ozi-editor-toolbar-bg:; */
+    /* --ozi-editor-content-bg:; */
+    /* --ozi-audio-bg:         ; */
+    /* --ozi-auth-dropdown-bg: ; */
+    /* --ozi-color-primary-light: rgba(.., .15); (fundos suaves ficam translúcidos) */
+}
+
+/* 2) Dark automático pelo sistema (mesmos tokens do bloco acima) */
+@media (prefers-color-scheme: dark) {
+    :root:not([data-ozi-theme="light"]) {
+        /* repita aqui os mesmos remapeamentos do bloco 1 */
+    }
+}

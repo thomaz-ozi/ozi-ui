@@ -2,8 +2,8 @@
  * ------------------------------------------
  * ozi-loaddata
  * ------------------------------------------
- * Ver: 4.0.5
- * 2026-06-26
+ * Ver: 5.0.0
+ * 2026-07-03
  *
  * Responsabilidade:
  *   - Orquestra fetch, UI, progress bar, busy state, actions
@@ -19,10 +19,25 @@
  * Dependencias:
  *   - ozi-loaddata-collector.js (auto-carregado antes do boot)
  *   - ozi-validate.js (OZI.modules.validate — carregado pelo ozi-conf antes deste)
+ *   - zero jQuery (contrato de camadas v2)
  *
  * Expoe: window.oziLoadData, window.__zldConf
  *
  * Changelog:
+ *   - v5.0.0: [V2-F2] Migracao para JS puro (docs/ozi-ui-v2-contratos.md, dev-hard):
+ *       - Motor 100% nativo: querySelector/querySelectorAll/classList/insertAdjacentHTML
+ *         no lugar de jQuery; AJAX ja era via fetch (sem mudanca).
+ *       - zldGetProgressBar/zldApplyTriggerState/renderToDestiny/handleHttpErrorHtml/
+ *         limpeza pos-envio (zldFormClear) reescritos sem $().
+ *       - Delegacao de clique/change/interativa nativa via addEventListener + closest()
+ *         (blur trocado por focusout — blur nao faz bubble, delegacao precisa de bubble).
+ *       - zldSafeById passa a retornar Element nativo (era jQuery) — nenhum consumidor
+ *         externo encontrado (grep no plugin inteiro); alinha com o alias de mesmo nome
+ *         que o ozi-helpers v1.1.0 ja expõe (eliminava a divergência entre os dois).
+ *       - Nao emite CustomEvent proprio (nunca emitiu — apenas orquestra render/hooks);
+ *         nenhuma mudanca de contrato de eventos aqui.
+ *       - API publica inalterada: window.oziLoadData, window.__zldConf, window.zldConf
+ *         (getter), aliases zld* e oziLoaddata (compat v0.x).
  *   - v4.0.5: [FIX-HOOKS] zldRenderDependencies passa a disparar OZI.hooks apos
  *     os hooks do zldConf. Garante que plugins registrados em OZI.hooks.afterRender
  *     (ex: component:select) re-inicializam em conteudo carregado por fetch,
@@ -44,13 +59,8 @@
  *   - v4.0.2: Adicionado auto-carregamento do collector via _loadCollector()
  */
 
-(function ($, window, document) {
+(function (window, document) {
     'use strict';
-
-    if (!$) {
-        console.error('oziLoadData: jQuery nao encontrado.');
-        return;
-    }
 
     if (window.__zld_inited) return;
     window.__zld_inited = true;
@@ -203,13 +213,29 @@
 
     function zldSafeById(id, log) {
         if (id && typeof id === 'string' && id.trim() !== '') {
-            var $el = $('#' + id);
-            if ($el.length) return $el;
+            var el = document.getElementById(id);
+            if (el) return el;
             if (log) console.warn('[oziLoadData] Elemento nao encontrado: #' + id);
         } else {
             if (log) console.warn('[oziLoadData] ID vazio passado para zldSafeById()');
         }
         return null;
+    }
+
+    // aplica/remove uma ou mais classes (string separada por espaco) num Element
+    function _classListOp(el, classString, method) {
+        if (!el || !classString) return;
+        String(classString).trim().split(/\s+/).forEach(function (c) {
+            if (c) el.classList[method](c);
+        });
+    }
+
+    // Element ou Document que corresponde ao seletor, incluindo o proprio
+    // escopo se ele mesmo casar (equivalente a $scope.find(sel).addBack(sel))
+    function _matchSelfAndDescendants(scope, selector) {
+        var found = Array.prototype.slice.call(scope.querySelectorAll(selector));
+        if (scope.nodeType === 1 && scope.matches(selector)) found.unshift(scope);
+        return found;
     }
 
     // ---------------------------------------------
@@ -313,38 +339,41 @@
     // ---------------------------------------------
 
     function zldGetProgressBar() {
-        var cls  = zldConf.zldProgressBarGlobalClass;
-        var $bar = $('.' + cls);
+        var cls = zldConf.zldProgressBarGlobalClass;
+        var bar = document.querySelector('.' + cls);
 
-        if (!$bar.length) {
-            $bar = $('<div class="' + cls + '"><div class="ozi-progress-bar"></div></div>');
-            $('body').prepend($bar);
+        if (!bar) {
+            bar = document.createElement('div');
+            bar.className = cls;
+            var inner = document.createElement('div');
+            inner.className = 'ozi-progress-bar';
+            bar.appendChild(inner);
+            document.body.insertBefore(bar, document.body.firstChild);
         }
 
-        return $bar;
+        return bar;
     }
 
     function zldProgressStart() {
         if (!zldConf.zldProgressBarGlobalOption) return;
-        var $bar = zldGetProgressBar();
-        $bar
-            .removeClass(zldConf.zldProgressSuccessClass + ' ' + zldConf.zldProgressErrorClass)
-            .addClass(zldConf.zldProgressLoadingClass);
+        var bar = zldGetProgressBar();
+        _classListOp(bar, zldConf.zldProgressSuccessClass, 'remove');
+        _classListOp(bar, zldConf.zldProgressErrorClass,   'remove');
+        _classListOp(bar, zldConf.zldProgressLoadingClass, 'add');
     }
 
     function zldProgressFinish(success) {
         if (!zldConf.zldProgressBarGlobalOption) return;
-        var $bar        = zldGetProgressBar();
+        var bar         = zldGetProgressBar();
         var finishClass = success !== false
             ? zldConf.zldProgressSuccessClass
             : zldConf.zldProgressErrorClass;
 
-        $bar
-            .removeClass(zldConf.zldProgressLoadingClass)
-            .addClass(finishClass);
+        _classListOp(bar, zldConf.zldProgressLoadingClass, 'remove');
+        _classListOp(bar, finishClass, 'add');
 
         setTimeout(function () {
-            $bar.removeClass(finishClass);
+            _classListOp(bar, finishClass, 'remove');
         }, 600);
     }
 
@@ -395,30 +424,29 @@
     }
 
     function zldApplyTriggerState(el, isValid) {
-        var $el   = $(el);
         var valid = !!isValid;
 
-        if (!$el.is('[data-zld-show-errors]')) {
-            $el.attr('data-zld-show-errors', 'false');
+        if (!el.hasAttribute('data-zld-show-errors')) {
+            el.setAttribute('data-zld-show-errors', 'false');
         }
 
-        $el.attr('data-zld-valid',    valid ? 'true' : 'false');
-        $el.attr('data-zld-disabled', valid ? 'false' : 'true');
+        el.setAttribute('data-zld-valid',    valid ? 'true' : 'false');
+        el.setAttribute('data-zld-disabled', valid ? 'false' : 'true');
 
         if (zldConf.zldAriaDisabled) {
-            $el.attr('aria-disabled', valid ? 'false' : 'true');
+            el.setAttribute('aria-disabled', valid ? 'false' : 'true');
         }
 
         if (zldConf.zldButtonDisabledClass) {
-            $el.toggleClass(zldConf.zldButtonDisabledClass, !valid);
+            _classListOp(el, zldConf.zldButtonDisabledClass, valid ? 'remove' : 'add');
         }
 
         if (zldConf.zldButtonEnabledClass) {
-            $el.toggleClass(zldConf.zldButtonEnabledClass, valid);
+            _classListOp(el, zldConf.zldButtonEnabledClass, valid ? 'add' : 'remove');
         }
 
         if (zldConf.zldUseNativeDisabled === true) {
-            $el.prop('disabled', !valid);
+            el.disabled = !valid;
         }
     }
 
@@ -459,9 +487,9 @@
     }
 
     function _evalAllTriggers(scope) {
-        var $scope = scope ? $(scope) : $(document);
-        $scope.find('[data-zld-url]').addBack('[data-zld-url]').each(function () {
-            _evalTriggerState(this);
+        var root = scope || document;
+        _matchSelfAndDescendants(root, '[data-zld-url]').forEach(function (el) {
+            _evalTriggerState(el);
         });
     }
 
@@ -469,35 +497,31 @@
         var validate = window.OZI && window.OZI.modules && window.OZI.modules.validate;
         if (!validate || typeof validate.field !== 'function') return;
 
-        var belongs = false;
-        $('[data-zld-url]').each(function () {
-            if (_fieldMatchesTrigger(field, _readTriggerConfig(this))) {
-                belongs = true;
-                return false;
-            }
+        var triggers = Array.prototype.slice.call(document.querySelectorAll('[data-zld-url]'));
+
+        var belongs = triggers.some(function (trigger) {
+            return _fieldMatchesTrigger(field, _readTriggerConfig(trigger));
         });
 
         if (!belongs) return;
 
-        validate.field($(field));
+        validate.field(field);
 
-        $('[data-zld-url]').each(function () {
-            if (_fieldMatchesTrigger(field, _readTriggerConfig(this))) {
-                _evalTriggerState(this);
+        triggers.forEach(function (trigger) {
+            if (_fieldMatchesTrigger(field, _readTriggerConfig(trigger))) {
+                _evalTriggerState(trigger);
             }
         });
     }
 
     function zldInitInteractiveValidation(scope) {
-        var $scope = scope ? $(scope) : $(document);
+        var root = scope || document;
 
-        $scope.find('[data-zld-url]').addBack('[data-zld-url]').each(function () {
-            var $el = $(this);
+        _matchSelfAndDescendants(root, '[data-zld-url]').forEach(function (el) {
+            el.setAttribute('data-zld-show-errors', 'false');
+            el.setAttribute('data-zld-busy',        'false');
 
-            $el.attr('data-zld-show-errors', 'false');
-            $el.attr('data-zld-busy',        'false');
-
-            _evalTriggerState(this);
+            _evalTriggerState(el);
         });
     }
 
@@ -587,17 +611,17 @@
         }
         loadData.zldId = elementData.id;
 
-        var $button = zldSafeById(loadData.zldId, loadData.zldLog);
+        var button = zldSafeById(loadData.zldId, loadData.zldLog);
 
         // ── busy state ────────────────────────────────────────────
-        if (loadData.zldFormBusy === true && $button) {
+        if (loadData.zldFormBusy === true && button) {
             var disabledClass = zldConf.zldButtonDisabledClass || '';
-            if (disabledClass && $button.hasClass(disabledClass)) return { perm: 1 };
+            if (disabledClass && button.classList.contains(disabledClass)) return { perm: 1 };
 
-            if (disabledClass)                 $button.addClass(disabledClass);
-            if (zldConf.zldButtonEnabledClass) $button.removeClass(zldConf.zldButtonEnabledClass);
-            if (zldConf.zldAriaDisabled)       $button.attr('aria-disabled', 'true');
-            $button.attr('data-zld-busy', 'true');
+            if (disabledClass)                  _classListOp(button, disabledClass, 'add');
+            if (zldConf.zldButtonEnabledClass) _classListOp(button, zldConf.zldButtonEnabledClass, 'remove');
+            if (zldConf.zldAriaDisabled)       button.setAttribute('aria-disabled', 'true');
+            button.setAttribute('data-zld-busy', 'true');
         }
 
         // ── coleta via collector ──────────────────────────────────
@@ -627,7 +651,8 @@
         }
 
         // ── CSRF ──────────────────────────────────────────────────
-        var token = $('meta[name="csrf-token"]').attr('content');
+        var csrfMeta = document.querySelector('meta[name="csrf-token"]');
+        var token    = csrfMeta ? csrfMeta.getAttribute('content') : null;
         if (token && !formData.has('_token')) formData.append('_token', token);
 
         // ── arquivos ──────────────────────────────────────────────
@@ -647,7 +672,7 @@
 
         // ── bloqueio de validacao ─────────────────────────────────
         if (!collected.isValid) {
-            if ($button) $button.removeClass(zldConf.zldButtonDisabledClass);
+            if (button) _classListOp(button, zldConf.zldButtonDisabledClass, 'remove');
             dataResponse.perm = collected.ldValidate;
             return dataResponse;
         }
@@ -659,17 +684,17 @@
         var finishUi = function (success) {
             zldProgressFinish(success !== false);
 
-            if ($button) {
+            if (button) {
                 setTimeout(function () {
-                    if (zldConf.zldButtonDisabledClass) $button.removeClass(zldConf.zldButtonDisabledClass);
-                    if (zldConf.zldButtonEnabledClass)  $button.addClass(zldConf.zldButtonEnabledClass);
+                    if (zldConf.zldButtonDisabledClass) _classListOp(button, zldConf.zldButtonDisabledClass, 'remove');
+                    if (zldConf.zldButtonEnabledClass)  _classListOp(button, zldConf.zldButtonEnabledClass, 'add');
 
                     if (zldConf.zldAriaDisabled) {
-                        var isStillInvalid = $button.attr('data-zld-disabled') === 'true';
-                        $button.attr('aria-disabled', isStillInvalid ? 'true' : 'false');
+                        var isStillInvalid = button.getAttribute('data-zld-disabled') === 'true';
+                        button.setAttribute('aria-disabled', isStillInvalid ? 'true' : 'false');
                     }
 
-                    $button.attr('data-zld-busy', 'false');
+                    button.setAttribute('data-zld-busy', 'false');
                 }, 400);
             }
         };
@@ -678,27 +703,34 @@
             var ld_destiny = loadData.zldDestinyId;
             if (!ld_destiny) return;
 
-            var $destiny = $('#' + ld_destiny);
-            if (!$destiny.length) {
+            var destiny = document.getElementById(ld_destiny);
+            if (!destiny) {
                 if (loadData.zldLog) console.warn('[oziLoadData] destino nao encontrado:', ld_destiny);
                 return;
             }
 
-            var root = $destiny[0];
+            var root = destiny;
 
             zldRenderDependencies(root, loadData, 'before');
 
-            if (loadData.zldDestinyAppend)      $destiny.append(html);
-            else if (loadData.zldDestinyBefore) $destiny.before(html);
-            else                                $destiny.html(html);
+            if (loadData.zldDestinyAppend)      destiny.insertAdjacentHTML('beforeend', html);
+            else if (loadData.zldDestinyBefore) destiny.insertAdjacentHTML('beforebegin', html);
+            else                                destiny.innerHTML = html;
 
             zldRenderDependencies(root, loadData, 'after');
         };
 
         var handleHttpErrorHtml = function (status, html) {
             renderToDestiny(zldBuildAlertHtml('warning', 'Erro ao carregar.', 'Status ' + status));
-            $('#logErrorLaravelOziTitle').html(status);
-            $('#logErrorLaravelOzi').contents().find('body').html(html);
+
+            var titleEl = document.getElementById('logErrorLaravelOziTitle');
+            if (titleEl) titleEl.innerHTML = status;
+
+            var iframe = document.getElementById('logErrorLaravelOzi');
+            if (iframe && iframe.contentDocument) {
+                var body = iframe.contentDocument.querySelector('body');
+                if (body) body.innerHTML = html;
+            }
         };
 
         // ── modos de envio ────────────────────────────────────────
@@ -775,18 +807,19 @@
                     if (loadData.zldFormClear) {
                         (loadData.zldCatchGroupId || []).forEach(function (groupId) {
                             if (!groupId) return;
-                            var $group = $('#' + groupId);
-                            if (!$group.length) return;
+                            var group = document.getElementById(groupId);
+                            if (!group) return;
 
                             formData.forEach(function (value, key) {
-                                var $input = $group.find('[name="' + key + '"]');
-                                if ($input.length && $input.attr('type') !== 'hidden') {
-                                    // [FIX-CSS] usa _zldClassMap para respeitar o tema ativo
-                                    $input
-                                        .removeClass(_zldClassMap('valid',   zldConf.zldResponseValidClass))
-                                        .removeClass(_zldClassMap('invalid', zldConf.zldResponseInvalidClass))
-                                        .val('');
-                                }
+                                var inputs = group.querySelectorAll('[name="' + key + '"]');
+                                inputs.forEach(function (input) {
+                                    if (input.type !== 'hidden') {
+                                        // [FIX-CSS] usa _zldClassMap para respeitar o tema ativo
+                                        _classListOp(input, _zldClassMap('valid',   zldConf.zldResponseValidClass),   'remove');
+                                        _classListOp(input, _zldClassMap('invalid', zldConf.zldResponseInvalidClass), 'remove');
+                                        input.value = '';
+                                    }
+                                });
                             });
                         });
                     }
@@ -856,7 +889,7 @@
         };
 
         if (zldConf.zldInteractiveValidation === true) {
-            $(el).attr('data-zld-show-errors', 'true');
+            el.setAttribute('data-zld-show-errors', 'true');
 
             var cfg = _readTriggerConfig(el);
             var result = _collect({
@@ -878,15 +911,16 @@
         oziLoadData(attributes, null, el);
     }
 
-    $(document).on('click', '[data-zld-url]', function (e) {
-        var el = (e.target && e.target.closest)
-            ? e.target.closest('[data-zld-url]')
-            : this;
+    document.addEventListener('click', function (e) {
+        var el = e.target.closest('[data-zld-url]');
+        if (!el) return;
         _handleDispatch(el, e);
     });
 
-    $(document).on('change', 'select[data-zld-url]', function (e) {
-        _handleDispatch(this, e);
+    document.addEventListener('change', function (e) {
+        var el = e.target.closest('select[data-zld-url]');
+        if (!el) return;
+        _handleDispatch(el, e);
     });
 
 
@@ -896,14 +930,21 @@
 
     var _syncDebounceTimer = null;
 
-    $(document).on('input change blur', 'input, select, textarea', function () {
+    function _onInteractiveFieldEvent(e) {
         if (zldConf.zldInteractiveValidation !== true) return;
-        var field = this;
+        var field = e.target;
+        if (!field.matches('input, select, textarea')) return;
+
         clearTimeout(_syncDebounceTimer);
         _syncDebounceTimer = setTimeout(function () {
             zldSyncRelatedTriggers(field);
         }, 150);
-    });
+    }
+
+    // 'focusout' no lugar de 'blur' — blur nao faz bubble, delegacao precisa de bubble
+    document.addEventListener('input',    _onInteractiveFieldEvent);
+    document.addEventListener('change',   _onInteractiveFieldEvent);
+    document.addEventListener('focusout', _onInteractiveFieldEvent);
 
 
     // ---------------------------------------------
@@ -969,19 +1010,21 @@
     // A inicializacao interativa (zldInitInteractiveValidation) e o
     // registro do hook afterRender ficam DENTRO do .then() para garantir
     // que OziCollector ja existe antes de _collect() ser chamado.
-    //
-    // Race condition corrigida: antes, o $(function(){}) do jQuery
-    // disparava zldInitInteractiveValidation no DOMContentLoaded,
-    // antes do .then() do _loadCollector() resolver — OziCollector era null.
     // ---------------------------------------------
+
+    function _initReady() {
+        zldInitInteractiveValidation(document);
+    }
 
     _loadCollector().then(function () {
         if (zldConf.zldLog) console.log('[oziLoadData] collector pronto. Iniciando validacao interativa...');
 
         // inicializacao segura — OziCollector garantido aqui
-        $(function () {
-            zldInitInteractiveValidation(document);
-        });
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', _initReady);
+        } else {
+            _initReady();
+        }
 
         // hook afterRender — re-init em conteudo dinamico
         zldConf.zldHooks.afterRender.push(function (root) {
@@ -991,4 +1034,4 @@
         if (zldConf.zldLog) console.log('[oziLoadData] boot concluido.');
     });
 
-})(jQuery, window, document);
+})(window, document);

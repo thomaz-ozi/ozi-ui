@@ -2,6 +2,37 @@
 
 ---
 
+## [2.0.0] — 2026-07-03 (v2 F2 #1 — primeiro componente migrado)
+
+### Alterado
+- Motor interno 100% JS puro — zero jQuery (contrato de camadas v2,
+  `dev-hard/docs/ozi-ui-v2-contratos.md`). Coleta/estado via `querySelectorAll`,
+  `closest`, `classList`; sem `$()`/`.is()`/`.val()`/`.attr()` internos.
+- Validação interativa passa a usar delegação nativa em `document`
+  (`input`/`change`/`focusout` — `focusout` no lugar de `blur`, que não faz bubble).
+- `container()`/`field()`/`applyState()` aceitam Element nativo, jQuery ou
+  seletor via `OZI.helpers.toElement`/`toElements` (helpers de transição v1.1.0).
+- `invalidFields[].el` substitui `invalidFields[].$el` — nenhum consumidor
+  externo lia esse campo além de `.name` (confirmado por grep no plugin inteiro).
+
+### Mantido (sem regressão)
+- API pública inalterada: `registerAdapter`, `container`, `applyState`,
+  `initInteractive`, `field`, `getAdapters`.
+- Compat retroativa `window.oziValidateContainer` com warn.
+- Adapters ainda-v1 registrados por `ozi-select`, `ozi-autocomplete`,
+  `ozi-editor` e `ozi-audio` (pendentes na F2) continuam funcionando sem
+  alteração — recebem o elemento envelopado em jQuery via ponte de transição
+  `_wrapLegacy()` (`guard-ok`, documentada no arquivo), removida quando cada
+  um desses componentes migrar.
+- Validado por página de aceite dedicada:
+  `public/teste-v2/aceite-validate.html` (20 checks, PASSOU em Edge headless).
+
+### Nota
+- Retirado do `PENDING_V1` do guard `tools/check-camadas.sh` — primeiro
+  componente do escopo v2 a zerar a própria pendência.
+
+---
+
 ## [1.0.0] — 2025 (v1.0.0 release)
 
 ### Adicionado

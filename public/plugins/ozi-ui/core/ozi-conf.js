@@ -3,8 +3,11 @@
  *  ------------------------------------------
  *  ozi-conf
  *  ------------------------------------------
- *  Ver: 2.0.3
- *  2026-06-13
+ *  Ver: 3.0.0
+ *  2026-07-05
+ *
+ *  v3.0.0 — versionamento da geração v2 (major +1). Mantém-se a fonte única de
+ *    _pluginMap/_allPlugins, classMap por tema e resolução de deps.
  *
  * Responsabilidade:
  *   - Define todos os valores default do OZI-UI

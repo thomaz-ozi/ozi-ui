@@ -2,8 +2,8 @@
  * ------------------------------------------
  * ozi-loaddata-collector
  * ------------------------------------------
- * Ver: 1.0.1
- * 2026-05-27
+ * Ver: 2.0.0
+ * 2026-07-03
  *
  *
  * Responsabilidade:
@@ -19,9 +19,17 @@
  *   - Nao conhece fetch, progress bar, busy state
  *   - Nao conhece adapters — o validate resolve
  *
- * Dependencias: ozi-validate.js (OZI.modules.validate)
+ * Dependencias: ozi-validate.js (OZI.modules.validate) — zero jQuery (contrato de camadas v2).
  * Carregado por: ozi-loaddata.js (auto-carrega antes de iniciar)
  * Expoe: window.OziCollector, window.oziValidateContainer (compat)
+ *
+ * Changelog:
+ *   - v2.0.0: [V2-F2] Migracao para JS puro (docs/ozi-ui-v2-contratos.md, dev-hard):
+ *       removidos os dois unicos usos de jQuery (`$(container)` e
+ *       `$(document.getElementsByName(...))`) — eram so wrapping de passagem
+ *       para `validate.container({ $container, $elements })`, que ja aceita
+ *       Element/NodeList nativos via `OZI.helpers.toElement/toElements`
+ *       desde a migracao do ozi-validate (F2 #1). Nenhuma logica mudou.
  *
  * Retorno padrao (compativel com oziLoadData v1.0.1):
  * {
@@ -34,7 +42,7 @@
  * }
  */
 
-(function ($, window, document) {
+(function (window, document) {
     'use strict';
 
     // ---------------------------------------------
@@ -178,7 +186,7 @@
             }
 
             var partial = validate.container({
-                $container:  $(container),
+                $container:  container,
                 formData:    new FormData(),
                 silent:      silent
             });
@@ -208,8 +216,8 @@
             // campo por name — busca no DOM e valida
             // IMPORTANTE: nao clona os elementos — passa direto via $elements
             // Clone causava loop de eventos (event listeners copiados + HTMLCollection viva)
-            var $elements = $(document.getElementsByName(_str(item)));
-            if (!$elements.length) {
+            var elements = document.getElementsByName(_str(item));
+            if (!elements.length) {
                 if (log) console.warn('[OziCollector] campo nao encontrado pelo name:', item);
                 return;
             }
@@ -219,10 +227,10 @@
                 return;
             }
 
-            // passa $elements direto — validate usa .filter() em vez de .find()
+            // passa a NodeList direto — validate.container normaliza via toElements()
             // elementos permanecem no DOM original sem clonar
             var partial = validate.container({
-                $elements: $elements,
+                $elements: elements,
                 formData:  new FormData(),
                 silent:    silent
             });
@@ -272,4 +280,4 @@
         });
     };
 
-})(jQuery, window, document);
+})(window, document);

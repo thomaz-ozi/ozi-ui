@@ -10,7 +10,11 @@
     lang.register('es', {
         search: {
             minCharsMessage:  'Escriba al menos {min} caracteres',
-            noResultsMessage: 'No se encontraron resultados'
+            noResultsMessage: 'No se encontraron resultados',
+            pagination:       'Paginación',
+            prev:             'Anterior',
+            next:             'Siguiente',
+            page:             'Página'
         }
     });
 })(window);

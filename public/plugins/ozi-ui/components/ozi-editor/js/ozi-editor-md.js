@@ -2,12 +2,16 @@
  * ------------------------------------------
  * ozi-editor-md
  * ------------------------------------------
- * Ver: 1.0.2
- * 2026-06-01
+ * Ver: 2.0.0
+ * 2026-07-04
  *
+ * [2.0.0] [V2-F2] Zero jQuery (contrato de camadas v2 §2). Removido o branch
+ *                 de boot `window.jQuery($fn)`; os conversores (mdToHtml/htmlToMd)
+ *                 ja eram vanilla puro. Boot: OZI.ready (primario) → readyState/
+ *                 DOMContentLoaded (fallback). ozi-editor.js e migrado em separado.
  * [1.0.0] Conversor MD↔HTML para ozi-editor.js
  * [1.0.2] FIX-BOOT  _register() nunca executado imediatamente
- *                 Prioridade: OZI.ready → jQuery $(fn) → DOMContentLoaded
+ *                 Prioridade: OZI.ready → DOMContentLoaded
  *                 Resolve timing: md.js executava antes do _boot() do editor
  *
  * [1.0.1] Boot simplificado — ozi-loader garante ordem (editor-md deps: ['editor'])
@@ -441,26 +445,24 @@
      * Solução em ordem de prioridade:
      *
      * 1. OZI.ready() — garante execução após boot completo do OZI-UI
-     *    (todos os plugins carregados, DOM inicializado)
+     *    (todos os plugins carregados, DOM inicializado). Caminho normal
+     *    no ecossistema; o _boot() do ozi-editor.js já rodou aqui.
      *
-     * 2. jQuery $(function(){}) — mesma fila do ozi-editor.js,
-     *    loader garante que editor executa antes de editor-md,
-     *    portanto OZI.components.editor existe quando _register roda
+     * 2. readyState / DOMContentLoaded — fallback para uso manual/isolado.
      *
-     * 3. DOMContentLoaded — fallback para uso manual sem jQuery
-     *
-     * NUNCA chamar _register() imediatamente — mesmo que OZI ou
-     * jQuery já existam, o _boot() do editor pode não ter rodado.
+     * NUNCA chamar _register() imediatamente sem OZI.ready — o _boot() do
+     * editor pode não ter rodado, e registerConverters chamaria init(md)
+     * antes de os elementos existirem no DOM.
      * ───────────────────────────────────────────── */
 
     if (window.OZI && typeof window.OZI.ready === 'function') {
         /* OZI.ready — após boot completo do ecossistema */
         window.OZI.ready(function () { _register(); });
-    } else if (typeof window.jQuery === 'function') {
-        /* jQuery — mesma fila do editor, loader garante ordem */
-        window.jQuery(function () { _register(); });
+    } else if (window.document.readyState !== 'loading') {
+        /* DOM já pronto — uso manual após o load */
+        _register();
     } else {
-        /* fallback puro — uso manual sem jQuery */
+        /* fallback puro — uso manual sem OZI */
         window.document.addEventListener('DOMContentLoaded', _register);
     }
 

@@ -1,0 +1,94 @@
+/**
+ * themes/_template/tokens.css
+ * Template de tokens para um tema custom do OZI-UI.
+ *
+ * Copie a pasta _template/ para themes/meu-tema/ e preencha os valores.
+ * TODOS os tokens são opcionais — o que você não declarar herda de
+ * themes/default/tokens.css (que é a fonte única de fallbacks).
+ * Declare só o que diferencia o seu tema.
+ *
+ * Os componentes leem estes tokens em runtime; nenhum valor de framework
+ * fica hardcoded no JS (contrato v2: tema = dados, nunca código).
+ */
+
+:root {
+    /* ─── CORES SEMÂNTICAS ───────────────────────────────── */
+    --ozi-color-primary:        /* ex: #3b82f6 */;
+    --ozi-color-primary-hover:  ;
+    --ozi-color-primary-light:  ;   /* fundo suave (badges, opção selecionada) */
+    --ozi-color-secondary:      ;
+    --ozi-color-success:        ;
+    --ozi-color-success-light:  ;
+    --ozi-color-danger:         ;   /* usado na validação — defina! */
+    --ozi-color-danger-light:   ;
+    --ozi-color-warning:        ;
+    --ozi-color-warning-light:  ;
+    --ozi-color-info:           ;
+    --ozi-color-info-light:     ;
+
+    /* ─── NEUTROS (escala 50→900) ────────────────────────── */
+    --ozi-color-white:          ;
+    --ozi-color-gray-50:        ;
+    --ozi-color-gray-100:       ;
+    --ozi-color-gray-200:       ;
+    --ozi-color-gray-300:       ;
+    --ozi-color-gray-400:       ;
+    --ozi-color-gray-500:       ;
+    --ozi-color-gray-600:       ;
+    --ozi-color-gray-700:       ;
+    --ozi-color-gray-800:       ;
+    --ozi-color-gray-900:       ;
+
+    /* ─── TIPOGRAFIA ─────────────────────────────────────── */
+    --ozi-font-family:          ;
+    --ozi-font-size-xs:         ;
+    --ozi-font-size-sm:         ;
+    --ozi-font-size-base:       ;
+    --ozi-font-size-lg:         ;
+
+    /* ─── BORDAS E RAIOS ─────────────────────────────────── */
+    --ozi-border-width:         ;
+    --ozi-border-color:         ;
+    --ozi-border-color-focus:   ;
+    --ozi-radius-sm:            ;
+    --ozi-radius-md:            ;
+    --ozi-radius-lg:            ;
+    --ozi-radius-xl:            ;
+    --ozi-radius-full:          ;   /* ex: 9999px — pills */
+
+    /* ─── SOMBRAS ────────────────────────────────────────── */
+    --ozi-shadow-sm:            ;
+    --ozi-shadow-md:            ;
+    --ozi-shadow-lg:            ;
+
+    /* ─── TRANSIÇÕES ─────────────────────────────────────── */
+    --ozi-transition-fast:      ;
+    --ozi-transition-base:      ;
+    --ozi-transition-slow:      ;
+
+    /* ─── Z-INDEX ────────────────────────────────────────── */
+    --ozi-z-dropdown:           ;
+    --ozi-z-modal:              ;
+    --ozi-z-toast:              ;
+
+    /* ─── FUNDOS DE COMPONENTES ──────────────────────────── */
+    --ozi-select-bg:            ;
+    --ozi-editor-toolbar-bg:    ;
+    --ozi-editor-content-bg:    ;
+    --ozi-audio-bg:             ;
+    --ozi-auth-dropdown-bg:     ;
+    --ozi-auth-dropdown-shadow: ;
+
+    /* ─── PROGRESS BAR (loaddata) ────────────────────────── */
+    --ozi-progress-height:      ;
+    --ozi-progress-color:       ;
+    --ozi-progress-success-color:;
+    --ozi-progress-error-color: ;
+
+    /* ─── VALIDAÇÃO ──────────────────────────────────────── */
+    --ozi-invalid-color:        ;
+    --ozi-invalid-border:       ;
+    --ozi-valid-color:          ;
+    --ozi-valid-border:         ;
+    --ozi-feedback-font-size:   ;
+}

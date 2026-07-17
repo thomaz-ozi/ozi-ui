@@ -36,7 +36,7 @@
     function _register() {
         var integrations = window.OZI && window.OZI.integrations;
         /* OZI.components.select é setado dentro do _boot() do ozi-select.js,
-         * que roda via $(fn) — assíncrono mesmo com DOM pronto (jQuery 3.x).
+         * que roda no DOMContentLoaded/readyState (v2, boot nativo).
          * window.OziSelect é atribuído sincronamente, portanto sempre disponível. */
         var select = (window.OZI && window.OZI.components && window.OZI.components.select)
                   || window.OziSelect;

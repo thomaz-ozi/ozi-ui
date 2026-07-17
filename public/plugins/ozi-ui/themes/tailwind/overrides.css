@@ -1,0 +1,181 @@
+/**
+ * themes/tailwind/overrides.css
+ * Versão: 1.0.0
+ *
+ * Ajustes dos componentes OZI-UI para integração com Tailwind CSS.
+ * Faz os componentes OZI se comportarem visualmente como controles de
+ * formulário nativos do Tailwind (mesmo look do @tailwindcss/forms):
+ * borda gray-300, radius `rounded`, foco com ring azul (blue-500).
+ *
+ * Usa exclusivamente tokens --ozi-* (mapeados em themes/tailwind/tokens.css) —
+ * sem valores de framework hardcoded, exceto o ring de foco (equivalente ao
+ * `focus:ring-2 focus:ring-blue-500` do Tailwind).
+ *
+ * Carregue APÓS o Tailwind (base/components/utilities), tokens.css e
+ * default/overrides.css. Espelha themes/bootstrap5/overrides.css (paridade
+ * estrutural — a F3 garante que o mesmo build JS sirva os 3 temas trocando só
+ * oziConf({ theme })).
+ *
+ * Changelog:
+ *   - v1.0.0: [V2-F3] Criado (fechava a única lacuna estrutural dos temas).
+ *     Seletor de invalidez do editor corrigido para `.ozi-editor-wrap`
+ *     (classe raiz real do ozi-editor.js; `ozi-editor-root` nunca existiu).
+ */
+
+/* ─── FORM CONTROL — look de input Tailwind ─────────────── */
+
+/* oziSelect / oziAutocomplete alinhados ao input padrão do Tailwind */
+.ozi-select-control,
+.ozi-autocomplete-input {
+    display:          block;
+    width:            100%;
+    padding:          .5rem .75rem;           /* px-3 py-2 */
+    font-size:        var(--ozi-font-size-base);
+    font-weight:      400;
+    line-height:      1.5;
+    color:            var(--ozi-color-gray-900, #111827);
+    background-color: var(--ozi-select-bg);
+    border:           var(--ozi-border-width) solid var(--ozi-border-color);
+    border-radius:    var(--ozi-radius-md);   /* rounded */
+    transition:       border-color var(--ozi-transition-fast), box-shadow var(--ozi-transition-fast);
+    cursor:           pointer;
+}
+
+.ozi-select-control:focus,
+.ozi-select-control:focus-within,
+.ozi-autocomplete-input:focus {
+    border-color: var(--ozi-border-color-focus);
+    outline:      0;
+    box-shadow:   0 0 0 3px rgba(59, 130, 246, .4);   /* ring-2 ring-blue-500 */
+}
+
+/* oziEditor content alinhado ao input Tailwind */
+.ozi-editor-content,
+.ozi-editor-source {
+    display:          block;
+    width:            100%;
+    font-size:        var(--ozi-font-size-base);
+    color:            var(--ozi-color-gray-900, #111827);
+    background-color: var(--ozi-editor-content-bg);
+    border:           var(--ozi-border-width) solid var(--ozi-border-color);
+    border-radius:    0 0 var(--ozi-radius-md) var(--ozi-radius-md);
+    padding:          .5rem .75rem;
+}
+
+.ozi-editor-content:focus {
+    border-color: var(--ozi-border-color-focus);
+    outline:      0;
+    box-shadow:   0 0 0 3px rgba(59, 130, 246, .4);
+}
+
+/* ─── TOOLBAR DO EDITOR — alinhado ao Tailwind ──────────── */
+
+.ozi-editor-toolbar {
+    background:    var(--ozi-editor-toolbar-bg);
+    border:        var(--ozi-border-width) solid var(--ozi-border-color);
+    border-bottom: none;
+    border-radius: var(--ozi-radius-md) var(--ozi-radius-md) 0 0;
+    padding:       .25rem .5rem;
+    display:       flex;
+    flex-wrap:     wrap;
+    gap:           .25rem;
+}
+
+.ozi-editor-btn {
+    padding:       .25rem .5rem;
+    background:    transparent;
+    border:        1px solid transparent;
+    border-radius: var(--ozi-radius-sm);
+    cursor:        pointer;
+    color:         var(--ozi-color-gray-700, #374151);
+    transition:    background var(--ozi-transition-fast);
+    line-height:   1;
+}
+.ozi-editor-btn:hover        { background: var(--ozi-color-gray-100); }
+.ozi-editor-btn--active      { background: var(--ozi-color-primary-light); color: var(--ozi-color-primary); }
+.ozi-editor-btn:disabled     { opacity: .5; cursor: not-allowed; }
+
+/* ─── SELECT / AUTOCOMPLETE DROPDOWN ────────────────────── */
+
+.ozi-select-dropdown,
+.ozi-autocomplete-dropdown {
+    position:      absolute;
+    z-index:       var(--ozi-z-dropdown);
+    background:    var(--ozi-select-bg);
+    border:        var(--ozi-border-width) solid var(--ozi-border-color);
+    border-radius: var(--ozi-radius-md);
+    box-shadow:    var(--ozi-shadow-lg);      /* shadow-lg — dropdown Tailwind */
+    min-width:     100%;
+    margin-top:    .25rem;                    /* mt-1 */
+}
+
+.ozi-select-option {
+    padding:     .5rem .75rem;
+    cursor:      pointer;
+    font-size:   var(--ozi-font-size-base);
+    transition:  background var(--ozi-transition-fast);
+    display:     flex;
+    align-items: center;
+    gap:         .5rem;
+    color:       var(--ozi-color-gray-900, #111827);
+}
+.ozi-select-option:hover        { background: var(--ozi-color-gray-100); }
+.ozi-select-option.is-selected  { background: var(--ozi-color-primary-light); color: var(--ozi-color-primary); }
+.ozi-select-option.is-highlighted { background: var(--ozi-color-gray-100); }
+.ozi-select-option--disabled    { opacity: .5; cursor: not-allowed; }
+
+.ozi-select-search {
+    width:         100%;
+    padding:       .5rem .75rem;
+    border:        none;
+    border-bottom: var(--ozi-border-width) solid var(--ozi-border-color);
+    outline:       none;
+    font-size:     var(--ozi-font-size-sm);
+    background:    transparent;
+    color:         var(--ozi-color-gray-900, #111827);
+}
+
+.ozi-select-tag {
+    display:       inline-flex;
+    align-items:   center;
+    gap:           .25rem;
+    padding:       .125rem .5rem;
+    background:    var(--ozi-color-primary-light);
+    color:         var(--ozi-color-primary);
+    border-radius: var(--ozi-radius-full);    /* rounded-full — pill Tailwind */
+    font-size:     var(--ozi-font-size-xs);
+}
+
+/* ─── AUDIO — shell alinhado ao Tailwind ────────────────── */
+/* O componente ozi-audio tem CSS próprio (components/ozi-audio/css) baseado
+ * em tokens; aqui só o container recebe o look de card Tailwind. */
+
+.ozi-audio__main {
+    background:    var(--ozi-audio-bg);
+    border:        var(--ozi-border-width) solid var(--ozi-border-color);
+    border-radius: var(--ozi-radius-lg);      /* rounded-lg */
+    padding:       .75rem;
+}
+.ozi-audio__progress,
+.ozi-audio__volume-bar { accent-color: var(--ozi-color-primary); }
+
+/* ─── VALIDAÇÃO — integração com Tailwind ───────────────── */
+
+/* Select/autocomplete: markInvalid() aplica `.ozi-invalid` no controle
+ * (coberto por default/overrides.css — border-color: var(--ozi-invalid-border)).
+ * Reforço opcional do ring vermelho no foco de um controle inválido: */
+.ozi-select-control.ozi-invalid:focus,
+.ozi-autocomplete-input.ozi-invalid:focus {
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, .35);   /* ring red-500 */
+}
+
+/* Editor: _markInvalid() aplica classMap.invalid no .ozi-editor-wrap.
+ * No tema Tailwind o classMap.invalid inclui `border-red-500`; propagamos a
+ * cor de erro para content/toolbar. Também cobrimos o marcador semântico
+ * `.ozi-invalid` (temas que o usem). */
+.ozi-editor-wrap.border-red-500 .ozi-editor-content,
+.ozi-editor-wrap.border-red-500 .ozi-editor-toolbar,
+.ozi-editor-wrap.ozi-invalid .ozi-editor-content,
+.ozi-editor-wrap.ozi-invalid .ozi-editor-toolbar {
+    border-color: var(--ozi-color-danger);
+}

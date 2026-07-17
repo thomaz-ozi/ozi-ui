@@ -2,32 +2,38 @@
  *  ------------------------------------------
  *  ozi-helpers
  *  ------------------------------------------
- *  Ver: 1.0.2
- *  2026-05-27
+ *  Ver: 1.1.0
+ *  2026-07-03
  *
  *
  *
  * Responsabilidade:
  *   - Prover funcoes puras e reutilizaveis para todos os plugins
  *   - Sem estado proprio, sem DOM persistente, sem dependencia de outros modules
- *   - Consolidar helpers duplicados de oziLoadData, oziAudio e oziEditor (v0.x)
+ *   - Ponto unico de emissao de eventos do contrato v2 (emit)
  *
  * NAO faz:
  *   - Nao acessa OZI.modules.* nem OZI.components.*
  *   - Nao depende de OZI.conf (recebe o que precisa por parametro)
  *   - Nao manipula DOM de forma persistente
  *
- * Dependencias: jQuery (opcional — apenas runBatch)
+ * Dependencias: NENHUMA — zero jQuery (contrato de camadas v2).
+ *   Funcoes que recebem elemento aceitam Element nativo OU objeto jQuery
+ *   (normalizacao interna via toElement) para conviver com plugins v1
+ *   durante a migracao F2.
  * Consumido por: ozi.js (window.OziHelpers → OZI.helpers)
  * Usado por: todos os plugins
  *
  * Changelog:
- *   - Corrigido: guard singleton adicionado
- *   - Corrigido: parseInt interno renomeado para parseIntAttr
- *     evita mascarar window.parseInt dentro do modulo
- *   - Corrigido: runBatch documentado como dependente de jQuery
- *     com guard graceful se jQuery nao disponivel
- *   - Adicionado: guard typeof fetch no icon() — ambientes sem fetch
+ *   - v1.1.0: [V2-F1] Dependencia de jQuery removida por completo:
+ *       - toElement(x) — normaliza Element | jQuery | seletor string
+ *       - parseBool/parseInt/icon aceitam Element ou jQuery
+ *       - emit(el, name, detail) — ponto unico de CustomEvent do contrato v2
+ *         (bubbles: true, payload em detail; ver docs/ozi-ui-v2-contratos.md)
+ *       - runBatch DEPRECIADO para v2 (mantido funcional p/ plugins v1;
+ *         agora aceita tambem NodeList/Array sem jQuery)
+ *   - v1.0.2: guard singleton; parseInt renomeado internamente p/ parseIntAttr;
+ *     runBatch com guard graceful; guard typeof fetch no icon()
  */
 
 (function (window, document) {
@@ -41,46 +47,101 @@
 
 
     // ---------------------------------------------
-    // [2] PARSERS DE ATRIBUTO HTML
-    // Leitura segura de atributos com fallback.
+    // [2] NORMALIZACAO DE ELEMENTO
+    // Ponte de transicao v1/v2: toda funcao que recebe
+    // elemento aceita Element nativo, objeto jQuery ou
+    // seletor string.
     // ---------------------------------------------
 
     /**
-     * parseBool($el, attrName, fallback?)
+     * toElement(x)
+     * Normaliza para Element nativo.
+     *
+     * @param {Element|jQuery|string|null} x
+     * @returns {Element|null}
+     *
+     * @example
+     * toElement(document.getElementById('a')) // Element
+     * toElement($('#a'))                      // Element (primeiro do set)
+     * toElement('#a')                         // Element via querySelector
+     */
+    function toElement(x) {
+        if (!x) return null;
+        if (x.nodeType === 1 || x.nodeType === 9) return x;          // Element | Document
+        if (typeof x === 'string') return document.querySelector(x); // seletor
+        if (typeof x.jquery === 'string' || (x.length !== undefined && x[0] && x[0].nodeType === 1)) {
+            return x[0] || null;                                     // jQuery / array-like
+        }
+        return null;
+    }
+
+
+    /**
+     * toElements(x)
+     * Normaliza para Array<Element>.
+     * Aceita Element, NodeList, Array, jQuery, seletor string.
+     *
+     * @param {*} x
+     * @returns {Element[]}
+     */
+    function toElements(x) {
+        if (!x) return [];
+        if (x.nodeType === 1) return [x];
+        if (typeof x === 'string') return Array.prototype.slice.call(document.querySelectorAll(x));
+        if (x.length !== undefined) {
+            return Array.prototype.slice.call(x).filter(function (el) {
+                return el && el.nodeType === 1;
+            });
+        }
+        return [];
+    }
+
+
+    // ---------------------------------------------
+    // [3] PARSERS DE ATRIBUTO HTML
+    // Leitura segura de atributos com fallback.
+    // ---------------------------------------------
+
+    function _attr(el, attrName) {
+        el = toElement(el);
+        if (!el || typeof el.getAttribute !== 'function') return null;
+        return el.getAttribute(attrName);
+    }
+
+    /**
+     * parseBool(el, attrName, fallback?)
      * Le atributo HTML e converte para boolean.
      * Aceita: 'true'|'1'|'yes'|'on' -> true
-     *         'false'|'0'|'no'|'off'|'' -> false
+     *         'false'|'0'|'no'|'off' -> false
      *
-     * @param {jQuery} $el
+     * @param {Element|jQuery} el
      * @param {string} attrName
      * @param {boolean} [fallback=false]
      * @returns {boolean}
      */
-    function parseBool($el, attrName, fallback) {
+    function parseBool(el, attrName, fallback) {
         if (fallback === undefined) fallback = false;
-        var raw = $el.attr(attrName);
+        var raw = _attr(el, attrName);
         if (raw === undefined || raw === null) return fallback;
         var val = String(raw).trim().toLowerCase();
         if (val === 'true'  || val === '1' || val === 'yes' || val === 'on')  return true;
         if (val === 'false' || val === '0' || val === 'no'  || val === 'off') return false;
-        if (val === '') return fallback;
         return fallback;
     }
 
 
     /**
-     * parseIntAttr($el, attrName, fallback?)
+     * parseIntAttr(el, attrName, fallback?)
      * Le atributo HTML e converte para inteiro.
-     * Renomeado de parseInt para nao mascarar window.parseInt dentro do modulo.
      *
-     * @param {jQuery} $el
+     * @param {Element|jQuery} el
      * @param {string} attrName
      * @param {number} [fallback=0]
      * @returns {number}
      */
-    function parseIntAttr($el, attrName, fallback) {
+    function parseIntAttr(el, attrName, fallback) {
         if (fallback === undefined) fallback = 0;
-        var raw = $el.attr(attrName);
+        var raw = _attr(el, attrName);
         if (raw === undefined || raw === null || raw === '') return fallback;
         var parsed = window.parseInt(raw, 10);
         return isNaN(parsed) ? fallback : parsed;
@@ -110,7 +171,7 @@
 
 
     // ---------------------------------------------
-    // [3] IDENTIFICADORES
+    // [4] IDENTIFICADORES
     // ---------------------------------------------
 
     var _idCounter = 0;
@@ -168,7 +229,7 @@
 
 
     // ---------------------------------------------
-    // [4] STRING
+    // [5] STRING
     // ---------------------------------------------
 
     /**
@@ -187,7 +248,7 @@
         if (!str) return '';
         return String(str)
             .normalize('NFD')
-            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[0300-036f]/g, '')
             .toLowerCase();
     }
 
@@ -284,17 +345,69 @@
 
 
     // ---------------------------------------------
-    // [5] ICONES — sistema unificado
-    // Resolve icones SVG inline conforme urlBase.
-    // Substitui sistemas proprios de oziAudio e oziEditor.
+    // [6] EVENTOS — contrato v2
+    // Ponto UNICO de emissao de CustomEvent.
+    // Ver docs/ozi-ui-v2-contratos.md §1.
     // ---------------------------------------------
 
     /**
-     * icon($el, name, options?)
-     * Insere icone SVG no elemento via fetch.
-     * Requer jQuery no $el.
+     * emit(el, name, detail?, options?)
+     * Emite CustomEvent nativo conforme o contrato v2:
+     * bubbles: true, payload exclusivamente em detail.
      *
-     * @param {jQuery}  $el
+     * detail padrao do contrato:
+     *   { component, name, value, items?, source: 'user'|'api' }
+     *
+     * @param {Element|jQuery} el       — elemento de origem
+     * @param {string}         name     — ex: 'ozi:change'
+     * @param {object}         [detail] — payload (contrato §1.3)
+     * @param {object}         [options]
+     * @param {boolean}        [options.bubbles=true]
+     * @param {boolean}        [options.cancelable=false]
+     * @returns {boolean} — false se preventDefault() foi chamado
+     *
+     * @example
+     * OZI.helpers.emit(root, 'ozi:change', {
+     *     component: 'ozi-select',
+     *     name:      'uf',
+     *     value:     'SP',
+     *     source:    'user'
+     * });
+     */
+    function emit(el, name, detail, options) {
+        el = toElement(el);
+        if (!el || !name) return true;
+
+        options = options || {};
+        detail  = detail  || {};
+
+        // aviso de contrato — apenas com log ativo, nunca bloqueia
+        if (window.OZI && window.OZI.conf && window.OZI.conf.core && window.OZI.conf.core.log) {
+            if (name.indexOf('ozi:') === 0 && !detail.component) {
+                console.warn('[OZI:helpers] emit(' + name + '): detail.component ausente (contrato v2 §1.3).');
+            }
+        }
+
+        var event = new CustomEvent(name, {
+            bubbles:    options.bubbles !== false,
+            cancelable: options.cancelable === true,
+            detail:     detail
+        });
+
+        return el.dispatchEvent(event);
+    }
+
+
+    // ---------------------------------------------
+    // [7] ICONES — sistema unificado
+    // Resolve icones SVG inline conforme urlBase.
+    // ---------------------------------------------
+
+    /**
+     * icon(el, name, options?)
+     * Insere icone SVG no elemento via fetch.
+     *
+     * @param {Element|jQuery} el
      * @param {string}  name     — ex: 'close', 'play', 'bold'
      * @param {object}  [options]
      * @param {string}  [options.fallback]  — texto/emoji se icone nao carregar
@@ -305,16 +418,18 @@
      * @returns {Promise<void>}
      *
      * @example
-     * OZI.helpers.icon($btn, 'close')
-     * OZI.helpers.icon($btn, 'bold', { plugin: 'editor' })
-     * OZI.helpers.icon($btn, 'play', { plugin: 'audio', fallback: '\u25b6' })
+     * OZI.helpers.icon(btn, 'close')
+     * OZI.helpers.icon(btn, 'bold', { plugin: 'editor' })
+     * OZI.helpers.icon(btn, 'play', { plugin: 'audio', fallback: '▶' })
      */
-    function icon($el, name, options) {
+    function icon(el, name, options) {
         options = options || {};
+        el = toElement(el);
+        if (!el) return Promise.resolve();
 
         // guard — fetch pode nao estar disponivel em ambientes antigos
         if (typeof fetch === 'undefined') {
-            if (options.fallback) $el.text(options.fallback);
+            if (options.fallback) el.textContent = options.fallback;
             return Promise.resolve();
         }
 
@@ -338,59 +453,58 @@
                         (options.color ? 'color:' + options.color + ';fill:currentColor;' : '') +
                         '"');
                 }
-                $el.html(svg);
+                el.innerHTML = svg;
             })
             .catch(function () {
-                if (options.fallback) $el.text(options.fallback);
+                if (options.fallback) el.textContent = options.fallback;
             });
     }
 
 
     // ---------------------------------------------
-    // [6] ASYNC
+    // [8] ASYNC — DEPRECIADO para v2
     // ---------------------------------------------
 
     /**
-     * runBatch($items, callbackItem, callbackEnd?)
-     * Executa callbackItem para cada item jQuery em lote.
-     * Requer jQuery — verifica disponibilidade gracefully.
+     * runBatch(items, callbackItem, callbackEnd?)
+     * DEPRECIADO (v2): use toElements(x).forEach().
+     * Mantido funcional para plugins v1 durante a F2.
      *
-     * @param {jQuery}   $items
-     * @param {function} callbackItem  — fn($item, index)
+     * Se jQuery estiver presente e items for jQuery, o callback recebe
+     * $(item) como na v1. Caso contrario recebe Element nativo.
+     *
+     * @param {jQuery|NodeList|Element[]} items
+     * @param {function} callbackItem  — fn(item, index)
      * @param {function} [callbackEnd] — fn(total)
      */
-    function runBatch($items, callbackItem, callbackEnd) {
-        // guard — requer jQuery
-        if (typeof window.jQuery === 'undefined') {
-            console.warn('[OZI:helpers] runBatch: jQuery nao disponivel.');
+    function runBatch(items, callbackItem, callbackEnd) {
+        var isJq = items && typeof items.jquery === 'string';
+        var els  = toElements(items);
+
+        if (!els.length) {
             if (typeof callbackEnd === 'function') callbackEnd(0);
             return;
         }
 
-        if (!$items || !$items.length) {
-            if (typeof callbackEnd === 'function') callbackEnd(0);
-            return;
-        }
+        var wrap = (isJq && typeof window.jQuery !== 'undefined') // guard-ok: compat v1, sem dependência
+            ? function (el) { return window.jQuery(el); }         // guard-ok: compat v1, sem dependência
+            : function (el) { return el; };
 
-        var $ = window.jQuery;
-        var total = $items.length;
-
-        $items.each(function (i) {
+        els.forEach(function (el, i) {
             try {
-                callbackItem($(this), i);
+                callbackItem(wrap(el), i);
             } catch (e) {
                 console.warn('[OZI:helpers] runBatch: erro no item ' + i + ':', e);
             }
         });
 
-        if (typeof callbackEnd === 'function') callbackEnd(total);
+        if (typeof callbackEnd === 'function') callbackEnd(els.length);
     }
 
 
     // ---------------------------------------------
-    // [7] CONTROLE DE CONCORRENCIA
+    // [9] CONTROLE DE CONCORRENCIA
     // Garante instancia unica ativa por escopo.
-    // Baseado no padrao activePlayerInstance do oziAudio.
     // ---------------------------------------------
 
     var _exclusiveActors = {};
@@ -405,12 +519,8 @@
      * @returns {object|null}      — instancia anterior ou atual
      *
      * @example
-     * // registrar nova instancia ativa:
      * var previous = OZI.helpers.exclusiveActor('audio-player', newInstance);
      * if (previous && previous.pause) previous.pause();
-     *
-     * // ler instancia ativa atual:
-     * var current = OZI.helpers.exclusiveActor('audio-player');
      */
     function exclusiveActor(scope, instance) {
         if (!scope) return null;
@@ -426,7 +536,7 @@
 
 
     // ---------------------------------------------
-    // [8] COMPAT RETROATIVA — aliases v0.x
+    // [10] COMPAT RETROATIVA — aliases v0.x
     // Funcoes antigas com prefixo zld* continuam
     // funcionando com warn quando log ativo.
     // ---------------------------------------------
@@ -450,36 +560,43 @@
 
 
     // ---------------------------------------------
-    // [9] EXPOSICAO — window.OziHelpers
+    // [11] EXPOSICAO — window.OziHelpers
     // Contrato interno para ozi.js.
     // Apos boot, disponivel em OZI.helpers.
     // ---------------------------------------------
 
     window.OziHelpers = {
 
-        // [2] parsers de atributo
+        // [2] normalizacao de elemento
+        toElement:      toElement,
+        toElements:     toElements,
+
+        // [3] parsers de atributo
         parseBool:      parseBool,
         parseInt:       parseIntAttr,    // exposto como parseInt na API publica
         parseList:      parseList,
 
-        // [3] identificadores
+        // [4] identificadores
         generateId:     generateId,
         normalizeDomId: normalizeDomId,
         safeById:       safeById,
 
-        // [4] string
+        // [5] string
         normalize:      normalize,
         escapeRegExp:   escapeRegExp,
         splitTopLevel:  splitTopLevel,
         classNames:     classNames,
 
-        // [5] visual
+        // [6] eventos — contrato v2
+        emit:           emit,
+
+        // [7] visual
         icon:           icon,
 
-        // [6] async
+        // [8] async (depreciado p/ v2)
         runBatch:       runBatch,
 
-        // [7] concorrencia
+        // [9] concorrencia
         exclusiveActor: exclusiveActor
     };
 

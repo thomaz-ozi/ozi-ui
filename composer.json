@@ -1,10 +1,10 @@
 {
   "name": "ozi-ui/core",
-  "version": "1.0.7",
-  "description": "Orquestrador do ecossistema ozi-ui — plugins front-end para Laravel",
+  "version": "2.0.0-dev",
+  "description": "Orquestrador do ecossistema ozi-ui — plugins front-end para Laravel (v2: JS puro, zero dependência de terceiros)",
   "type": "library",
   "license": "MIT",
-  "keywords": ["laravel", "ozi-ui", "plugins", "frontend", "jquery"],
+  "keywords": ["laravel", "ozi-ui", "plugins", "frontend", "vanilla-js", "livewire"],
   "homepage": "https://oziui.com",
   "authors": [
     {

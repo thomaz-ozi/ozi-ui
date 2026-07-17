@@ -1,10 +1,18 @@
 # ozi-autocomplete.js
 
-**Versão:** 1.0.0  
+**Versão:** 4.0.0 (v2 F2 #5 — migrado para JS puro, 2026-07-04)
 **Camada:** `components/ozi-autocomplete/`  
-**Dependências:** `ozi-core.js`, `ozi-suggest.js`, `ozi-validate.js`  
+**Dependências:** `ozi-core.js`, `ozi-suggest.js`, `ozi-validate.js` — zero jQuery
 **Expõe:** `OZI.components.autocomplete`, `window.OziAutocomplete` (compat)  
 **Eventos:** `ozi:change`, `ozi:unique-invalid`
+
+**Nota v2:** motor 100% JS puro (contrato `dev-hard/docs/ozi-ui-v2-contratos.md`) —
+DOM via `document.createElement`/`querySelector`/`classList`; "wrap" do input feito
+manualmente (`insertBefore`/`appendChild`); toast do grupo "unique" via Web Animations
+API. Fim do dual-dispatch: `emit()` só via `OZI.helpers.emit`, com `source:'user'|'api'`.
+O payload posicional jQuery legado é coberto pelo mesmo shim genérico do `ozi-select`
+(`integrations/adapters/ozi-change-v1-compat.shim.js`). Adapter no `ozi-validate` marca
+`nativeElement: true`.
 
 ---
 

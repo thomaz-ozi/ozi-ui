@@ -3,8 +3,12 @@
  * ------------------------------------------
  * ozi
  * ------------------------------------------
- * Ver: 1.0.7
- * 2026-06-26
+ * Ver: 2.0.0
+ * 2026-07-05
+ *
+ * v2.0.0 — índice de versão da geração v2 (JS puro, zero dependência de terceiros).
+ *   ozi.js é o marcador de versão da biblioteca. Bump 1.0.7 → 2.0.0 no corte v2.
+ *   (Release formal 2.0.0 no Packagist acontece na F5; este é o índice do dev line.)
  *
  *
  * Ponto de entrada único do OZI-UI.
@@ -68,7 +72,7 @@
      * ───────────────────────────────────────────── */
 
     var OZI = {
-        version: '1.0.7',
+        version: '2.0.0',
 
         conf:         {},
         helpers:      {},

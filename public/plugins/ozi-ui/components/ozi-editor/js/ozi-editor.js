@@ -2,54 +2,51 @@
  * ------------------------------------------
  * ozi-editor
  * ------------------------------------------
- * Ver: 3.1.1
- * 2026-06-13
+ * Ver: 4.0.0
+ * 2026-07-04
  *
- * [3.1.1] FIX-MD-BOOT  OZI.components.editor exposto sincronamente ao fim da IIFE
- *                      (antes de qualquer DOMReady) — resolve timing quando OZI.ready
- *                      dispara antes do _boot(). registerConverters usa $(fn) para
- *                      diferir init(null,'md') à fila jQuery (sempre após _boot()).
+ * Editor WYSIWYG (contenteditable) com toolbar declarativa, modos html/md,
+ * dropdowns de heading/classes, source view, sanitizacao e validacao.
+ * Instance-based (registry por key). Conversores MD via ozi-editor-md.js.
  *
- * [3.1.0] FEAT-7  Atributo unificado — type integrado ao identificador
- *                 data-ozi-editor-html="key" → type=html, key=value
- *                 data-ozi-editor-md="key"   → type=md,   key=value
- *                 - data-ozi-editor + data-ozi-editor-type REMOVIDOS
- *                 - RULE-1 desnecessária — type é estrutural
- *                 - Zero ambiguidade: type visível de relance no template
- *                 - Dois editores na mesma página sem nenhuma configuração extra
- *                 - _resolve, init, _registerAdapter atualizados
+ * Dependencias: ozi.js (OZI.helpers, OZI.lang, OZI.hooks, OZI.modules.validate) —
+ *   zero jQuery (contrato de camadas v2 §2). O motor (Selection/Range/execCommand/
+ *   contentEditable) sempre foi nativo; a migracao trocou o encanamento de DOM/eventos.
+ * Expoe: OZI.components.editor, window.OziEditor (compat)
+ * Eventos: ozi:init, ozi:change, ozi:destroy (CustomEvent nativos, contrato v2)
  *
- * [2.5.1] FIX-TIMING  editorAPI.init(root, type) — aceita filtro por type
- *                     _boot → init(null, 'html') — só html no boot
- *                     registerConverters → init(null, 'md') — md após conversores
- *                     Elementos md sem conversores aguardam silenciosamente
+ * Changelog:
+ *   - v4.0.0: [V2-F2] Migracao para JS puro (docs/ozi-ui-v2-contratos.md, dev-hard):
+ *       - Zero jQuery. Build de UI via createElement; delegacao de eventos nativa
+ *         em cada wrap (addEventListener + e.target.closest), rastreada por
+ *         instancia para o destroy(). ':visible' -> checagem de style.display.
+ *       - `.closest(sel, context)` 2-arg do jQuery -> Element.closest() nativo +
+ *         guard content.contains() + normalizacao de text-node (nodeType 3).
+ *       - Estado de init por-elemento migrado de $.data() para WeakMap (por type).
+ *       - Fim do dual-dispatch: emitChange() emite SOMENTE CustomEvent via
+ *         OZI.helpers.emit(). Payload passa a aderir ao contrato:
+ *         { component:'ozi-editor', name:key, value, type, source }. Sem shim —
+ *         nenhum consumidor jQuery-posicional de ozi:change do editor no Central RH
+ *         (verificado: unico listener generico e nativo e filtra o editor fora).
+ *       - Adicionados ozi:init (pos-init da instancia) e ozi:destroy (no destroy()).
+ *         source: 'user' na interacao, 'api' em setValue/destroy.
+ *       - Adapter ozi-validate: declara nativeElement:true e recebe Element nativo
+ *         (padrao do ozi-select F2#4). registerConverters/init(md) deferido via
+ *         flag _booted (sem a fila $(fn)); ozi-editor-md.js migrado em separado.
  *
- * [2.5.0] RULE-1  data-ozi-editor-type OBRIGATÓRIO (substituído por FEAT-7)
- *
- * [2.4.0] FEAT-6  data-ozi-editor-type="html|md"
- *                 - DEFAULT_TOOLS_HTML / DEFAULT_TOOLS_MD por type
- *                 - BUILT_IN_THEMES_HTML / BUILT_IN_THEMES_MD por type
- *                 - BLOCKED_IN_MD — ferramentas sem equivalente Markdown
- *                 - Botão incompatível → ícone ? (inerte, title explicativo)
- *                 - _convertIn / _convertOut — hooks preenchidos por ozi-editor-md.js
- *                 - _converters — contrato público para ozi-editor-md.js
- *                 - source mode exibe no formato nativo do type
- *
- * [2.3.0] FEAT-5  data-ozi-editor-theme + oziConf themes — presets de toolbar
- * [2.2.0] FEAT-4  Headings movidos para dropdown separado
- * [2.1.0] FEAT-3  data-ozi-editor-class — dropdown de classes customizadas
- * [2.1.0] FEAT-2  Headings h1–h6 como ferramenta de toolbar
- * [2.1.0] FEAT-1  DEFAULT_TOOLS — constante editável; prioridade: atributo → oziConf → DEFAULT_TOOLS
- * [2.0.2] FIX-A/B/C/D  Correções CSS var, seletor init, textAlign, bindEvents
+ *   Historico anterior (jQuery):
+ *   - v3.1.1 FIX-MD-BOOT; v3.1.0 FEAT-7 (data-ozi-editor-html/md); v2.5.x timing;
+ *     v2.4 type html|md; v2.3 themes; v2.1 headings/classes/tools; v2.0.2 fixes.
  */
 
-(function ($, window, document) {
+(function (window, document) {
     'use strict';
 
-    if (typeof $ === 'undefined') {
-        console.error('[OZI:editor] jQuery não encontrado.');
-        return;
-    }
+    // ─────────────────────────────────────────────
+    // [0] GUARD — singleton
+    // ─────────────────────────────────────────────
+
+    if (window.OziEditor) return;
 
     /* ─────────────────────────────────────────────
      * [1] REGISTRY E CONTADOR
@@ -57,6 +54,14 @@
 
     var _instances = {};
     var _counter   = 0;
+
+    /* estado de init por-elemento (substitui $.data), por type */
+    var _initState = new WeakMap();
+    function _isInited(el, type)      { var s = _initState.get(el); return !!(s && s[type]); }
+    function _setInited(el, type, on) { var s = _initState.get(el); if (!s) { s = {}; _initState.set(el, s); } s[type] = !!on; }
+
+    var _booted       = false;
+    var _pendingMdInit = false;
 
     /* ─────────────────────────────────────────────
      * [2] HELPERS INTERNOS
@@ -104,10 +109,35 @@
         return (conf && conf.classMap && conf.classMap[key]) || fallback || '';
     }
 
-    function _parseBool($el, attr, fallback) {
+    /* classList.add/remove aceitando string com multiplas classes (ex.: tailwind) */
+    function _classListOp(el, classString, method) {
+        if (!el || !classString) return;
+        String(classString).trim().split(/\s+/).forEach(function (c) { if (c) el.classList[method](c); });
+    }
+
+    /* equivalente a $('<tag class>').attr({...}) */
+    function _el(tag, className, attrs) {
+        var e = document.createElement(tag);
+        if (className) e.className = className;
+        if (attrs) Object.keys(attrs).forEach(function (k) {
+            if (attrs[k] !== undefined && attrs[k] !== null && attrs[k] !== false) e.setAttribute(k, attrs[k]);
+        });
+        return e;
+    }
+
+    /* jQuery :visible dos dropdowns — controlados por style.display inline */
+    function _isShown(el) { return !!el && el.style.display !== 'none'; }
+
+    function _emitEvent(el, name, detail) {
         var h = _h();
-        if (h.parseBool) return h.parseBool($el, attr, fallback);
-        var raw = $el.attr(attr);
+        if (h && typeof h.emit === 'function') { h.emit(el, name, detail); return; }
+        if (typeof CustomEvent === 'function') el.dispatchEvent(new CustomEvent(name, { bubbles: true, detail: detail }));
+    }
+
+    function _parseBool(el, attr, fallback) {
+        var h = _h();
+        if (h.parseBool) return h.parseBool(el, attr, fallback);
+        var raw = el ? el.getAttribute(attr) : null;
         if (raw === undefined || raw === null) return !!fallback;
         var val = String(raw).trim().toLowerCase();
         if (val === 'true'  || val === '1' || val === 'yes' || val === 'on')  return true;
@@ -133,42 +163,13 @@
     }
 
     /* ─────────────────────────────────────────────
-     * [3] DEFAULT_TOOLS — padrão do autor por type
-     *
-     * Prioridade de resolução (para ambos os types):
-     *   1. data-ozi-editor-theme  → nome de theme → string
-     *   2. data-ozi-editor-tools  → string direta
-     *   3. oziConf defaultTheme   → nome de theme → string
-     *   4. oziConf defaultTools   → string direta (compat)
-     *   5. DEFAULT_TOOLS_HTML / DEFAULT_TOOLS_MD   ← fallback do autor
+     * [3] DEFAULT_TOOLS — padrao do autor por type
      * ───────────────────────────────────────────── */
 
     var DEFAULT_TOOLS_HTML = '[bold,italic,underline], [ul,ol], [left,center,right]; [heading,classes], table, clear, codeblock, source';
     var DEFAULT_TOOLS_MD   = '[bold,italic], [ul,ol]; heading; codeblock, table; source';
 
-    /* ─────────────────────────────────────────────
-     * FERRAMENTAS BLOQUEADAS EM MD
-     *
-     * Sem equivalente Markdown direto.
-     * Se declaradas em data-ozi-editor-tools com type=md,
-     * o botão aparece como ? (inerte, com title explicativo).
-     * 'classes' não está bloqueado — dev decide conscientemente.
-     * ───────────────────────────────────────────── */
-
-    var BLOCKED_IN_MD = {
-        left:   true,
-        center: true,
-        right:  true,
-        clear:  true
-    };
-
-    /* ─────────────────────────────────────────────
-     * THEMES BUILT-IN POR TYPE
-     *
-     * Dois dicionários independentes.
-     * Dev estende via oziConf:
-     *   components.editor.themes.html / .md
-     * ───────────────────────────────────────────── */
+    var BLOCKED_IN_MD = { left: true, center: true, right: true, clear: true };
 
     var BUILT_IN_THEMES_HTML = {
         minimal:  '[bold,italic,underline]; source',
@@ -192,27 +193,8 @@
         return null;
     }
 
-    /* ─────────────────────────────────────────────
-     * CONTRATO DE CONVERSORES — preenchido por ozi-editor-md.js
-     *
-     * OZI.components.editor.registerConverters({
-     *     mdToHtml: fn,
-     *     htmlToMd:  fn
-     * });
-     *
-     * Se não registrado e type=md: passthrough sem conversão.
-     * ───────────────────────────────────────────── */
-
-    var _converters = {
-        mdToHtml: null,
-        htmlToMd:  null
-    };
-
-    /* ─────────────────────────────────────────────
-     * [3.1.0] SELETOR ÚNICO
-     *
-     * Centralizado — usado em init(), _resolve() e _registerAdapter().
-     * ───────────────────────────────────────────── */
+    /* CONTRATO DE CONVERSORES — preenchido por ozi-editor-md.js */
+    var _converters = { mdToHtml: null, htmlToMd: null };
 
     var SELECTOR = '[data-ozi-editor-html], [data-ozi-editor-md]';
 
@@ -275,15 +257,13 @@
             part = part.trim();
             if (!part) return null;
             var idx = part.indexOf(':');
-            if (idx > -1) {
-                return { cls: part.slice(0, idx).trim(), label: part.slice(idx + 1).trim() };
-            }
+            if (idx > -1) return { cls: part.slice(0, idx).trim(), label: part.slice(idx + 1).trim() };
             return { cls: part, label: part };
         }).filter(Boolean);
     }
 
     /* ─────────────────────────────────────────────
-     * [7] SANITIZAÇÃO DE HTML
+     * [7] SANITIZACAO DE HTML
      * ───────────────────────────────────────────── */
 
     var ALLOWED_TAGS = {
@@ -298,9 +278,10 @@
 
     function _sanitizeHtml(html) {
         if (!html) return '';
-        var $tmp = $('<div>').html(html);
-        _cleanNode($tmp[0]);
-        return $tmp.html();
+        var tmp = document.createElement('div');
+        tmp.innerHTML = html;
+        _cleanNode(tmp);
+        return tmp.innerHTML;
     }
 
     function _cleanNode(node) {
@@ -349,29 +330,19 @@
 
     /* ─────────────────────────────────────────────
      * [8] CONSTRUCTOR
-     *
-     * [3.1.0] FEAT-7 — type integrado ao atributo identificador:
-     *
-     *   data-ozi-editor-html="descricao"  →  type=html, key='descricao'
-     *   data-ozi-editor-md="descricao"    →  type=md,   key='descricao'
-     *
-     * Regras:
-     *   - Nenhum dos dois presentes → throw (mensagem clara)
-     *   - key vazio → throw
-     *   - Os dois presentes → html vence (primeiro detectado)
      * ───────────────────────────────────────────── */
 
     function OziEditor(element) {
-        this.$textarea = $(element);
+        this.textarea = element;
 
         /* [FEAT-7] detecta type pelo atributo presente */
-        var keyHtml = this.$textarea.attr('data-ozi-editor-html');
-        var keyMd   = this.$textarea.attr('data-ozi-editor-md');
+        var keyHtml = this.textarea.getAttribute('data-ozi-editor-html');
+        var keyMd   = this.textarea.getAttribute('data-ozi-editor-md');
 
-        if (keyHtml !== undefined) {
+        if (keyHtml !== null) {
             this.editorType = 'html';
             this.key        = _trim(String(keyHtml));
-        } else if (keyMd !== undefined) {
+        } else if (keyMd !== null) {
             this.editorType = 'md';
             this.key        = _trim(String(keyMd));
         } else {
@@ -382,74 +353,70 @@
         }
 
         if (!this.key) {
-            throw new Error(
-                '[OZI:editor] Chave obrigatória.\n' +
-                'Exemplo: data-ozi-editor-html="descricao"'
-            );
+            throw new Error('[OZI:editor] Chave obrigatória.\nExemplo: data-ozi-editor-html="descricao"');
         }
 
         this.uid = 'ozi-editor-' + (++_counter);
-        this.ns  = '.oziEditor.' + this.uid;
 
         var pluginConf = window.OZI && window.OZI.conf &&
             window.OZI.conf.components && window.OZI.conf.components.editor;
 
-        /* temas do dev separados por type */
         var _devThemesByType = pluginConf && pluginConf.themes;
         var _devThemes       = _devThemesByType && _devThemesByType[this.editorType];
+        var _builtIn         = this.editorType === 'md' ? BUILT_IN_THEMES_MD : BUILT_IN_THEMES_HTML;
 
-        /* dicionário built-in correto para o type */
-        var _builtIn = this.editorType === 'md' ? BUILT_IN_THEMES_MD : BUILT_IN_THEMES_HTML;
-
-        /* prioridade de resolução da toolbar */
-        var _themeName   = this.$textarea.attr('data-ozi-editor-theme');
+        var _themeName   = this.textarea.getAttribute('data-ozi-editor-theme');
         var _themeStr    = _resolveTheme(_themeName, _devThemes, _builtIn);
-
         var _defTheme    = pluginConf && pluginConf.defaultTheme;
         var _defThemeStr = _resolveTheme(_defTheme, _devThemes, _builtIn);
-
         var _defaultTools = this.editorType === 'md' ? DEFAULT_TOOLS_MD : DEFAULT_TOOLS_HTML;
 
         this.toolsRaw =
-            _themeStr                                    ||  /* 1. theme no elemento */
-            this.$textarea.attr('data-ozi-editor-tools') ||  /* 2. tools direto */
-            _defThemeStr                                 ||  /* 3. defaultTheme do conf */
-            (pluginConf && pluginConf.defaultTools)      ||  /* 4. defaultTools (compat) */
-            _defaultTools;                                   /* 5. fallback por type */
+            _themeStr                                          ||  /* 1. theme no elemento */
+            this.textarea.getAttribute('data-ozi-editor-tools') ||  /* 2. tools direto */
+            _defThemeStr                                       ||  /* 3. defaultTheme do conf */
+            (pluginConf && pluginConf.defaultTools)            ||  /* 4. defaultTools (compat) */
+            _defaultTools;                                          /* 5. fallback por type */
 
-        this.height      = this.$textarea.attr('data-ozi-editor-height') || '200px';
-        this.placeholder = this.$textarea.attr('data-ozi-editor-placeholder') || _t('editor.placeholder');
-        this.uicolor     = this.$textarea.attr('data-ozi-editor-uicolor')
+        this.height      = this.textarea.getAttribute('data-ozi-editor-height') || '200px';
+        this.placeholder = this.textarea.getAttribute('data-ozi-editor-placeholder') || _t('editor.placeholder');
+        this.uicolor     = this.textarea.getAttribute('data-ozi-editor-uicolor')
             || (pluginConf && pluginConf.uicolor)
             || 'var(--ozi-color-primary)';
 
-        this.isDisabled      = _parseBool(this.$textarea, 'data-ozi-editor-disabled', false);
-        this.isRequired      = _parseBool(this.$textarea, 'data-ozi-editor-required', false);
-        this.requiredMessage = this.$textarea.attr('data-ozi-editor-required-message') || _t('common.required');
+        this.isDisabled      = _parseBool(this.textarea, 'data-ozi-editor-disabled', false);
+        this.isRequired      = _parseBool(this.textarea, 'data-ozi-editor-required', false);
+        this.requiredMessage = this.textarea.getAttribute('data-ozi-editor-required-message') || _t('common.required');
 
-        this.classDefs = _parseClassDefs(this.$textarea.attr('data-ozi-editor-class') || '');
+        this.classDefs = _parseClassDefs(this.textarea.getAttribute('data-ozi-editor-class') || '');
 
         this.toolsLayout  = _parseToolsLayout(this.toolsRaw);
         this.isSourceMode = false;
         this._savedRange  = null;
+        this._listeners   = [];
 
-        this.$wrap            = null;
-        this.$toolbar         = null;
-        this.$content         = null;
-        this.$source          = null;
-        this.$feedback        = null;
-        this.$headingDropdown = null;
-        this.$classDropdown   = null;
+        this.wrap            = null;
+        this.toolbar         = null;
+        this.content         = null;
+        this.source          = null;
+        this.feedback        = null;
+        this.headingDropdown = null;
+        this.classDropdown   = null;
     }
+
+    /* rastreia listeners para remocao no destroy */
+    OziEditor.prototype._on = function (target, type, handler) {
+        target.addEventListener(type, handler);
+        this._listeners.push({ target: target, type: type, handler: handler });
+    };
 
     /* ─────────────────────────────────────────────
      * [9] LIFECYCLE
      * ───────────────────────────────────────────── */
 
     OziEditor.prototype.init = function () {
-        var initFlag = 'ozi-editor-' + this.editorType + '-initialized';
-        if (this.$textarea.data(initFlag)) return;
-        this.$textarea.data(initFlag, true);
+        if (_isInited(this.textarea, this.editorType)) return;
+        _setInited(this.textarea, this.editorType, true);
 
         this._buildUI();
         this._loadIcons();
@@ -460,19 +427,28 @@
         if (this.isDisabled) this._setDisabled(true);
 
         _instances[this.key] = this;
+
+        _emitEvent(this.textarea, 'ozi:init', {
+            component: 'ozi-editor', name: this.key,
+            value: this.textarea.value, type: this.editorType, source: 'api'
+        });
     };
 
     OziEditor.prototype.destroy = function () {
-        this.$textarea.off(this.ns);
-        $(document).off(this.ns);
-        if (this.$wrap) this.$wrap.remove();
-        var initFlag = 'ozi-editor-' + this.editorType + '-initialized';
-        this.$textarea.show().removeData(initFlag);
+        (this._listeners || []).forEach(function (l) { l.target.removeEventListener(l.type, l.handler); });
+        this._listeners = [];
+        if (this.wrap && this.wrap.parentNode) this.wrap.parentNode.removeChild(this.wrap);
+        this.textarea.style.display = '';
+        _setInited(this.textarea, this.editorType, false);
         delete _instances[this.key];
+        _emitEvent(this.textarea, 'ozi:destroy', {
+            component: 'ozi-editor', name: this.key,
+            value: null, type: this.editorType, source: 'api'
+        });
     };
 
     OziEditor.prototype.reload = function () {
-        var el = this.$textarea[0];
+        var el = this.textarea;
         this.destroy();
         var fresh = new OziEditor(el);
         fresh.init();
@@ -486,38 +462,34 @@
     OziEditor.prototype._buildUI = function () {
         var self = this;
 
-        /* [3.1.0] $wrap recebe data-ozi-editor-type para CSS e debug
-         * (atributo do wrapper gerado — não do textarea original) */
-        self.$wrap = $('<div class="ozi-editor-wrap"></div>')
-            .css('--ozi-editor-uicolor', self.uicolor)
-            .attr('data-ozi-editor-type', self.editorType);
+        self.wrap = _el('div', 'ozi-editor-wrap', { 'data-ozi-editor-type': self.editorType });
+        self.wrap.style.setProperty('--ozi-editor-uicolor', self.uicolor);
 
-        self.$toolbar = $('<div class="ozi-editor-toolbar"></div>');
+        self.toolbar = _el('div', 'ozi-editor-toolbar');
         self._buildToolbarButtons();
 
-        self.$content = $('<div class="ozi-editor-content" contenteditable="true" role="textbox" aria-multiline="true"></div>')
-            .css('min-height', self.height)
-            .attr('data-placeholder', self.placeholder);
+        self.content = _el('div', 'ozi-editor-content', {
+            contenteditable: 'true', role: 'textbox', 'aria-multiline': 'true',
+            'data-placeholder': self.placeholder
+        });
+        self.content.style.minHeight = self.height;
 
-        var sourcePlaceholder = self.editorType === 'md'
-            ? _t('editor.source.md')
-            : _t('editor.source');
-
-        self.$source = $('<textarea class="ozi-editor-source"></textarea>')
-            .css('min-height', self.height)
-            .attr('placeholder', sourcePlaceholder)
-            .hide();
+        var sourcePlaceholder = self.editorType === 'md' ? _t('editor.source.md') : _t('editor.source');
+        self.source = _el('textarea', 'ozi-editor-source', { placeholder: sourcePlaceholder });
+        self.source.style.minHeight = self.height;
+        self.source.style.display = 'none';
 
         var feedbackClass = _classMap('feedback', 'ozi-feedback');
-        self.$feedback = $('<div class="' + feedbackClass + ' ozi-editor-feedback"></div>').hide();
+        self.feedback = _el('div', feedbackClass + ' ozi-editor-feedback');
+        self.feedback.style.display = 'none';
 
-        self.$wrap
-            .append(self.$toolbar)
-            .append(self.$content)
-            .append(self.$source)
-            .append(self.$feedback);
+        self.wrap.appendChild(self.toolbar);
+        self.wrap.appendChild(self.content);
+        self.wrap.appendChild(self.source);
+        self.wrap.appendChild(self.feedback);
 
-        self.$textarea.hide().after(self.$wrap);
+        self.textarea.style.display = 'none';
+        self.textarea.insertAdjacentElement('afterend', self.wrap);
     };
 
     /* ─────────────────────────────────────────────
@@ -528,77 +500,60 @@
         var self = this;
 
         self.toolsLayout.forEach(function (row) {
-            var $row = $('<div class="ozi-editor-toolbar-row"></div>');
+            var rowEl = _el('div', 'ozi-editor-toolbar-row');
 
             row.items.forEach(function (item) {
                 if (item.type === 'group') {
-                    var $group = $('<div class="ozi-editor-toolbar-group"></div>');
+                    var groupEl = _el('div', 'ozi-editor-toolbar-group');
                     item.tools.forEach(function (tool) {
-                        var $btn = self._buildToolButton(tool);
-                        if ($btn && $btn.length) $group.append($btn);
+                        var btn = self._buildToolButton(tool);
+                        if (btn) groupEl.appendChild(btn);
                     });
-                    if ($group.children().length) $row.append($group);
+                    if (groupEl.children.length) rowEl.appendChild(groupEl);
                 } else if (item.type === 'tool') {
-                    var $btn = self._buildToolButton(item.tool);
-                    if ($btn && $btn.length) $row.append($btn);
+                    var btn = self._buildToolButton(item.tool);
+                    if (btn) rowEl.appendChild(btn);
                 }
             });
 
-            if ($row.children().length) self.$toolbar.append($row);
+            if (rowEl.children.length) self.toolbar.appendChild(rowEl);
         });
     };
 
-    /*
-     * Resultado por cenário:
-     *
-     *   tool desconhecida (typo: "bild")
-     *     → botão ? | title: "Unknown tool: bild"
-     *
-     *   tool bloqueada em MD (left/center/right/clear) com type=md
-     *     → botão ? | title: "Not available in this mode: left"
-     *
-     *   tool válida para o type
-     *     → botão normal
-     */
     OziEditor.prototype._buildToolButton = function (tool) {
         var self = this;
 
         if (!TOOL_META[tool]) {
             return self._buildIncompatibleButton(tool, _t('editor.unknown') + ': ' + tool);
         }
-
         if (self.editorType === 'md' && BLOCKED_IN_MD[tool]) {
             return self._buildIncompatibleButton(tool, _t('editor.incompatible') + ': ' + tool);
         }
 
         var meta  = TOOL_META[tool];
         var label = _t(meta.labelKey);
-
-        if (tool === 'source' && self.editorType === 'md') {
-            label = _t('editor.source.md');
-        }
+        if (tool === 'source' && self.editorType === 'md') label = _t('editor.source.md');
 
         if (tool === 'heading') return self._buildHeadingButton(label);
         if (tool === 'classes') return self._buildClassesButton(label);
 
-        var $btn = $('<button type="button" class="ozi-editor-btn"></button>')
-            .attr('data-ozi-editor-tool', tool)
-            .attr('title', label)
-            .attr('aria-label', label)
-            .append($('<span class="ozi-editor-btn-icon" aria-hidden="true"></span>'));
-
-        return $btn;
+        var btn = _el('button', 'ozi-editor-btn', {
+            type: 'button', 'data-ozi-editor-tool': tool, title: label, 'aria-label': label
+        });
+        btn.appendChild(_el('span', 'ozi-editor-btn-icon', { 'aria-hidden': 'true' }));
+        return btn;
     };
 
-    /* Botão ? — inerte, visível, title explicativo */
     OziEditor.prototype._buildIncompatibleButton = function (tool, titleMsg) {
-        return $('<button type="button" class="ozi-editor-btn ozi-editor-btn--incompatible"></button>')
-            .attr('disabled', true)
-            .attr('data-ozi-editor-tool-blocked', tool)
-            .attr('title', titleMsg)
-            .attr('aria-label', titleMsg)
-            .attr('aria-disabled', 'true')
-            .append($('<span class="ozi-editor-btn-icon" aria-hidden="true">?</span>'));
+        var btn = _el('button', 'ozi-editor-btn ozi-editor-btn--incompatible', {
+            type: 'button', 'data-ozi-editor-tool-blocked': tool,
+            title: titleMsg, 'aria-label': titleMsg, 'aria-disabled': 'true'
+        });
+        btn.disabled = true;
+        var span = _el('span', 'ozi-editor-btn-icon', { 'aria-hidden': 'true' });
+        span.textContent = '?';
+        btn.appendChild(span);
+        return btn;
     };
 
     /* ─────────────────────────────────────────────
@@ -608,60 +563,58 @@
     OziEditor.prototype._buildHeadingButton = function (label) {
         var self = this;
 
-        var $wrap = $('<div class="ozi-editor-heading-wrap"></div>');
+        var wrap = _el('div', 'ozi-editor-heading-wrap');
+        var btn  = _el('button', 'ozi-editor-btn ozi-editor-btn--heading', {
+            type: 'button', 'data-ozi-editor-tool': 'heading',
+            title: label, 'aria-label': label, 'aria-haspopup': 'true', 'aria-expanded': 'false'
+        });
+        btn.appendChild(_el('span', 'ozi-editor-btn-icon', { 'aria-hidden': 'true' }));
 
-        var $btn = $('<button type="button" class="ozi-editor-btn ozi-editor-btn--heading"></button>')
-            .attr('data-ozi-editor-tool', 'heading')
-            .attr('title', label)
-            .attr('aria-label', label)
-            .attr('aria-haspopup', 'true')
-            .attr('aria-expanded', 'false')
-            .append($('<span class="ozi-editor-btn-icon" aria-hidden="true"></span>'));
-
-        var $dropdown = $('<div class="ozi-editor-heading-dropdown" role="menu"></div>').hide();
+        var dropdown = _el('div', 'ozi-editor-heading-dropdown', { role: 'menu' });
+        dropdown.style.display = 'none';
 
         ['h1','h2','h3','h4','h5','h6'].forEach(function (level) {
-            var levelLabel = _t('editor.' + level);
-            var $item = $('<button type="button" class="ozi-editor-heading-item" role="menuitem"></button>')
-                .attr('data-ozi-heading', level)
-                .append($('<span class="ozi-editor-heading-check" aria-hidden="true">&#10003;</span>'))
-                .append($('<span class="ozi-editor-heading-tag"></span>').text(level.toUpperCase()))
-                .append($('<span class="ozi-editor-heading-label"></span>').text(levelLabel));
-            $dropdown.append($item);
+            var item  = _el('button', 'ozi-editor-heading-item', { type: 'button', 'data-ozi-heading': level, role: 'menuitem' });
+            var check = _el('span', 'ozi-editor-heading-check', { 'aria-hidden': 'true' });
+            check.innerHTML = '&#10003;';
+            var tagEl = _el('span', 'ozi-editor-heading-tag');   tagEl.textContent = level.toUpperCase();
+            var lblEl = _el('span', 'ozi-editor-heading-label'); lblEl.textContent = _t('editor.' + level);
+            item.appendChild(check); item.appendChild(tagEl); item.appendChild(lblEl);
+            dropdown.appendChild(item);
         });
 
-        self.$headingDropdown = $dropdown;
-        $wrap.append($btn).append($dropdown);
-        return $wrap;
+        self.headingDropdown = dropdown;
+        wrap.appendChild(btn); wrap.appendChild(dropdown);
+        return wrap;
     };
 
     OziEditor.prototype._toggleHeadingDropdown = function (forceClose) {
         var self = this;
-        if (!self.$headingDropdown) return;
+        if (!self.headingDropdown) return;
 
-        var isOpen = self.$headingDropdown.is(':visible');
+        var isOpen = _isShown(self.headingDropdown);
+        var hb     = self.wrap.querySelector('.ozi-editor-btn--heading');
 
         if (forceClose || isOpen) {
-            self.$headingDropdown.hide();
-            self.$wrap.find('.ozi-editor-btn--heading').attr('aria-expanded', 'false');
+            self.headingDropdown.style.display = 'none';
+            if (hb) hb.setAttribute('aria-expanded', 'false');
             return;
         }
 
         self._updateHeadingDropdownChecks();
-        self.$headingDropdown.show();
-        self.$wrap.find('.ozi-editor-btn--heading').attr('aria-expanded', 'true');
+        self.headingDropdown.style.display = '';
+        if (hb) hb.setAttribute('aria-expanded', 'true');
     };
 
     OziEditor.prototype._updateHeadingDropdownChecks = function () {
         var self = this;
-        if (!self.$headingDropdown) return;
+        if (!self.headingDropdown) return;
 
         var block      = self._getClosestBlockElement();
         var currentTag = block ? String(block.tagName || '').toLowerCase() : '';
 
-        self.$headingDropdown.find('[data-ozi-heading]').each(function () {
-            var level = $(this).attr('data-ozi-heading');
-            $(this).toggleClass('ozi-editor-heading-item--active', level === currentTag);
+        Array.prototype.forEach.call(self.headingDropdown.querySelectorAll('[data-ozi-heading]'), function (it) {
+            it.classList.toggle('ozi-editor-heading-item--active', it.getAttribute('data-ozi-heading') === currentTag);
         });
     };
 
@@ -671,60 +624,57 @@
 
     OziEditor.prototype._buildClassesButton = function (label) {
         var self = this;
+        if (!self.classDefs || !self.classDefs.length) return null;
 
-        if (!self.classDefs || !self.classDefs.length) return $();
+        var wrap = _el('div', 'ozi-editor-classes-wrap');
+        var btn  = _el('button', 'ozi-editor-btn ozi-editor-btn--classes', {
+            type: 'button', 'data-ozi-editor-tool': 'classes',
+            title: label, 'aria-label': label, 'aria-haspopup': 'true', 'aria-expanded': 'false'
+        });
+        btn.appendChild(_el('span', 'ozi-editor-btn-icon', { 'aria-hidden': 'true' }));
 
-        var $wrap = $('<div class="ozi-editor-classes-wrap"></div>');
-
-        var $btn = $('<button type="button" class="ozi-editor-btn ozi-editor-btn--classes"></button>')
-            .attr('data-ozi-editor-tool', 'classes')
-            .attr('title', label)
-            .attr('aria-label', label)
-            .attr('aria-haspopup', 'true')
-            .attr('aria-expanded', 'false')
-            .append($('<span class="ozi-editor-btn-icon" aria-hidden="true"></span>'));
-
-        var $dropdown = $('<div class="ozi-editor-classes-dropdown" role="menu"></div>').hide();
+        var dropdown = _el('div', 'ozi-editor-classes-dropdown', { role: 'menu' });
+        dropdown.style.display = 'none';
 
         self.classDefs.forEach(function (def) {
-            var $item = $('<button type="button" class="ozi-editor-classes-item" role="menuitem"></button>')
-                .attr('data-ozi-class', def.cls)
-                .append($('<span class="ozi-editor-classes-check" aria-hidden="true"></span>'))
-                .append($('<span class="ozi-editor-classes-label"></span>').text(def.label));
-            $dropdown.append($item);
+            var item = _el('button', 'ozi-editor-classes-item', { type: 'button', 'data-ozi-class': def.cls, role: 'menuitem' });
+            item.appendChild(_el('span', 'ozi-editor-classes-check', { 'aria-hidden': 'true' }));
+            var lblEl = _el('span', 'ozi-editor-classes-label'); lblEl.textContent = def.label;
+            item.appendChild(lblEl);
+            dropdown.appendChild(item);
         });
 
-        self.$classDropdown = $dropdown;
-        $wrap.append($btn).append($dropdown);
-        return $wrap;
+        self.classDropdown = dropdown;
+        wrap.appendChild(btn); wrap.appendChild(dropdown);
+        return wrap;
     };
 
     OziEditor.prototype._toggleClassDropdown = function (forceClose) {
         var self = this;
-        if (!self.$classDropdown) return;
+        if (!self.classDropdown) return;
 
-        var isOpen = self.$classDropdown.is(':visible');
+        var isOpen = _isShown(self.classDropdown);
+        var cb     = self.wrap.querySelector('.ozi-editor-btn--classes');
 
         if (forceClose || isOpen) {
-            self.$classDropdown.hide();
-            self.$wrap.find('.ozi-editor-btn--classes').attr('aria-expanded', 'false');
+            self.classDropdown.style.display = 'none';
+            if (cb) cb.setAttribute('aria-expanded', 'false');
             return;
         }
 
         self._updateClassDropdownChecks();
-        self.$classDropdown.show();
-        self.$wrap.find('.ozi-editor-btn--classes').attr('aria-expanded', 'true');
+        self.classDropdown.style.display = '';
+        if (cb) cb.setAttribute('aria-expanded', 'true');
     };
 
     OziEditor.prototype._updateClassDropdownChecks = function () {
         var self = this;
-        if (!self.$classDropdown) return;
+        if (!self.classDropdown) return;
 
         var activeClasses = self._getActiveClasses();
 
-        self.$classDropdown.find('[data-ozi-class]').each(function () {
-            var cls = $(this).attr('data-ozi-class');
-            $(this).toggleClass('ozi-editor-classes-item--active', activeClasses.indexOf(cls) > -1);
+        Array.prototype.forEach.call(self.classDropdown.querySelectorAll('[data-ozi-class]'), function (it) {
+            it.classList.toggle('ozi-editor-classes-item--active', activeClasses.indexOf(it.getAttribute('data-ozi-class')) > -1);
         });
     };
 
@@ -739,9 +689,8 @@
         var node = sel.getRangeAt(0).commonAncestorContainer;
         if (node.nodeType === 3) node = node.parentNode;
 
-        while (node && node !== self.$content[0]) {
-            var cls = String(node.className || '');
-            cls.split(/\s+/).forEach(function (c) {
+        while (node && node !== self.content) {
+            String(node.className || '').split(/\s+/).forEach(function (c) {
                 c = c.trim();
                 if (c && allCls.indexOf(c) > -1 && active.indexOf(c) === -1) active.push(c);
             });
@@ -779,12 +728,13 @@
 
         var ancestor = range.commonAncestorContainer;
         if (ancestor.nodeType === 3) ancestor = ancestor.parentNode;
-        var $existingSpan = $(ancestor).closest('span.' + cls, self.$content[0]);
+        var existingSpan = (ancestor && ancestor.closest) ? ancestor.closest('span.' + cls) : null;
 
-        if ($existingSpan.length) {
-            var $parent = $existingSpan.parent();
-            $existingSpan.replaceWith($existingSpan.contents());
-            $parent[0] && $parent[0].normalize();
+        if (existingSpan && self.content.contains(existingSpan)) {
+            var parent = existingSpan.parentNode;
+            while (existingSpan.firstChild) parent.insertBefore(existingSpan.firstChild, existingSpan);
+            parent.removeChild(existingSpan);
+            if (parent) parent.normalize();
         } else {
             try {
                 var span = document.createElement('span');
@@ -816,8 +766,7 @@
         var results = [];
         var BLOCK   = ['P','H1','H2','H3','H4','H5','H6','LI','TD','TH','PRE','BLOCKQUOTE'];
 
-        $(self.$content[0]).find(BLOCK.join(',').toLowerCase()).each(function () {
-            var node      = this;
+        Array.prototype.forEach.call(self.content.querySelectorAll(BLOCK.join(',').toLowerCase()), function (node) {
             var nodeRange = document.createRange();
             nodeRange.selectNode(node);
             if (range.compareBoundaryPoints(Range.END_TO_START, nodeRange) < 1 &&
@@ -830,33 +779,31 @@
     };
 
     /* ─────────────────────────────────────────────
-     * [14] CARREGAMENTO DE ÍCONES SVG
+     * [14] CARREGAMENTO DE ICONES SVG
      * ───────────────────────────────────────────── */
 
     OziEditor.prototype._loadIcons = function () {
         var self = this;
         var h    = _h();
 
-        var _textFallback = function ($iconEl, tool) {
-            if (/^h[1-6]$/.test(tool))  { $iconEl.html('<strong>' + tool.toUpperCase() + '</strong>'); }
-            else if (tool === 'heading') { $iconEl.html('H'); }
-            else if (tool === 'classes') { $iconEl.html('&#127991;'); }
-            else                         { $iconEl.text(tool); }
+        var _textFallback = function (iconEl, tool) {
+            if (/^h[1-6]$/.test(tool))    { iconEl.innerHTML = '<strong>' + tool.toUpperCase() + '</strong>'; }
+            else if (tool === 'heading')  { iconEl.innerHTML = 'H'; }
+            else if (tool === 'classes')  { iconEl.innerHTML = '&#127991;'; }
+            else                          { iconEl.textContent = tool; }
         };
 
-        self.$toolbar.find('[data-ozi-editor-tool]').each(function () {
-            var tool    = $(this).attr('data-ozi-editor-tool');
-            var meta    = TOOL_META[tool];
+        Array.prototype.forEach.call(self.toolbar.querySelectorAll('[data-ozi-editor-tool]'), function (btn) {
+            var tool = btn.getAttribute('data-ozi-editor-tool');
+            var meta = TOOL_META[tool];
             if (!meta) return;
 
-            var $iconEl = $(this).find('.ozi-editor-btn-icon');
+            var iconEl = btn.querySelector('.ozi-editor-btn-icon');
+            if (!iconEl) return;
 
-            if (!h.icon) { _textFallback($iconEl, tool); return; }
+            if (!h.icon) { _textFallback(iconEl, tool); return; }
 
-            h.icon($iconEl, meta.icon, {
-                plugin:   'editor',
-                fallback: meta.labelKey.split('.').pop()
-            });
+            h.icon(iconEl, meta.icon, { plugin: 'editor', fallback: meta.labelKey.split('.').pop() });
         });
     };
 
@@ -865,47 +812,39 @@
      * ───────────────────────────────────────────── */
 
     OziEditor.prototype._convertIn = function (raw) {
-        if (this.editorType === 'md' && _converters.mdToHtml) {
-            return _converters.mdToHtml(raw);
-        }
+        if (this.editorType === 'md' && _converters.mdToHtml) return _converters.mdToHtml(raw);
         return raw;
     };
 
     OziEditor.prototype._convertOut = function (html) {
-        if (this.editorType === 'md' && _converters.htmlToMd) {
-            return _converters.htmlToMd(html);
-        }
+        if (this.editorType === 'md' && _converters.htmlToMd) return _converters.htmlToMd(html);
         return html;
     };
 
     /* ─────────────────────────────────────────────
-     * [16] SINCRONIZAÇÃO TEXTAREA ↔ CONTENT
+     * [16] SINCRONIZACAO TEXTAREA <-> CONTENT
      * ───────────────────────────────────────────── */
 
     OziEditor.prototype._syncFromTextarea = function () {
-        var raw  = this.$textarea.val() || '';
+        var raw  = this.textarea.value || '';
         var html = this._convertIn(raw);
-        this.$content.html(_sanitizeHtml(html));
+        this.content.innerHTML = _sanitizeHtml(html);
     };
 
     OziEditor.prototype._syncToTextarea = function () {
-        if (this.isSourceMode) {
-            this.$textarea.val(this.$source.val());
-            return;
-        }
-        var html = this.$content.html();
-        this.$textarea.val(this._convertOut(html));
+        if (this.isSourceMode) { this.textarea.value = this.source.value; return; }
+        this.textarea.value = this._convertOut(this.content.innerHTML);
     };
 
     /* ─────────────────────────────────────────────
-     * [17] HELPERS DE SELEÇÃO E PARÁGRAFO
+     * [17] HELPERS DE SELECAO E PARAGRAFO
      * ───────────────────────────────────────────── */
 
     OziEditor.prototype._saveSelection = function () {
         var sel = window.getSelection();
         if (!sel || !sel.rangeCount) return;
         var range = sel.getRangeAt(0);
-        if (!this.$content[0].contains(range.commonAncestorContainer)) return;
+        if (!this.content.contains(range.commonAncestorContainer)) return;
         this._savedRange = range.cloneRange();
     };
 
@@ -924,7 +863,7 @@
         if (!node) return null;
         if (node.nodeType === 3) node = node.parentNode;
         tagNames = tagNames.map(function (t) { return t.toUpperCase(); });
-        while (node && node !== this.$content[0]) {
+        while (node && node !== this.content) {
             if (tagNames.indexOf(String(node.tagName || '').toUpperCase()) !== -1) return node;
             node = node.parentNode;
         }
@@ -938,7 +877,7 @@
         if (!node) return null;
         if (node.nodeType === 3) node = node.parentNode;
         var blockTags = ['P','H1','H2','H3','H4','H5','H6','DIV','LI','TD','TH','PRE','BLOCKQUOTE'];
-        while (node && node !== this.$content[0]) {
+        while (node && node !== this.content) {
             if (blockTags.indexOf(String(node.tagName || '').toUpperCase()) !== -1) return node;
             node = node.parentNode;
         }
@@ -947,7 +886,7 @@
 
     OziEditor.prototype._getRootInlineNodes = function () {
         var result    = [];
-        var root      = this.$content[0];
+        var root      = this.content;
         if (!root) return result;
         var blockTags = ['P','H1','H2','H3','H4','H5','H6','DIV','UL','OL','LI','PRE','TABLE','TBODY','THEAD','TR','TD','TH','BLOCKQUOTE'];
         Array.prototype.slice.call(root.childNodes || []).forEach(function (node) {
@@ -963,7 +902,7 @@
     };
 
     OziEditor.prototype._wrapRootInlineContentInParagraph = function () {
-        var root = this.$content[0];
+        var root = this.content;
         if (!root) return null;
         var inlineNodes = this._getRootInlineNodes();
         if (!inlineNodes.length) return null;
@@ -975,7 +914,7 @@
 
     OziEditor.prototype._insertHtmlAtCursor = function (html) {
         var sel = window.getSelection();
-        if (!sel || !sel.rangeCount) { this.$content.append(html); return; }
+        if (!sel || !sel.rangeCount) { this.content.insertAdjacentHTML('beforeend', html); return; }
         var range = sel.getRangeAt(0);
         range.deleteContents();
         var temp = document.createElement('div');
@@ -1003,17 +942,16 @@
     };
 
     /* ─────────────────────────────────────────────
-     * [18] EXECUÇÃO DE FERRAMENTAS
+     * [18] EXECUCAO DE FERRAMENTAS
      * ───────────────────────────────────────────── */
 
     OziEditor.prototype._runTool = function (tool) {
         var meta = TOOL_META[tool];
         if (!meta) return;
-
         if (tool === 'classes') return;
         if (tool === 'heading') return;
 
-        this.$content.focus();
+        this.content.focus();
 
         if (meta.execCmd) {
             document.execCommand(meta.execCmd, false, null);
@@ -1025,13 +963,13 @@
         }
 
         switch (tool) {
-            case 'codeblock': this._toggleCodeBlock();         break;
-            case 'source':    this._toggleSourceMode();        break;
-            case 'table':     this._insertTable();             break;
-            case 'clear':     this._clearFormat();             break;
-            case 'left':      this._applyTextAlign('left');    break;
-            case 'center':    this._applyTextAlign('center');  break;
-            case 'right':     this._applyTextAlign('right');   break;
+            case 'codeblock': this._toggleCodeBlock();        break;
+            case 'source':    this._toggleSourceMode();       break;
+            case 'table':     this._insertTable();            break;
+            case 'clear':     this._clearFormat();            break;
+            case 'left':      this._applyTextAlign('left');   break;
+            case 'center':    this._applyTextAlign('center'); break;
+            case 'right':     this._applyTextAlign('right');  break;
             case 'h1': case 'h2': case 'h3':
             case 'h4': case 'h5': case 'h6':
                 this._toggleHeading(tool); break;
@@ -1078,18 +1016,22 @@
     OziEditor.prototype._toggleCodeBlock = function () {
         var sel = window.getSelection();
         if (!sel || !sel.rangeCount) return;
-        var node = sel.getRangeAt(0).commonAncestorContainer;
-        var $pre = $(node).closest('pre', this.$content[0]);
-        if ($pre.length) {
-            $pre.replaceWith($pre.html());
+        var node  = sel.getRangeAt(0).commonAncestorContainer;
+        var start = node.nodeType === 3 ? node.parentElement : node;
+        var pre   = (start && start.closest) ? start.closest('pre') : null;
+
+        if (pre && this.content.contains(pre)) {
+            var parent = pre.parentNode;
+            while (pre.firstChild) parent.insertBefore(pre.firstChild, pre);
+            parent.removeChild(pre);
         } else {
             var range = sel.getRangeAt(0);
-            var pre   = document.createElement('pre');
+            var preEl = document.createElement('pre');
             var code  = document.createElement('code');
             try { code.appendChild(range.extractContents()); }
             catch (e) { code.textContent = sel.toString(); }
-            pre.appendChild(code);
-            range.insertNode(pre);
+            preEl.appendChild(code);
+            range.insertNode(preEl);
         }
     };
 
@@ -1109,7 +1051,7 @@
         if (sel && sel.rangeCount) {
             var node = sel.getRangeAt(0).commonAncestorContainer;
             if (node.nodeType === 3) node = node.parentNode;
-            $(node).removeAttr('style');
+            if (node && node.removeAttribute) node.removeAttribute('style');
         }
     };
 
@@ -1123,9 +1065,6 @@
 
     /* ─────────────────────────────────────────────
      * [20] MODO SOURCE
-     * Source exibe no formato nativo do type:
-     *   type=html → HTML bruto
-     *   type=md   → Markdown
      * ───────────────────────────────────────────── */
 
     OziEditor.prototype._toggleSourceMode = function () {
@@ -1134,18 +1073,20 @@
 
     OziEditor.prototype._enterSourceMode = function () {
         this._syncToTextarea();
-        this.$source.val(this.$textarea.val()).show();
-        this.$content.hide();
-        this.$toolbar.find('[data-ozi-editor-tool="source"]').addClass('ozi-editor-btn--active');
+        this.source.value = this.textarea.value;
+        this.source.style.display = 'block';
+        this.content.style.display = 'none';
+        this._setToolActive('source', true);
         this.isSourceMode = true;
     };
 
     OziEditor.prototype._exitSourceMode = function () {
-        var raw  = this.$source.val();
+        var raw  = this.source.value;
         var html = this._convertIn(raw);
-        this.$content.html(_sanitizeHtml(html)).show();
-        this.$source.hide();
-        this.$toolbar.find('[data-ozi-editor-tool="source"]').removeClass('ozi-editor-btn--active');
+        this.content.innerHTML = _sanitizeHtml(html);
+        this.content.style.display = '';
+        this.source.style.display = 'none';
+        this._setToolActive('source', false);
         this.isSourceMode = false;
         this._syncToTextarea();
     };
@@ -1154,71 +1095,85 @@
      * [21] ESTADO DA TOOLBAR
      * ───────────────────────────────────────────── */
 
+    OziEditor.prototype._setToolActive = function (tool, active) {
+        Array.prototype.forEach.call(this.toolbar.querySelectorAll('[data-ozi-editor-tool="' + tool + '"]'), function (b) {
+            b.classList.toggle('ozi-editor-btn--active', !!active);
+        });
+    };
+
     OziEditor.prototype._updateToolbarState = function () {
         var self = this;
 
         ['bold', 'italic', 'underline'].forEach(function (cmd) {
             var active = false;
             try { active = document.queryCommandState(cmd); } catch (e) {}
-            self.$toolbar.find('[data-ozi-editor-tool="' + cmd + '"]').toggleClass('ozi-editor-btn--active', active);
+            self._setToolActive(cmd, active);
         });
 
         var inCode = false;
         var sel = window.getSelection();
         if (sel && sel.rangeCount) {
-            var node = sel.getRangeAt(0).commonAncestorContainer;
-            inCode = !!($(node).closest('pre, code', self.$content[0]).length);
+            var node  = sel.getRangeAt(0).commonAncestorContainer;
+            var start = node.nodeType === 3 ? node.parentElement : node;
+            var pc    = (start && start.closest) ? start.closest('pre, code') : null;
+            inCode = !!(pc && self.content.contains(pc));
         }
-        self.$toolbar.find('[data-ozi-editor-tool="codeblock"]').toggleClass('ozi-editor-btn--active', inCode);
+        self._setToolActive('codeblock', inCode);
 
         ['left', 'center', 'right'].forEach(function (align) {
             var active = false;
             try { active = document.queryCommandState('justify' + align.charAt(0).toUpperCase() + align.slice(1)); } catch (e) {}
-            self.$toolbar.find('[data-ozi-editor-tool="' + align + '"]').toggleClass('ozi-editor-btn--active', active);
+            self._setToolActive(align, active);
         });
 
         var block      = self._getClosestBlockElement();
         var currentTag = block ? String(block.tagName || '').toLowerCase() : '';
-        self.$toolbar.find('.ozi-editor-btn--heading').toggleClass('ozi-editor-btn--active', /^h[1-6]$/.test(currentTag));
+        Array.prototype.forEach.call(self.toolbar.querySelectorAll('.ozi-editor-btn--heading'), function (b) {
+            b.classList.toggle('ozi-editor-btn--active', /^h[1-6]$/.test(currentTag));
+        });
 
-        if (self.$headingDropdown && self.$headingDropdown.is(':visible')) {
-            self._updateHeadingDropdownChecks();
-        }
-        if (self.$classDropdown && self.$classDropdown.is(':visible')) {
-            self._updateClassDropdownChecks();
-        }
+        if (self.headingDropdown && _isShown(self.headingDropdown)) self._updateHeadingDropdownChecks();
+        if (self.classDropdown && _isShown(self.classDropdown))     self._updateClassDropdownChecks();
     };
 
     /* ─────────────────────────────────────────────
-     * [22] EVENTOS
+     * [22] EVENTOS — delegacao nativa por wrap (rastreada p/ destroy)
      * ───────────────────────────────────────────── */
+
+    OziEditor.prototype._closestIn = function (target, selector) {
+        var found = target && target.closest ? target.closest(selector) : null;
+        return (found && this.wrap.contains(found)) ? found : null;
+    };
 
     OziEditor.prototype._bindEvents = function () {
         var self = this;
 
-        self.$wrap.on('mousedown' + self.ns,
-            '.ozi-editor-btn:not(.ozi-editor-btn--classes):not(.ozi-editor-btn--incompatible)',
-            function (e) {
-                e.preventDefault();
-                if (!self.isDisabled) {
-                    self._restoreSelection();
-                    self._runTool($(this).attr('data-ozi-editor-tool'));
-                }
-            }
-        );
-
-        self.$wrap.on('mousedown' + self.ns, '.ozi-editor-btn--heading', function (e) {
+        /* botao de ferramenta (exclui classes e incompativel) */
+        self._on(self.wrap, 'mousedown', function (e) {
+            var btn = self._closestIn(e.target, '.ozi-editor-btn:not(.ozi-editor-btn--classes):not(.ozi-editor-btn--incompatible)');
+            if (!btn) return;
             e.preventDefault();
             if (!self.isDisabled) {
-                self._toggleClassDropdown(true);
-                self._toggleHeadingDropdown();
+                self._restoreSelection();
+                self._runTool(btn.getAttribute('data-ozi-editor-tool'));
             }
         });
 
-        self.$wrap.on('mousedown' + self.ns, '.ozi-editor-heading-item', function (e) {
+        /* botao heading — abre/fecha dropdown */
+        self._on(self.wrap, 'mousedown', function (e) {
+            var btn = self._closestIn(e.target, '.ozi-editor-btn--heading');
+            if (!btn) return;
+            e.preventDefault();
+            if (!self.isDisabled) { self._toggleClassDropdown(true); self._toggleHeadingDropdown(); }
+        });
+
+        /* item de heading */
+        self._on(self.wrap, 'mousedown', function (e) {
+            var it = self._closestIn(e.target, '.ozi-editor-heading-item');
+            if (!it) return;
             e.preventDefault();
             if (self.isDisabled) return;
-            var level = $(this).attr('data-ozi-heading');
+            var level = it.getAttribute('data-ozi-heading');
             self._toggleHeadingDropdown(true);
             self._restoreSelection();
             self._toggleHeading(level);
@@ -1227,53 +1182,67 @@
             self.emitChange();
         });
 
-        self.$wrap.on('mousedown' + self.ns, '.ozi-editor-btn--classes', function (e) {
+        /* botao classes — abre/fecha dropdown */
+        self._on(self.wrap, 'mousedown', function (e) {
+            var btn = self._closestIn(e.target, '.ozi-editor-btn--classes');
+            if (!btn) return;
             e.preventDefault();
-            if (!self.isDisabled) {
-                self._toggleHeadingDropdown(true);
-                self._toggleClassDropdown();
-            }
+            if (!self.isDisabled) { self._toggleHeadingDropdown(true); self._toggleClassDropdown(); }
         });
 
-        self.$wrap.on('mousedown' + self.ns, '.ozi-editor-classes-item', function (e) {
+        /* item de classe */
+        self._on(self.wrap, 'mousedown', function (e) {
+            var it = self._closestIn(e.target, '.ozi-editor-classes-item');
+            if (!it) return;
             e.preventDefault();
             if (self.isDisabled) return;
-            var cls = $(this).attr('data-ozi-class');
+            var cls = it.getAttribute('data-ozi-class');
             self._toggleClassDropdown(true);
             self._restoreSelection();
             self._applyClass(cls);
             self._updateToolbarState();
         });
 
-        $(document).on('mousedown' + self.ns, function (e) {
-            if (self.$headingDropdown && self.$headingDropdown.is(':visible')) {
-                if (!$(e.target).closest('.ozi-editor-heading-wrap').length) {
-                    self._toggleHeadingDropdown(true);
-                }
+        /* clique fora — fecha dropdowns abertos */
+        self._on(document, 'mousedown', function (e) {
+            if (self.headingDropdown && _isShown(self.headingDropdown)) {
+                if (!(e.target.closest && e.target.closest('.ozi-editor-heading-wrap'))) self._toggleHeadingDropdown(true);
             }
-            if (self.$classDropdown && self.$classDropdown.is(':visible')) {
-                if (!$(e.target).closest('.ozi-editor-classes-wrap').length) {
-                    self._toggleClassDropdown(true);
-                }
+            if (self.classDropdown && _isShown(self.classDropdown)) {
+                if (!(e.target.closest && e.target.closest('.ozi-editor-classes-wrap'))) self._toggleClassDropdown(true);
             }
         });
 
-        self.$wrap.on('keyup' + self.ns + ' mouseup' + self.ns, '.ozi-editor-content', function () {
+        /* selecao no content */
+        var onContentSel = function (e) {
+            if (!self._closestIn(e.target, '.ozi-editor-content')) return;
             self._saveSelection();
             self._updateToolbarState();
-        });
+        };
+        self._on(self.wrap, 'keyup', onContentSel);
+        self._on(self.wrap, 'mouseup', onContentSel);
 
-        self.$wrap.on('focus' + self.ns, '.ozi-editor-content', function () {
+        /* focus (delegado via focusin, que borbulha) */
+        self._on(self.wrap, 'focusin', function (e) {
+            if (!self._closestIn(e.target, '.ozi-editor-content')) return;
             self._saveSelection();
         });
 
-        self.$wrap.on('input' + self.ns, '.ozi-editor-content', function () {
-            self._saveSelection();
-            self._syncToTextarea();
-            self.emitChange();
+        /* input — content ou source */
+        self._on(self.wrap, 'input', function (e) {
+            if (self._closestIn(e.target, '.ozi-editor-content')) {
+                self._saveSelection();
+                self._syncToTextarea();
+                self.emitChange();
+            } else if (self._closestIn(e.target, '.ozi-editor-source')) {
+                self._syncToTextarea();
+                self.emitChange();
+            }
         });
 
-        self.$wrap.on('keydown' + self.ns, '.ozi-editor-content', function (e) {
+        /* Enter no content — insere paragrafo fora de code/list/table */
+        self._on(self.wrap, 'keydown', function (e) {
+            if (!self._closestIn(e.target, '.ozi-editor-content')) return;
             if (self.isDisabled || self.isSourceMode) return;
             if (e.key === 'Enter' && !e.shiftKey) {
                 var inCode  = self._getClosestSelectionNode(['PRE', 'CODE']);
@@ -1292,11 +1261,13 @@
             }
         });
 
-        self.$wrap.on('paste' + self.ns, '.ozi-editor-content', function (e) {
+        /* paste — sanitiza */
+        self._on(self.wrap, 'paste', function (e) {
+            if (!self._closestIn(e.target, '.ozi-editor-content')) return;
             e.preventDefault();
-            var clip = e.originalEvent.clipboardData || window.clipboardData;
-            var html = clip.getData('text/html');
-            var text = clip.getData('text/plain');
+            var clip = e.clipboardData || window.clipboardData;
+            var html = clip ? clip.getData('text/html') : '';
+            var text = clip ? clip.getData('text/plain') : '';
             if (html)      { document.execCommand('insertHTML', false, _sanitizeHtml(html)); }
             else if (text) { document.execCommand('insertText', false, text); }
             self._saveSelection();
@@ -1304,46 +1275,42 @@
             self.emitChange();
         });
 
-        self.$wrap.on('input' + self.ns, '.ozi-editor-source', function () {
-            self._syncToTextarea();
-            self.emitChange();
-        });
-
-        self.$textarea.closest('form').on('submit' + self.ns, function () {
-            self._syncToTextarea();
-        });
+        /* submit do form — garante sync final */
+        var form = self.textarea.closest('form');
+        if (form) self._on(form, 'submit', function () { self._syncToTextarea(); });
     };
 
     /* ─────────────────────────────────────────────
-     * [23] VALIDAÇÃO
+     * [23] VALIDACAO
      * ───────────────────────────────────────────── */
 
     OziEditor.prototype.isValid = function () {
         if (!this.isRequired) return true;
-        var text = $('<div>').html(this.$textarea.val() || '').text().trim();
-        return text.length > 0;
+        var tmp = document.createElement('div');
+        tmp.innerHTML = this.textarea.value || '';
+        return (tmp.textContent || '').trim().length > 0;
     };
 
     OziEditor.prototype._markInvalid = function () {
-        this.$wrap.addClass(_classMap('invalid', 'ozi-invalid'));
-        this.$feedback.text(this.requiredMessage).show();
+        _classListOp(this.wrap, _classMap('invalid', 'ozi-invalid'), 'add');
+        this.feedback.textContent = this.requiredMessage;
+        this.feedback.style.display = 'block';
     };
 
     OziEditor.prototype._clearInvalid = function () {
-        this.$wrap
-            .removeClass(_classMap('invalid', 'ozi-invalid'))
-            .removeClass(_classMap('valid',   'ozi-valid'));
-        this.$feedback.hide();
+        _classListOp(this.wrap, _classMap('invalid', 'ozi-invalid'), 'remove');
+        _classListOp(this.wrap, _classMap('valid',   'ozi-valid'),   'remove');
+        this.feedback.style.display = 'none';
     };
 
     OziEditor.prototype.validate = function (focusOnError) {
         var valid = this.isValid();
         if (!valid) {
             this._markInvalid();
-            if (focusOnError) this.$content.focus();
+            if (focusOnError) this.content.focus();
         } else {
             this._clearInvalid();
-            if (this.isRequired) this.$wrap.addClass(_classMap('valid', 'ozi-valid'));
+            if (this.isRequired) _classListOp(this.wrap, _classMap('valid', 'ozi-valid'), 'add');
         }
         return valid;
     };
@@ -1351,7 +1318,7 @@
     OziEditor.prototype.setState = function (state) {
         this._clearInvalid();
         if (state === 'invalid') this._markInvalid();
-        if (state === 'valid')   this.$wrap.addClass(_classMap('valid', 'ozi-valid'));
+        if (state === 'valid')   _classListOp(this.wrap, _classMap('valid', 'ozi-valid'), 'add');
     };
 
     /* ─────────────────────────────────────────────
@@ -1360,109 +1327,77 @@
 
     OziEditor.prototype._setDisabled = function (state) {
         this.isDisabled = !!state;
-        this.$content.attr('contenteditable', state ? 'false' : 'true');
-        this.$toolbar.find('.ozi-editor-btn').prop('disabled', state);
-        this.$wrap.toggleClass('ozi-editor--disabled', state);
+        this.content.setAttribute('contenteditable', state ? 'false' : 'true');
+        Array.prototype.forEach.call(this.toolbar.querySelectorAll('.ozi-editor-btn'), function (b) { b.disabled = !!state; });
+        this.wrap.classList.toggle('ozi-editor--disabled', !!state);
     };
 
     /* ─────────────────────────────────────────────
-     * [25] I/O PÚBLICO
-     *
-     * getValue → retorna no formato nativo do type
-     * setValue → recebe no formato nativo do type
-     * emitChange → inclui type no payload
+     * [25] I/O PUBLICO
      * ───────────────────────────────────────────── */
 
     OziEditor.prototype.getValue = function () {
         this._syncToTextarea();
-        return this.$textarea.val() || '';
+        return this.textarea.value || '';
     };
 
     OziEditor.prototype.setValue = function (v) {
         var html      = this._convertIn(v || '');
         var sanitized = _sanitizeHtml(html);
-        this.$content.html(sanitized);
-        this.$textarea.val(v || '');
-        if (this.isSourceMode) this.$source.val(v || '');
-        this.emitChange();
+        this.content.innerHTML = sanitized;
+        this.textarea.value = v || '';
+        if (this.isSourceMode) this.source.value = v || '';
+        this.emitChange('api');
     };
 
-    OziEditor.prototype.emitChange = function () {
-        var payload = { key: this.key, value: this.$textarea.val(), type: this.editorType };
-        this.$textarea.trigger('ozi:change', [payload, this]);
-        if (typeof CustomEvent === 'function') {
-            this.$textarea[0].dispatchEvent(new CustomEvent('ozi:change', { bubbles: true, detail: payload }));
-        }
+    OziEditor.prototype.emitChange = function (source) {
+        _emitEvent(this.textarea, 'ozi:change', {
+            component: 'ozi-editor',
+            name:      this.key,
+            value:     this.textarea.value,
+            type:      this.editorType,
+            source:    source || 'user'
+        });
     };
 
     /* ─────────────────────────────────────────────
-     * [26] API ESTÁTICA — OZI.components.editor
-     *
-     * [3.1.0] _resolve — busca key nos dois atributos
-     * [3.1.0] init     — seletor SELECTOR cobre os dois tipos
-     * [3.1.0] init     — type detectado pelo atributo presente
+     * [26] API ESTATICA — OZI.components.editor
      * ───────────────────────────────────────────── */
 
     function _resolve(selectorOrKey) {
         if (!selectorOrKey) return null;
 
-        /* busca direta por key no registry */
-        if (typeof selectorOrKey === 'string' && _instances[selectorOrKey]) {
-            return _instances[selectorOrKey];
-        }
+        if (typeof selectorOrKey === 'string' && _instances[selectorOrKey]) return _instances[selectorOrKey];
 
-        /* busca por elemento DOM */
-        var el  = selectorOrKey instanceof $ ? selectorOrKey[0] : selectorOrKey;
-        if (!el) return null;
+        var el = (selectorOrKey && selectorOrKey.jquery) ? selectorOrKey[0] : selectorOrKey;
+        if (!el || el.nodeType !== 1) return null;
 
-        /* [3.1.0] lê key dos dois atributos possíveis */
-        var key = $(el).attr('data-ozi-editor-html') || $(el).attr('data-ozi-editor-md');
+        var key = el.getAttribute('data-ozi-editor-html') || el.getAttribute('data-ozi-editor-md');
         return key ? (_instances[_trim(String(key))] || null) : null;
     }
 
     var editorAPI = {
 
-        /*
-         * init(root, type)
-         *
-         * root — elemento raiz de busca (null = body inteiro)
-         * type — 'html' | 'md' | undefined (undefined = todos permitidos)
-         *
-         * [3.1.0] Seletor: SELECTOR = '[data-ozi-editor-html], [data-ozi-editor-md]'
-         * [3.1.0] Type detectado pelo atributo presente no elemento
-         *
-         * No boot: init(null, 'html') — só html
-         * Após registerConverters: init(null, 'md') — só md
-         * afterRender: init(root) — sem filtro, guarda interna protege md sem conversores
-         */
         init: function (root, type) {
-            var $targets;
+            var targets;
             if (root) {
-                var $root = $(root);
-                $targets  = $root.find(SELECTOR);
-                if ($root.is(SELECTOR)) $targets = $targets.add($root);
+                var rootEl = (root && root.jquery) ? root[0] : root;
+                if (!rootEl || !rootEl.querySelectorAll) return;
+                targets = Array.prototype.slice.call(rootEl.querySelectorAll(SELECTOR));
+                if (rootEl.matches && rootEl.matches(SELECTOR) && targets.indexOf(rootEl) === -1) targets.push(rootEl);
             } else {
-                $targets = $('body').find(SELECTOR);
+                targets = Array.prototype.slice.call((document.body || document).querySelectorAll(SELECTOR));
             }
 
-            $targets.each(function () {
-                /* [3.1.0] type detectado pelo atributo presente */
-                var $el    = $(this);
-                var elType = $el.attr('data-ozi-editor-md') !== undefined ? 'md' : 'html';
+            targets.forEach(function (el) {
+                var elType = el.getAttribute('data-ozi-editor-md') !== null ? 'md' : 'html';
 
-                /* flag de inicialização por type — permite html e md no mesmo elemento
-                 * (caso raro mas não quebra) */
-                var initFlag = 'ozi-editor-' + elType + '-initialized';
-                if ($el.data(initFlag)) return;
-
-                /* filtra por type quando solicitado */
+                if (_isInited(el, elType)) return;
                 if (type && elType !== type) return;
-
-                /* elementos md sem conversores aguardam silenciosamente */
                 if (elType === 'md' && !_converters.mdToHtml) return;
 
                 try {
-                    var inst = new OziEditor(this);
+                    var inst = new OziEditor(el);
                     inst.init();
                 } catch (e) {
                     console.warn('[OZI:editor] init erro:', e.message);
@@ -1471,7 +1406,7 @@
         },
 
         get:     function (k) { return _resolve(k); },
-        getAll:  function ()  { return Object.values(_instances); },
+        getAll:  function ()  { return Object.keys(_instances).map(function (k) { return _instances[k]; }); },
         destroy: function (k) { var i = _resolve(k); if (i) i.destroy(); },
         reload:  function (k) { var i = _resolve(k); return i ? i.reload() : null; },
 
@@ -1485,19 +1420,14 @@
         disable: function (k) { var i = _resolve(k); if (i) i._setDisabled(true); },
         enable:  function (k) { var i = _resolve(k); if (i) i._setDisabled(false); },
 
-        /*
-         * registerConverters — chamado por ozi-editor-md.js
-         * Após registro inicializa todos os [data-ozi-editor-md] pendentes.
-         */
         registerConverters: function (converters) {
             if (typeof converters.mdToHtml === 'function') _converters.mdToHtml = converters.mdToHtml;
-            if (typeof converters.htmlToMd  === 'function') _converters.htmlToMd  = converters.htmlToMd;
-            /* $(fn): se OZI.ready disparar antes de _boot(), init(null,'md') entra
-             * na fila jQuery e sempre roda após _boot() (que foi enfileirado primeiro) */
-            $(function () { editorAPI.init(null, 'md'); });
+            if (typeof converters.htmlToMd === 'function') _converters.htmlToMd = converters.htmlToMd;
+            /* garante init(md) APOS o _boot() (sem a fila $(fn) do jQuery) */
+            if (_booted) editorAPI.init(null, 'md');
+            else _pendingMdInit = true;
         },
 
-        /* constantes para inspeção/debug */
         DEFAULT_TOOLS_HTML:   DEFAULT_TOOLS_HTML,
         DEFAULT_TOOLS_MD:     DEFAULT_TOOLS_MD,
         BUILT_IN_THEMES_HTML: BUILT_IN_THEMES_HTML,
@@ -1513,18 +1443,17 @@
         var validate = window.OZI && window.OZI.modules && window.OZI.modules.validate;
         if (!validate || typeof validate.registerAdapter !== 'function') return;
 
-        /* [3.1.0] match cobre os dois atributos */
         validate.registerAdapter({
-            name:     'ozi-editor',
-            match:    function ($el) { return $el.is(SELECTOR); },
-            isValid:  function ($el) { var i = _resolve($el[0]); return i ? i.isValid()  : true; },
-            getValue: function ($el) { var i = _resolve($el[0]); return i ? i.getValue() : ''; },
-            setState: function ($el, state) { var i = _resolve($el[0]); if (i) i.setState(state); }
+            name:         'ozi-editor',
+            nativeElement: true,
+            match:    function (el) { return !!(el && el.matches && el.matches(SELECTOR)); },
+            isValid:  function (el) { var i = _resolve(el); return i ? i.isValid()  : true; },
+            getValue: function (el) { var i = _resolve(el); return i ? i.getValue() : ''; },
+            setState: function (el, state) { var i = _resolve(el); if (i) i.setState(state); }
         });
     }
 
     function _boot() {
-        /* inicializa apenas html — md aguarda ozi-editor-md.js */
         editorAPI.init(null, 'html');
         _registerAdapter();
 
@@ -1540,6 +1469,9 @@
                 editorAPI.init(root);
             });
         }
+
+        _booted = true;
+        if (_pendingMdInit) editorAPI.init(null, 'md');
     }
 
     /* namespace legado — compatibilidade */
@@ -1551,9 +1483,8 @@
         reload:  editorAPI.reload
     };
 
-    /* [3.1.1] FIX-MD-BOOT — expõe a API sincronamente no fim da IIFE.
-     * ozi-editor-md.js encontra OZI.components.editor imediatamente,
-     * independente de quando OZI.ready ou $(fn) disparam. */
+    /* expõe a API sincronamente — ozi-editor-md.js encontra OZI.components.editor
+     * imediatamente, independente de quando OZI.ready dispara. */
     (function () {
         var OZI = window.OZI;
         if (OZI) {
@@ -1562,6 +1493,10 @@
         }
     }());
 
-    $(function () { _boot(); });
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', _boot);
+    } else {
+        _boot();
+    }
 
-})(jQuery, window, document);
+})(window, document);

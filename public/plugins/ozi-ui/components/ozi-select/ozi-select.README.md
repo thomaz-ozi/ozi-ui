@@ -1,8 +1,8 @@
 # ozi-select.js
 
-**Versão:** 1.0.0  
+**Versão:** 6.0.0 (v2 F2 #4 — migrado para JS puro, 2026-07-03)
 **Camada:** `components/ozi-select/`  
-**Dependências:** `ozi-core.js`, `ozi-suggest.js`, `ozi-validate.js`  
+**Dependências:** `ozi-core.js`, `ozi-suggest.js`, `ozi-validate.js` — zero jQuery
 **Expõe:** `OZI.components.select`, `window.OziSelect` (compat)  
 **Eventos:** `ozi:open`, `ozi:close`, `ozi:change`
 
@@ -11,8 +11,18 @@
 ## Descrição
 
 Select customizado com busca, seleção múltipla, grupos, imagens e busca remota.  
-Padrão Prototype com `key/uid/ns` + registry + destroy.  
+Padrão Prototype com `key/uid` + registry + destroy.  
 Baseado em `oziSelect v4.3.2`.
+
+**Nota v2:** motor 100% JS puro (contrato `dev-hard/docs/ozi-ui-v2-contratos.md`) —
+DOM via `document.createElement`/`querySelector`/`classList`; delegação de eventos
+nativa (`addEventListener` + `closest()`, um único listener de clique por instância).
+Fim do dual-dispatch: `emit()` usa somente `OZI.helpers.emit()`. O payload posicional
+jQuery `(event, items)` que 2 arquivos do Central RH ainda consomem é responsabilidade
+de um shim opcional em `integrations/adapters/ozi-change-v1-compat.shim.js` (nunca
+do componente). `emit()`/`emitChange()` ganham `source: 'user'|'api'` — `setValue()`
+(API programática) emite `source:'api'`. O adapter registrado no `ozi-validate` marca
+`nativeElement: true` e recebe `Element` nativo (antes: jQuery `$el`/`$el[0]`).
 
 ---
 

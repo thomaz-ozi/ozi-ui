@@ -2,6 +2,41 @@
 
 ---
 
+## [5.0.0] — 2026-07-03 (v2 F2 #3 — migrado para JS puro)
+
+### Alterado
+- Motor 100% JS puro (contrato `dev-hard/docs/ozi-ui-v2-contratos.md`) — zero
+  jQuery em `ozi-loaddata.js` e `ozi-loaddata-collector.js`. AJAX já era via
+  `fetch` (sem mudança). `querySelector`/`querySelectorAll`/`classList`/
+  `insertAdjacentHTML`/`closest()` no lugar de `$()`.
+- `zldGetProgressBar`, `zldApplyTriggerState`, `renderToDestiny`,
+  `handleHttpErrorHtml` e a limpeza pós-envio (`zldFormClear`) reescritos sem jQuery.
+- Delegação de clique/change/validação interativa via `addEventListener` +
+  `closest()`. `blur` trocado por `focusout` (bubble nativo).
+- `zldSafeById` passa a retornar `Element` nativo (era jQuery) — nenhum
+  consumidor externo encontrado por grep no plugin inteiro; alinha com o
+  alias de mesmo nome já exposto por `ozi-helpers` v1.1.0 (eliminava
+  divergência entre os dois).
+- `ozi-loaddata-collector.js`: removidos os dois únicos usos de jQuery — eram
+  wrapping de passagem para `validate.container()`, que já aceita Element/
+  NodeList nativos desde a migração do `ozi-validate` (F2 #1).
+
+### Mantido (sem regressão)
+- API pública inalterada: `window.oziLoadData`, `window.__zldConf`,
+  `window.zldConf` (getter), aliases `zld*` e `oziLoaddata` (compat v0.x).
+- Não emite `CustomEvent` próprio (nunca emitiu — só orquestra render/hooks);
+  nenhuma mudança de contrato de eventos aqui.
+- Validado por página de aceite dedicada:
+  `public/teste-v2/aceite-loaddata.html` (18 checks, PASSOU em Edge headless).
+
+### Nota de teste
+- Sob `file://` + carregamento dinâmico de plugins (mecanismo do próprio
+  `ozi.js`), o headless às vezes reporta um `"Script error."` opaco (sem
+  filename/lineno) que **não é uma falha real** — reproduzido isoladamente
+  carregando só o plugin `select` (nunca tocado nesta migração). A página de
+  aceite filtra esse ruído conhecido e mantém a checagem de erros reais.
+- Retirado do `PENDING_V1` do guard `check-camadas.sh` (15 → 13 arquivos).
+
 ## [1.0.0] — 2025 (v1.0.0 release)
 
 ### Adicionado

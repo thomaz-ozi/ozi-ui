@@ -2,10 +2,38 @@
  * ------------------------------------------
  * ozi-select
  * ------------------------------------------
- * Ver: 5.0.2
- * 2026-06-26
+ * Ver: 6.0.0
+ * 2026-07-03
  *
  * Changelog:
+ *   - v6.0.0: [V2-F2] Migracao para JS puro (docs/ozi-ui-v2-contratos.md, dev-hard):
+ *       - Zero jQuery: DOM via document.createElement/querySelector/classList;
+ *         Element.after()/before() nativos no lugar de .after()/.before() jQuery.
+ *       - Delegacao de eventos nativa (addEventListener + closest()) no lugar de
+ *         $ui.on(evento, seletor, fn); um unico listener de click por instancia,
+ *         checagem em ordem do mais especifico (clear/toggle/tag-remove/option/
+ *         group-label) para o mais geral (control) — substitui o guard manual
+ *         que a v1 fazia dentro do handler do control.
+ *       - ':visible' do jQuery substituido por isVisible() (offsetWidth/Height/
+ *         getClientRects), mesma heuristica usada no ozi-toggle.
+ *       - Fim do dual-dispatch: emit() usa somente OZI.helpers.emit() (CustomEvent
+ *         nativo, bubbles+detail no contrato). O payload posicional jQuery
+ *         '(event, items)' que 2 arquivos do Central RH ainda consomem
+ *         (candidate-list.blade.php:754, profile/edit.blade.php:388) passa a
+ *         ser responsabilidade de um shim em integrations/ (nunca do
+ *         componente) — ver integrations/adapters/ozi-change-v1-compat.shim.js.
+ *       - emit()/emitChange() ganham parametro `source` ('user'|'api') —
+ *         setValue() (API programatica) emite com source:'api'; interacoes
+ *         do usuario continuam 'user'. Novo no contrato v2 (nao existia payload
+ *         posicional equivalente na v1).
+ *       - _registerAdapter() marca `nativeElement: true` no ozi-validate —
+ *         adapter agora recebe Element nativo (antes: jQuery $el/$el[0]).
+ *         selectAPI.get() passa a aceitar Element nativo alem de string/seletor.
+ *       - init idempotente via marker `el.__oziSelectInitialized` (era
+ *         $root.data('ozi-select-initialized') — cache interno do jQuery).
+ *       - API publica inalterada: OZI.components.select.{init,observe,get,
+ *         getAll,destroy,reload,value,items,clear,open,close,disable,enable,
+ *         required,setOptions}; window.OziSelect mantido.
  *   - v5.0.2: [FIX-C] Container de hidden marcado com [data-ozi-component-hidden].
  *     Permite que o coletor do ozi-validate (v1.0.3+) preserve o valor da selecao
  *     em forms ZLD (que antes descartavam todo [type="hidden"]). Sem isso, o valor
@@ -21,15 +49,10 @@
  *   - v5.0.0: selectAPI.init() — escopo corrigido para aceitar elemento DOM
  */
 
-(function ($) {
+(function () {
     'use strict';
 
-    if (typeof $ === 'undefined') {
-        console.error('[OZI:select] jQuery não encontrado.');
-        return;
-    }
-
-    var instances      = {};
+    var instances       = {};
     var instanceCounter = 0;
 
     /* ─── helpers de lang / classMap com fallback ──────────────────── */
@@ -48,15 +71,39 @@
         return (conf && conf.classMap && conf.classMap[key]) || fallback || '';
     }
 
+    /* ─── helpers de DOM nativo ─────────────────────────────────────── */
+
+    // equivalente a $('<tag>', { attrs }) — so atributos HTML, sem 'css'/'text'/'html'
+    function _make(tag, attrs) {
+        var el = document.createElement(tag);
+        if (attrs) {
+            Object.keys(attrs).forEach(function (k) {
+                if (attrs[k] !== undefined && attrs[k] !== null) el.setAttribute(k, attrs[k]);
+            });
+        }
+        return el;
+    }
+
+    function _classListOp(el, classString, method) {
+        if (!el || !classString) return;
+        String(classString).trim().split(/\s+/).forEach(function (c) {
+            if (c) el.classList[method](c);
+        });
+    }
+
+    // heuristica equivalente ao jQuery :visible
+    function _isVisible(el) {
+        return !!(el.offsetWidth || el.offsetHeight || (el.getClientRects && el.getClientRects().length));
+    }
+
     /* ─── construtor ───────────────────────────────────────────────── */
 
     function OziSelect(element) {
-        this.$root = $(element);
-        this.key   = String(this.$root.attr('data-ozi-select') || '').trim();
+        this.root = element;
+        this.key  = String(this.root.getAttribute('data-ozi-select') || '').trim();
         if (!this.key) throw new Error('[OZI:select] data-ozi-select é obrigatório.');
 
         this.uid = 'ozi-select-' + (++instanceCounter);
-        this.ns  = '.oziSelect.' + this.uid;
 
         this.isMultiple      = this.parseBooleanAttr('data-ozi-select-multiple');
         this.isMultipleGroup = this.parseBooleanAttr('data-ozi-select-multiple-group');
@@ -65,25 +112,25 @@
         else if (this.isMultiple)  { this.mode = 'multiple'; this.groupToggleEnabled = false; }
         else                       { this.mode = 'single';   this.groupToggleEnabled = false; }
 
-        this.submitName        = String(this.$root.data('ozi-select-submit-name') || this.key).trim();
-        this.valuePlaceholder  = String(this.$root.data('ozi-select-value-placeholder') || _t('select.valuePlaceholder', 'Selecione...'));
-        this.searchPlaceholder = String(this.$root.data('ozi-select-search-placeholder') || _t('select.searchPlaceholder', 'Pesquisar...'));
-        this.listHeight        = String(this.$root.data('ozi-select-list') || '').trim();
-        this.imageDimension    = String(this.$root.data('ozi-select-image-dimension') || '').trim();
-        this.valueIcon         = String(this.$root.data('ozi-select-value-icon') || '').trim();
-        this.searchIcon        = String(this.$root.data('ozi-select-search-icon') || '').trim();
+        this.submitName        = String(this.root.dataset.oziSelectSubmitName || this.key).trim();
+        this.valuePlaceholder  = String(this.root.dataset.oziSelectValuePlaceholder || _t('select.valuePlaceholder', 'Selecione...'));
+        this.searchPlaceholder = String(this.root.dataset.oziSelectSearchPlaceholder || _t('select.searchPlaceholder', 'Pesquisar...'));
+        this.listHeight        = String(this.root.dataset.oziSelectList || '').trim();
+        this.imageDimension    = String(this.root.dataset.oziSelectImageDimension || '').trim();
+        this.valueIcon         = String(this.root.dataset.oziSelectValueIcon || '').trim();
+        this.searchIcon        = String(this.root.dataset.oziSelectSearchIcon || '').trim();
 
-        this.hasSubmitFieldsConfig = this.$root.is('[data-ozi-select-submit-fields]');
-        this.submitFieldsRaw       = String(this.$root.attr('data-ozi-select-submit-fields') || '');
+        this.hasSubmitFieldsConfig = this.root.hasAttribute('data-ozi-select-submit-fields');
+        this.submitFieldsRaw       = String(this.root.getAttribute('data-ozi-select-submit-fields') || '');
 
         this.isDisabledConfig = this.parseBooleanAttr('data-ozi-select-disabled');
         this.isRequiredConfig = this.parseBooleanAttr('data-ozi-select-required');
-        this.requiredMessage  = String(this.$root.attr('data-ozi-select-required-message') || _t('select.requiredMessage', 'Selecione uma opção.'));
+        this.requiredMessage  = String(this.root.getAttribute('data-ozi-select-required-message') || _t('select.requiredMessage', 'Selecione uma opção.'));
 
-        this.zldUrl      = String(this.$root.data('ozi-select-zld-url')       || '').trim();
-        this.zldMethod   = String(this.$root.data('ozi-select-zld-method')    || 'POST').trim().toUpperCase();
-        this.zldParam    = String(this.$root.data('ozi-select-zld-param')     || 'search').trim();
-        this.zldItemName = String(this.$root.data('ozi-select-zld-item-name') || '').trim();
+        this.zldUrl      = String(this.root.dataset.oziSelectZldUrl      || '').trim();
+        this.zldMethod   = String(this.root.dataset.oziSelectZldMethod   || 'POST').trim().toUpperCase();
+        this.zldParam    = String(this.root.dataset.oziSelectZldParam    || 'search').trim();
+        this.zldItemName = String(this.root.dataset.oziSelectZldItemName || '').trim();
         this.zldMin      = this.parseIntegerAttr('data-ozi-select-zld-min',   1);
         this.zldDelay    = this.parseIntegerAttr('data-ozi-select-zld-delay', 300);
         this.zldLog      = this.parseBooleanAttr('data-ozi-select-zld-log');
@@ -102,17 +149,21 @@
         this.remoteAbortController = null;
         this.remoteRequestSeq      = 0;
 
-        this.$form            = null;
-        this.$ui              = null;
-        this.$control         = null;
-        this.$value           = null;
-        this.$clear           = null;
-        this.$toggle          = null;
-        this.$dropdown        = null;
-        this.$search          = null;
-        this.$list            = null;
-        this.$hiddenContainer = null;
-        this.$feedback        = null;
+        this.form            = null;
+        this.ui              = null;
+        this.control         = null;
+        this.valueEl         = null;
+        this.clearBtn        = null;
+        this.toggleBtn       = null;
+        this.dropdown        = null;
+        this.search          = null;
+        this.list            = null;
+        this.hiddenContainer = null;
+        this.feedback        = null;
+
+        this._onDocumentClick = null;
+        this._onFormSubmit    = null;
+        this._onFormReset     = null;
 
         this.init();
     }
@@ -120,23 +171,23 @@
     /* ─── helpers de atributo ──────────────────────────────────────── */
 
     OziSelect.prototype.parseBooleanAttr = function (attrName) {
-        if (!this.$root.is('[' + attrName + ']')) return false;
-        var raw = this.$root.attr(attrName);
-        if (raw === undefined || raw === '') return true;
+        if (!this.root.hasAttribute(attrName)) return false;
+        var raw = this.root.getAttribute(attrName);
+        if (raw === null || raw === '') return true;
         raw = String(raw).trim().toLowerCase();
         return !(raw === 'false' || raw === '0' || raw === 'no' || raw === 'off');
     };
 
     OziSelect.prototype.parseIntegerAttr = function (attrName, fallback) {
-        if (!this.$root.is('[' + attrName + ']')) return fallback;
-        var parsed = parseInt(String(this.$root.attr(attrName) || '').trim(), 10);
+        if (!this.root.hasAttribute(attrName)) return fallback;
+        var parsed = parseInt(String(this.root.getAttribute(attrName) || '').trim(), 10);
         return isNaN(parsed) ? fallback : parsed;
     };
 
     /* ─── alias map ────────────────────────────────────────────────── */
 
     OziSelect.prototype.parseAliasMap = function () {
-        var raw = String(this.$root.attr('data-ozi-select-as') || '').trim();
+        var raw = String(this.root.getAttribute('data-ozi-select-as') || '').trim();
         var map = {};
         if (!raw) return map;
         raw.split(',').forEach(function (chunk) {
@@ -176,24 +227,24 @@
     /* ─── init ─────────────────────────────────────────────────────── */
 
     OziSelect.prototype.init = function () {
-        if (this.$root.data('ozi-select-initialized')) return;
-        this.$root.data('ozi-select-initialized', true);
+        if (this.root.__oziSelectInitialized) return;
+        this.root.__oziSelectInitialized = true;
 
         this.parseImageDimension();
 
         this.submitMode = this.normalizeSubmitMode(
-            this.$root.attr('data-ozi-select-submit-mode') ||
+            this.root.getAttribute('data-ozi-select-submit-mode') ||
             (this.hasSubmitFieldsConfig ? 'legacy' : 'value-label')
         );
 
-        this.submitExtraFields = this.parseSubmitExtraFields(this.$root.attr('data-ozi-select-submit-extra') || '');
+        this.submitExtraFields = this.parseSubmitExtraFields(this.root.getAttribute('data-ozi-select-submit-extra') || '');
         this.submitFields      = this.hasSubmitFieldsConfig ? this.parseSubmitFields(this.submitFieldsRaw) : [];
         this.aliasMap          = this.parseAliasMap();
         this.options           = this.normalizeOptions(this.loadOptions());
         this.initialOptions    = this.cloneOptions(this.options);
 
-        this.$hiddenContainer = this.resolveHiddenContainer();
-        this.$form            = this.$root.closest('form');
+        this.hiddenContainer = this.resolveHiddenContainer();
+        this.form            = this.root.closest('form');
 
         this.buildUI();
         this.writeOptionsScript(this.options);
@@ -231,12 +282,19 @@
     OziSelect.prototype.loadOptions = function () {
         var key      = this.key;
         var selector = 'script[data-ozi-select-options="' + key + '"]';
-        var $script  = this.$root.nextAll(selector).first();
-        if (!$script.length) $script = this.$root.parent().find(selector).first();
-        if (!$script.length) $script = $(selector).first();
-        if (!$script.length) return [];
+
+        var script = null;
+        var sib = this.root.nextElementSibling;
+        while (sib) {
+            if (sib.matches(selector)) { script = sib; break; }
+            sib = sib.nextElementSibling;
+        }
+        if (!script && this.root.parentElement) script = this.root.parentElement.querySelector(selector);
+        if (!script) script = document.querySelector(selector);
+        if (!script) return [];
+
         try {
-            var parsed = JSON.parse($script.text().trim() || '[]');
+            var parsed = JSON.parse((script.textContent || '').trim() || '[]');
             return Array.isArray(parsed) ? parsed : [];
         } catch (e) {
             console.warn('[OZI:select] Erro ao parsear opções do select "' + key + '":', e.message);
@@ -246,20 +304,22 @@
 
     OziSelect.prototype.ensureOptionsScript = function () {
         var selector = 'script[data-ozi-select-options="' + this.key + '"]';
-        var $script  = $(selector).first();
-        if (!$script.length) {
-            $script = $('<script>', { type: 'application/json', 'data-ozi-select-options': this.key });
-            this.$root.after($script);
+        var script   = document.querySelector(selector);
+        if (!script) {
+            script = document.createElement('script');
+            script.type = 'application/json';
+            script.setAttribute('data-ozi-select-options', this.key);
+            this.root.after(script);
         }
-        return $script;
+        return script;
     };
 
     OziSelect.prototype.writeOptionsScript = function (options) {
-        this.ensureOptionsScript().text(JSON.stringify(Array.isArray(options) ? options : [], null, 2));
+        this.ensureOptionsScript().textContent = JSON.stringify(Array.isArray(options) ? options : [], null, 2);
     };
 
     OziSelect.prototype.resolveHiddenContainer = function () {
-        var $c = $('<div>', {
+        var c = _make('div', {
             id: this.uid + '-hidden',
             class: 'ozi-select-hidden-container',
             'data-ozi-select-generated-hidden': this.key,
@@ -268,21 +328,22 @@
             'data-ozi-component-hidden': this.key,
             'aria-hidden': 'true'
         });
-        this.$root.after($c);
-        return $c;
+        this.root.after(c);
+        return c;
     };
 
     /* ─── build UI ─────────────────────────────────────────────────── */
 
     OziSelect.prototype.buildUI = function () {
         var listId = this.uid + '-list';
-        this.$root.empty().addClass('ozi-select-root');
+        this.root.innerHTML = '';
+        this.root.classList.add('ozi-select-root');
 
-        this.$ui = $('<div>', { class: 'ozi-select-ui ozi-select-ui-v400' });
+        this.ui = _make('div', { class: 'ozi-select-ui ozi-select-ui-v400' });
 
-        this.$control = $('<div>', {
+        this.control = _make('div', {
             class:            'ozi-select-control',
-            tabindex:         this.isDisabled() ? -1 : 0,
+            tabindex:         this.isDisabled() ? '-1' : '0',
             role:             'combobox',
             'aria-haspopup': 'listbox',
             'aria-expanded': 'false',
@@ -290,24 +351,26 @@
             'aria-invalid':  'false'
         });
 
-        this.$value  = $('<div>', { class: 'ozi-select-value' });
-        var $actions = $('<div>', { class: 'ozi-select-actions' });
-        this.$clear  = $('<button>', { type: 'button', class: 'ozi-select-clear', 'aria-label': 'Limpar seleção' }).html('&times;');
-        this.$toggle = $('<button>', { type: 'button', class: 'ozi-select-toggle', 'aria-label': 'Abrir opções' }).html('&#9662;');
-        $actions.append(this.$clear, this.$toggle);
+        this.valueEl = _make('div', { class: 'ozi-select-value' });
+        var actions  = _make('div', { class: 'ozi-select-actions' });
+        this.clearBtn  = _make('button', { type: 'button', class: 'ozi-select-clear',  'aria-label': 'Limpar seleção' });
+        this.clearBtn.innerHTML = '&times;';
+        this.toggleBtn = _make('button', { type: 'button', class: 'ozi-select-toggle', 'aria-label': 'Abrir opções' });
+        this.toggleBtn.innerHTML = '&#9662;';
+        actions.appendChild(this.clearBtn);
+        actions.appendChild(this.toggleBtn);
 
         if (this.valueIcon) {
-            this.$control.append(
-                $('<span>', { class: 'ozi-select-value-icon', 'aria-hidden': 'true' }).append($('<i>', { class: this.valueIcon })),
-                this.$value, $actions
-            );
-        } else {
-            this.$control.append(this.$value, $actions);
+            var valueIconWrap = _make('span', { class: 'ozi-select-value-icon', 'aria-hidden': 'true' });
+            valueIconWrap.appendChild(_make('i', { class: this.valueIcon }));
+            this.control.appendChild(valueIconWrap);
         }
+        this.control.appendChild(this.valueEl);
+        this.control.appendChild(actions);
 
-        this.$dropdown  = $('<div>', { class: 'ozi-select-dropdown' });
-        var $searchWrap = $('<div>', { class: 'ozi-select-search-wrap' });
-        this.$search    = $('<input>', {
+        this.dropdown = _make('div', { class: 'ozi-select-dropdown' });
+        var searchWrap = _make('div', { class: 'ozi-select-search-wrap' });
+        this.search = _make('input', {
             type:         'text',
             class:        'ozi-select-search',
             name:         this.key + '_select_search',
@@ -316,35 +379,36 @@
         });
 
         if (this.searchIcon) {
-            $searchWrap.append(
-                $('<span>', { class: 'ozi-select-search-icon', 'aria-hidden': 'true' }).append($('<i>', { class: this.searchIcon })),
-                this.$search
-            );
-        } else {
-            $searchWrap.append(this.$search);
+            var searchIconWrap = _make('span', { class: 'ozi-select-search-icon', 'aria-hidden': 'true' });
+            searchIconWrap.appendChild(_make('i', { class: this.searchIcon }));
+            searchWrap.appendChild(searchIconWrap);
         }
+        searchWrap.appendChild(this.search);
 
-        this.$list = $('<div>', { class: 'ozi-select-list', id: listId, role: 'listbox' });
-        if (this.listHeight) this.$list.css('max-height', this.listHeight);
+        this.list = _make('div', { class: 'ozi-select-list', id: listId, role: 'listbox' });
+        if (this.listHeight) this.list.style.maxHeight = this.listHeight;
 
         // [FIX-A] fallback neutro OZI em vez de 'invalid-feedback' (BS5)
         var feedbackClass = _classMap('feedback', 'ozi-feedback');
-        this.$feedback = $('<div>', { class: feedbackClass + ' ozi-select-feedback' }).text(this.requiredMessage);
+        this.feedback = _make('div', { class: feedbackClass + ' ozi-select-feedback' });
+        this.feedback.textContent = this.requiredMessage;
 
-        this.$dropdown.append($searchWrap, this.$list);
-        this.$ui.append(this.$control, this.$dropdown);
-        this.$root.append(this.$ui, this.$feedback);
+        this.dropdown.appendChild(searchWrap);
+        this.dropdown.appendChild(this.list);
+        this.ui.appendChild(this.control);
+        this.ui.appendChild(this.dropdown);
+        this.root.appendChild(this.ui);
+        this.root.appendChild(this.feedback);
     };
 
     OziSelect.prototype.applyStateStyles = function () {
         var disabled = this.isDisabled();
-        this.$control
-            .toggleClass('is-disabled', disabled)
-            .attr('aria-disabled', disabled ? 'true' : 'false')
-            .attr('tabindex', disabled ? -1 : 0);
-        this.$search.prop('disabled', disabled);
-        this.$clear.prop('disabled', disabled);
-        this.$toggle.prop('disabled', disabled);
+        this.control.classList.toggle('is-disabled', disabled);
+        this.control.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+        this.control.setAttribute('tabindex', disabled ? '-1' : '0');
+        this.search.disabled    = disabled;
+        this.clearBtn.disabled  = disabled;
+        this.toggleBtn.disabled = disabled;
         if (disabled) { this.clearInvalid(); this.close(); }
     };
 
@@ -353,71 +417,91 @@
     OziSelect.prototype.bindEvents = function () {
         var self = this;
 
-        this.$ui.on('click', '.ozi-select-control', function (e) {
+        this.ui.addEventListener('click', function (e) {
+            var target = e.target;
+            var match;
+
+            match = target.closest('.ozi-select-group-label[data-ozi-group-toggle]');
+            if (match) {
+                e.preventDefault(); e.stopPropagation();
+                if (!self.isDisabled() && self.mode === 'multiple') {
+                    self.toggleGroup(match.getAttribute('data-ozi-group-toggle'), true);
+                }
+                return;
+            }
+
+            match = target.closest('.ozi-select-toggle');
+            if (match) {
+                e.preventDefault(); e.stopPropagation();
+                if (!self.isDisabled()) self.toggle();
+                return;
+            }
+
+            match = target.closest('.ozi-select-clear');
+            if (match) {
+                e.preventDefault(); e.stopPropagation();
+                if (!self.isDisabled()) self.clearSelection();
+                return;
+            }
+
+            match = target.closest('.ozi-select-tag-remove');
+            if (match) {
+                e.preventDefault(); e.stopPropagation();
+                if (!self.isDisabled()) self.unselectItem(match.getAttribute('data-value'));
+                return;
+            }
+
+            match = target.closest('.ozi-select-option');
+            if (match) {
+                e.preventDefault();
+                if (self.isDisabled()) return;
+                var item = self.findOptionByValue(match.getAttribute('data-value'));
+                if (item) self.toggleItem(item);
+                return;
+            }
+
+            // catch-all: clique no control (fora dos alvos especificos acima)
+            if (target.closest('.ozi-select-control')) {
+                if (self.isDisabled()) return;
+                self.toggle();
+            }
+        });
+
+        this.search.addEventListener('input', function () {
             if (self.isDisabled()) return;
-            if ($(e.target).closest('.ozi-select-clear, .ozi-select-toggle, .ozi-select-tag-remove').length) return;
-            self.toggle();
+            self.handleSearchInput(self.search.value || '');
         });
 
-        this.$ui.on('click', '.ozi-select-group-label[data-ozi-group-toggle]', function (e) {
-            e.preventDefault(); e.stopPropagation();
-            if (self.isDisabled() || self.mode !== 'multiple') return;
-            self.toggleGroup($(this).attr('data-ozi-group-toggle'), true);
-        });
-
-        this.$ui.on('click', '.ozi-select-toggle', function (e) {
-            e.preventDefault(); e.stopPropagation();
-            if (self.isDisabled()) return;
-            self.toggle();
-        });
-
-        this.$ui.on('click', '.ozi-select-clear', function (e) {
-            e.preventDefault(); e.stopPropagation();
-            if (self.isDisabled()) return;
-            self.clearSelection();
-        });
-
-        this.$ui.on('input', '.ozi-select-search', function () {
-            if (self.isDisabled()) return;
-            self.handleSearchInput($(this).val() || '');
-        });
-
-        this.$ui.on('click', '.ozi-select-option', function (e) {
-            e.preventDefault();
-            if (self.isDisabled()) return;
-            var item = self.findOptionByValue($(this).attr('data-value'));
-            if (item) self.toggleItem(item);
-        });
-
-        this.$ui.on('click', '.ozi-select-tag-remove', function (e) {
-            e.preventDefault(); e.stopPropagation();
-            if (self.isDisabled()) return;
-            self.unselectItem($(this).attr('data-value'));
-        });
-
-        this.$ui.on('keydown', '.ozi-select-control, .ozi-select-search', function (e) {
+        function onKeydown(e) {
             if (self.isDisabled()) return;
             self.handleKeydown(e);
-        });
+        }
+        this.control.addEventListener('keydown', onKeydown);
+        this.search.addEventListener('keydown', onKeydown);
 
-        $(document).on('click' + this.ns, function (e) {
-            if (!self.$ui.is(e.target) && self.$ui.has(e.target).length === 0) self.close();
-        });
+        this._onDocumentClick = function (e) {
+            if (!self.ui.contains(e.target)) self.close();
+        };
+        document.addEventListener('click', this._onDocumentClick);
     };
 
     OziSelect.prototype.bindFormEvents = function () {
         var self = this;
-        if (!this.$form || !this.$form.length) return;
-        this.$form.on('submit' + this.ns, function (e) {
+        if (!this.form) return;
+
+        this._onFormSubmit = function (e) {
             if (!self.validate()) {
                 e.preventDefault();
                 // [FIX-A] fallback neutro OZI em vez de 'was-validated' (BS5)
-                self.$form.addClass(_classMap('formValidated', 'ozi-validated'));
+                _classListOp(self.form, _classMap('formValidated', 'ozi-validated'), 'add');
             }
-        });
-        this.$form.on('reset' + this.ns, function () {
+        };
+        this._onFormReset = function () {
             setTimeout(function () { self.resetToInitial(); }, 0);
-        });
+        };
+
+        this.form.addEventListener('submit', this._onFormSubmit);
+        this.form.addEventListener('reset',  this._onFormReset);
     };
 
     OziSelect.prototype.handleKeydown = function (e) {
@@ -431,8 +515,8 @@
             case 'ArrowUp':   e.preventDefault(); this.highlightPrev(); break;
             case 'Enter':
                 e.preventDefault();
-                var $h = this.getHighlightedOption();
-                if ($h.length) { var item = this.findOptionByValue($h.attr('data-value')); if (item) this.toggleItem(item); }
+                var h = this.getHighlightedOption();
+                if (h) { var item = this.findOptionByValue(h.getAttribute('data-value')); if (item) this.toggleItem(item); }
                 break;
             case 'Escape': e.preventDefault(); this.close(true); break;
             case 'Tab':    this.close(); break;
@@ -446,24 +530,24 @@
     OziSelect.prototype.open = function (preferLast) {
         if (this.isDisabled() || this.isOpen) return;
         this.isOpen = true;
-        this.$ui.addClass('is-open');
-        this.$control.attr('aria-expanded', 'true');
-        this.renderOptions(this.$search.val() || '');
+        this.ui.classList.add('is-open');
+        this.control.setAttribute('aria-expanded', 'true');
+        this.renderOptions(this.search.value || '');
         this.syncHighlightAfterRender(!!preferLast);
-        this.$search.trigger('focus');
+        this.search.focus();
         this.emit('ozi:open');
     };
 
     OziSelect.prototype.close = function (focusControl) {
         if (!this.isOpen) return;
         this.isOpen = false;
-        this.$ui.removeClass('is-open');
-        this.$control.attr('aria-expanded', 'false');
-        this.$search.val('');
+        this.ui.classList.remove('is-open');
+        this.control.setAttribute('aria-expanded', 'false');
+        this.search.value = '';
         this.lastSearchQuery = '';
         this.renderOptions('');
-        this.$list.find('.ozi-select-option').removeClass('is-highlighted');
-        if (focusControl && !this.isDisabled()) this.$control.trigger('focus');
+        Array.prototype.forEach.call(this.list.querySelectorAll('.ozi-select-option'), function (o) { o.classList.remove('is-highlighted'); });
+        if (focusControl && !this.isDisabled()) this.control.focus();
         this.emit('ozi:close');
     };
 
@@ -496,7 +580,7 @@
         if (exists) { this.unselectItem(item.value); return; }
         this.selectedItems.push(item);
         this.syncHiddenInputs(); this.updateUI();
-        this.renderOptions(this.$search.val() || '');
+        this.renderOptions(this.search.value || '');
         this.syncHighlightAfterRender(false); this.clearInvalid(); this.emitChange();
     };
 
@@ -505,7 +589,7 @@
         this.selectedItems = this.selectedItems.filter(function (item) { return String(item.value) !== String(value); });
         if (this.selectedItems.length !== before) {
             this.syncHiddenInputs(); this.updateUI();
-            this.renderOptions(this.$search.val() || '');
+            this.renderOptions(this.search.value || '');
             this.syncHighlightAfterRender(false); this.validate(false); this.emitChange();
         }
     };
@@ -514,7 +598,7 @@
         if (this.isDisabled() || !this.selectedItems.length) return;
         this.selectedItems = [];
         this.syncHiddenInputs(); this.updateUI();
-        this.renderOptions(this.$search.val() || '');
+        this.renderOptions(this.search.value || '');
         this.clearInvalid(); this.emitChange();
     };
 
@@ -547,9 +631,9 @@
     };
 
     OziSelect.prototype.appendHiddenInput = function (name, value) {
-        var $input = $('<input>', { type: 'hidden', name: name, value: value == null ? '' : String(value) });
-        $input.prop('disabled', this.isDisabled());
-        this.$hiddenContainer.append($input);
+        var input = _make('input', { type: 'hidden', name: name, value: value == null ? '' : String(value) });
+        input.disabled = this.isDisabled();
+        this.hiddenContainer.appendChild(input);
     };
 
     OziSelect.prototype.shouldSkipAutoSubmitKey = function (key) {
@@ -596,7 +680,7 @@
 
     OziSelect.prototype.syncHiddenInputs = function () {
         var self = this;
-        this.$hiddenContainer.empty();
+        this.hiddenContainer.innerHTML = '';
         this.selectedItems.forEach(function (item, index) {
             if (self.submitMode === 'legacy' && self.hasSubmitFieldsConfig && self.submitFields.length) {
                 self.submitFields.forEach(function (field) {
@@ -615,7 +699,7 @@
     OziSelect.prototype.normalize          = function (v) { return String(v || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); };
     OziSelect.prototype.cloneOptions       = function (o) { try { return JSON.parse(JSON.stringify(Array.isArray(o) ? o : [])); } catch (e) { return Array.isArray(o) ? o.slice() : []; } };
     OziSelect.prototype.parseListString    = function (raw) { if (!raw) return []; if (Array.isArray(raw)) return raw; var s = String(raw).trim(); if (!s) return []; return s.split(',').map(function (i) { return String(i || '').trim(); }).filter(Boolean); };
-    OziSelect.prototype.renderOptionalHtml = function ($t, html) { if (!html) return false; $t.html(String(html)); return true; };
+    OziSelect.prototype.renderOptionalHtml = function (el, html) { if (!html) return false; el.innerHTML = String(html); return true; };
 
     OziSelect.prototype.flattenSearchText = function (obj) {
         var parts = []; var self = this;
@@ -646,19 +730,35 @@
     OziSelect.prototype.renderGroupBlock = function (block) {
         var groupSelected = this.groupToggleEnabled && this.mode === 'multiple' ? this.isGroupFullySelected(block.group, true) : false;
         var groupPartial  = this.groupToggleEnabled && this.mode === 'multiple' ? this.isGroupPartiallySelected(block.group, true) : false;
-        var $group = $('<div>', { class: 'ozi-select-group', 'data-ozi-group': block.group });
-        var $label = $('<div>', {
+        var group = _make('div', { class: 'ozi-select-group', 'data-ozi-group': block.group });
+        var label = _make('div', {
             class: 'ozi-select-group-label' + (groupSelected ? ' is-group-selected' : '') + (groupPartial ? ' is-group-partial' : ''),
             role: 'presentation'
-        }).text(block.group);
-        if (this.groupToggleEnabled && this.mode === 'multiple' && !this.isDisabled()) $label.attr('data-ozi-group-toggle', block.group);
-        $group.append($label);
-        var self = this; block.options.forEach(function (item) { $group.append(self.buildOption(item)); });
-        return $group;
+        });
+        label.textContent = block.group;
+        if (this.groupToggleEnabled && this.mode === 'multiple' && !this.isDisabled()) label.setAttribute('data-ozi-group-toggle', block.group);
+        group.appendChild(label);
+        var self = this; block.options.forEach(function (item) { group.appendChild(self.buildOption(item)); });
+        return group;
     };
 
-    OziSelect.prototype.getGroupVisibleOptions   = function (groupName) { return this.$list.find('.ozi-select-group[data-ozi-group="' + String(groupName).replace(/"/g, '\\"') + '"] .ozi-select-option:visible'); };
-    OziSelect.prototype.getItemsByGroup          = function (groupName, onlyVisible) { var group = String(groupName || ''); var values = onlyVisible ? this.getGroupVisibleOptions(group).map(function () { return String($(this).attr('data-value')); }).get() : null; return this.options.filter(function (item) { var same = String(item.group || '') === group; if (!same) return false; if (!onlyVisible) return true; return values.indexOf(String(item.value)) !== -1; }); };
+    OziSelect.prototype.getGroupVisibleOptions = function (groupName) {
+        var g = this.list.querySelector('.ozi-select-group[data-ozi-group="' + String(groupName).replace(/"/g, '\\"') + '"]');
+        if (!g) return [];
+        return Array.prototype.filter.call(g.querySelectorAll('.ozi-select-option'), _isVisible);
+    };
+
+    OziSelect.prototype.getItemsByGroup = function (groupName, onlyVisible) {
+        var group  = String(groupName || '');
+        var values = onlyVisible ? this.getGroupVisibleOptions(group).map(function (o) { return String(o.getAttribute('data-value')); }) : null;
+        return this.options.filter(function (item) {
+            var same = String(item.group || '') === group;
+            if (!same) return false;
+            if (!onlyVisible) return true;
+            return values.indexOf(String(item.value)) !== -1;
+        });
+    };
+
     OziSelect.prototype.isGroupFullySelected     = function (groupName, onlyVisible) { var items = this.getItemsByGroup(groupName, onlyVisible); if (!items.length) return false; var self = this; return items.every(function (item) { return self.isSelected(item.value); }); };
     OziSelect.prototype.isGroupPartiallySelected = function (groupName, onlyVisible) { var items = this.getItemsByGroup(groupName, onlyVisible); if (!items.length) return false; var self = this; var count = items.filter(function (item) { return self.isSelected(item.value); }).length; return count > 0 && count < items.length; };
 
@@ -669,134 +769,218 @@
         if (shouldSelectAll) { items.forEach(function (item) { if (!self.isSelected(item.value)) self.selectedItems.push(item); }); }
         else { var toRemove = items.map(function (item) { return String(item.value); }); this.selectedItems = this.selectedItems.filter(function (s) { return toRemove.indexOf(String(s.value)) === -1; }); }
         this.syncHiddenInputs(); this.updateUI();
-        this.renderOptions(this.$search.val() || '');
+        this.renderOptions(this.search.value || '');
         this.syncHighlightAfterRender(false); this.validate(false); this.emitChange();
     };
 
     OziSelect.prototype.renderOptions = function (query) {
         var self = this; var normalizedQuery = this.normalize(query || '');
-        this.$list.empty();
+        this.list.innerHTML = '';
         var filtered = this.options.filter(function (item) {
             if (!normalizedQuery) return true;
             return self.normalize(self.flattenSearchText(item)).indexOf(normalizedQuery) !== -1;
         });
         if (!filtered.length) {
-            var msg = this.$ui.hasClass('is-loading')
+            var msg = this.ui.classList.contains('is-loading')
                 ? _t('common.loading', 'Carregando...')
                 : _t('select.empty', 'Nenhum resultado encontrado');
-            this.$list.append($('<div>', { class: 'ozi-select-empty' }).text(msg));
+            var empty = _make('div', { class: 'ozi-select-empty' });
+            empty.textContent = msg;
+            this.list.appendChild(empty);
             return;
         }
         var blocks = this.buildRenderBlocks(filtered);
         blocks.forEach(function (block) {
-            if (block.type === 'option') { self.$list.append(self.buildOption(block.item)); return; }
-            if (block.type === 'group')  { self.$list.append(self.renderGroupBlock(block)); }
+            if (block.type === 'option') { self.list.appendChild(self.buildOption(block.item)); return; }
+            if (block.type === 'group')  { self.list.appendChild(self.renderGroupBlock(block)); }
         });
     };
 
     OziSelect.prototype.buildOption = function (item) {
         var selected = this.isSelected(item.value);
-        var $option  = $('<div>', {
+        var option = _make('div', {
             class:         'ozi-select-option' + (selected ? ' is-selected' : ''),
             'data-value':  item.value,
             role:          'option',
             'aria-selected': selected ? 'true' : 'false'
         });
-        if (item.optionClass && String(item.optionClass).trim()) $option.addClass(String(item.optionClass).trim());
+        if (item.optionClass && String(item.optionClass).trim()) {
+            _classListOp(option, String(item.optionClass).trim(), 'add');
+        }
         if (item.optionHtml && String(item.optionHtml).trim()) {
-            var $custom = $('<div>', { class: 'ozi-select-option-custom' });
-            this.renderOptionalHtml($custom, item.optionHtml);
-            $option.append($custom); return $option;
+            var custom = _make('div', { class: 'ozi-select-option-custom' });
+            this.renderOptionalHtml(custom, item.optionHtml);
+            option.appendChild(custom); return option;
         }
-        var $content = $('<div>', { class: 'ozi-select-option-content' });
+        var content = _make('div', { class: 'ozi-select-option-content' });
         if (item.image) {
-            $content.append($('<img>', { class: 'ozi-select-option-image', src: item.image, alt: item.label || '', css: { width: this.imageWidth, height: this.imageHeight } }));
+            var img = _make('img', { class: 'ozi-select-option-image', src: item.image, alt: item.label || '' });
+            img.style.width = this.imageWidth; img.style.height = this.imageHeight;
+            content.appendChild(img);
         } else {
-            $content.append($('<div>', { class: 'ozi-select-option-image is-no-image', css: { width: this.imageWidth, height: this.imageHeight } }));
+            var ph = _make('div', { class: 'ozi-select-option-image is-no-image' });
+            ph.style.width = this.imageWidth; ph.style.height = this.imageHeight;
+            content.appendChild(ph);
         }
-        var $texts = $('<div>', { class: 'ozi-select-option-texts' });
-        var $label = $('<div>', { class: 'ozi-select-option-label' });
-        if (item.label && String(item.label).trim()) { $label.html(String(item.label)); } else { $label.text(String(item.value || '')); }
-        $texts.append($label);
-        if (item.subLabel && String(item.subLabel).trim()) $texts.append($('<div>', { class: 'ozi-select-option-sublabel' }).html(String(item.subLabel)));
-        $content.append($texts); $option.append($content);
-        return $option;
+        var texts = _make('div', { class: 'ozi-select-option-texts' });
+        var label = _make('div', { class: 'ozi-select-option-label' });
+        if (item.label && String(item.label).trim()) { label.innerHTML = String(item.label); } else { label.textContent = String(item.value || ''); }
+        texts.appendChild(label);
+        if (item.subLabel && String(item.subLabel).trim()) {
+            var sub = _make('div', { class: 'ozi-select-option-sublabel' });
+            sub.innerHTML = String(item.subLabel);
+            texts.appendChild(sub);
+        }
+        content.appendChild(texts); option.appendChild(content);
+        return option;
     };
 
     /* ─── updateUI ─────────────────────────────────────────────────── */
 
     OziSelect.prototype.updateUI = function () {
-        this.$value.empty();
+        this.valueEl.innerHTML = '';
         if (!this.selectedItems.length) {
-            this.$value.addClass('is-placeholder').append(
-                $('<div>', { class: 'ozi-select-value-content' })
-                    .append($('<div>', { class: 'ozi-select-value-image is-no-image' }))
-                    .append($('<span>', { class: 'ozi-select-value-label' }).text(this.valuePlaceholder))
-            );
-            this.$clear.hide(); return;
+            this.valueEl.classList.add('is-placeholder');
+            var wrap = _make('div', { class: 'ozi-select-value-content' });
+            wrap.appendChild(_make('div', { class: 'ozi-select-value-image is-no-image' }));
+            var span = _make('span', { class: 'ozi-select-value-label' });
+            span.textContent = this.valuePlaceholder;
+            wrap.appendChild(span);
+            this.valueEl.appendChild(wrap);
+            this.clearBtn.style.display = 'none';
+            return;
         }
-        this.$value.removeClass('is-placeholder');
+        this.valueEl.classList.remove('is-placeholder');
         if (this.mode === 'single') {
-            this.$value.append(this.buildSelectedPreview(this.selectedItems[0]));
+            this.valueEl.appendChild(this.buildSelectedPreview(this.selectedItems[0]));
         } else {
-            var $tags = $('<div>', { class: 'ozi-select-tags' }); var self = this;
+            var tagsWrap = _make('div', { class: 'ozi-select-tags' }); var self = this;
             this.selectedItems.forEach(function (item) {
-                var $tag = $('<span>', { class: 'ozi-select-tag' });
-                if (item.image) $tag.append($('<img>', { class: 'ozi-select-tag-image', src: item.image, alt: item.label || '', css: { width: self.imageWidth, height: self.imageHeight } }));
-                var $tagLabel = $('<span>', { class: 'ozi-select-tag-label' });
-                if (item.label && String(item.label).trim()) { $tagLabel.html(String(item.label)); } else { $tagLabel.text(String(item.value || '')); }
-                $tag.append($tagLabel).append(
-                    $('<button>', { type: 'button', class: 'ozi-select-tag-remove', 'data-value': item.value, 'aria-label': 'Remover ' + (item.label || item.value || '') }).html('&times;')
-                );
-                $tags.append($tag);
+                var tag = _make('span', { class: 'ozi-select-tag' });
+                if (item.image) {
+                    var img = _make('img', { class: 'ozi-select-tag-image', src: item.image, alt: item.label || '' });
+                    img.style.width = self.imageWidth; img.style.height = self.imageHeight;
+                    tag.appendChild(img);
+                }
+                var tagLabel = _make('span', { class: 'ozi-select-tag-label' });
+                if (item.label && String(item.label).trim()) { tagLabel.innerHTML = String(item.label); } else { tagLabel.textContent = String(item.value || ''); }
+                tag.appendChild(tagLabel);
+                var removeBtn = _make('button', { type: 'button', class: 'ozi-select-tag-remove', 'data-value': item.value, 'aria-label': 'Remover ' + (item.label || item.value || '') });
+                removeBtn.innerHTML = '&times;';
+                tag.appendChild(removeBtn);
+                tagsWrap.appendChild(tag);
             });
-            this.$value.append($tags);
+            this.valueEl.appendChild(tagsWrap);
         }
-        this.$clear.toggle(!this.isDisabled());
+        this.clearBtn.style.display = this.isDisabled() ? 'none' : '';
     };
 
     OziSelect.prototype.buildSelectedPreview = function (item) {
-        var $content = $('<div>', { class: 'ozi-select-value-content' });
-        if (item.image) { $content.append($('<img>', { class: 'ozi-select-value-image', src: item.image, alt: item.label || '', css: { width: this.imageWidth, height: this.imageHeight } })); }
-        else            { $content.append($('<div>', { class: 'ozi-select-value-image is-no-image', css: { width: this.imageWidth, height: this.imageHeight } })); }
-        var $texts = $('<div>', { class: 'ozi-select-value-texts' });
-        var $label = $('<div>', { class: 'ozi-select-value-label' });
-        if (item.label && String(item.label).trim()) { $label.html(String(item.label)); } else { $label.text(String(item.value || '')); }
-        $texts.append($label);
-        if (item.subLabel && String(item.subLabel).trim()) $texts.append($('<div>', { class: 'ozi-select-value-sublabel' }).html(String(item.subLabel)));
-        $content.append($texts); return $content;
+        var content = _make('div', { class: 'ozi-select-value-content' });
+        if (item.image) {
+            var img = _make('img', { class: 'ozi-select-value-image', src: item.image, alt: item.label || '' });
+            img.style.width = this.imageWidth; img.style.height = this.imageHeight;
+            content.appendChild(img);
+        } else {
+            var ph = _make('div', { class: 'ozi-select-value-image is-no-image' });
+            ph.style.width = this.imageWidth; ph.style.height = this.imageHeight;
+            content.appendChild(ph);
+        }
+        var texts = _make('div', { class: 'ozi-select-value-texts' });
+        var label = _make('div', { class: 'ozi-select-value-label' });
+        if (item.label && String(item.label).trim()) { label.innerHTML = String(item.label); } else { label.textContent = String(item.value || ''); }
+        texts.appendChild(label);
+        if (item.subLabel && String(item.subLabel).trim()) {
+            var sub = _make('div', { class: 'ozi-select-value-sublabel' });
+            sub.innerHTML = String(item.subLabel);
+            texts.appendChild(sub);
+        }
+        content.appendChild(texts); return content;
     };
 
     /* ─── highlight / teclado ──────────────────────────────────────── */
 
-    OziSelect.prototype.getVisibleOptions        = function () { return this.$list.find('.ozi-select-option:visible'); };
-    OziSelect.prototype.getHighlightedOption      = function () { return this.$list.find('.ozi-select-option.is-highlighted').first(); };
-    OziSelect.prototype.getSelectedVisibleOption  = function () { var self = this; if (!this.selectedItems.length) return $(); return this.getVisibleOptions().filter(function () { var v = $(this).attr('data-value'); return self.selectedItems.some(function (i) { return String(i.value) === String(v); }); }).first(); };
-    OziSelect.prototype.highlightOption           = function ($o) { this.$list.find('.ozi-select-option').removeClass('is-highlighted'); if ($o && $o.length) { $o.addClass('is-highlighted'); this.ensureOptionVisible($o); } };
-    OziSelect.prototype.highlightFirstVisible     = function () { this.highlightOption(this.getVisibleOptions().first()); };
-    OziSelect.prototype.highlightLastVisible      = function () { this.highlightOption(this.getVisibleOptions().last()); };
-    OziSelect.prototype.highlightNext             = function () { var $v = this.getVisibleOptions(); var $c = this.getHighlightedOption(); var i = $c.length ? $v.index($c) : -1; var $n = $v.eq(i + 1); if ($n.length) this.highlightOption($n); else if (!$c.length && $v.length) this.highlightFirstVisible(); };
-    OziSelect.prototype.highlightPrev             = function () { var $v = this.getVisibleOptions(); var $c = this.getHighlightedOption(); var i = $c.length ? $v.index($c) : $v.length; var $p = $v.eq(i - 1); if ($p.length) this.highlightOption($p); else if (!$c.length && $v.length) this.highlightLastVisible(); };
-    OziSelect.prototype.ensureOptionVisible       = function ($o) { if (!$o || !$o.length) return; var l = this.$list; var oT = $o.position().top + l.scrollTop(); var oB = oT + $o.outerHeight(); var lT = l.scrollTop(); var lB = lT + l.innerHeight(); if (oT < lT) l.scrollTop(oT); else if (oB > lB) l.scrollTop(oB - l.innerHeight()); };
-    OziSelect.prototype.syncHighlightAfterRender  = function (preferLast) { var $v = this.getVisibleOptions(); var $s = this.getSelectedVisibleOption(); if (!$v.length) { this.$list.find('.ozi-select-option').removeClass('is-highlighted'); return; } if ($s.length) this.highlightOption($s); else if (preferLast) this.highlightLastVisible(); else this.highlightFirstVisible(); };
+    OziSelect.prototype.getVisibleOptions = function () {
+        return Array.prototype.filter.call(this.list.querySelectorAll('.ozi-select-option'), _isVisible);
+    };
+
+    OziSelect.prototype.getHighlightedOption = function () {
+        return this.list.querySelector('.ozi-select-option.is-highlighted');
+    };
+
+    OziSelect.prototype.getSelectedVisibleOption = function () {
+        if (!this.selectedItems.length) return null;
+        var self = this;
+        var visible = this.getVisibleOptions();
+        for (var i = 0; i < visible.length; i++) {
+            var v = visible[i].getAttribute('data-value');
+            if (self.selectedItems.some(function (item) { return String(item.value) === String(v); })) return visible[i];
+        }
+        return null;
+    };
+
+    OziSelect.prototype.highlightOption = function (opt) {
+        Array.prototype.forEach.call(this.list.querySelectorAll('.ozi-select-option'), function (o) { o.classList.remove('is-highlighted'); });
+        if (opt) { opt.classList.add('is-highlighted'); this.ensureOptionVisible(opt); }
+    };
+
+    OziSelect.prototype.highlightFirstVisible = function () { var v = this.getVisibleOptions(); this.highlightOption(v[0] || null); };
+    OziSelect.prototype.highlightLastVisible  = function () { var v = this.getVisibleOptions(); this.highlightOption(v[v.length - 1] || null); };
+
+    OziSelect.prototype.highlightNext = function () {
+        var v = this.getVisibleOptions(); var c = this.getHighlightedOption();
+        var i = c ? v.indexOf(c) : -1; var n = v[i + 1];
+        if (n) this.highlightOption(n); else if (!c && v.length) this.highlightFirstVisible();
+    };
+
+    OziSelect.prototype.highlightPrev = function () {
+        var v = this.getVisibleOptions(); var c = this.getHighlightedOption();
+        var i = c ? v.indexOf(c) : v.length; var p = v[i - 1];
+        if (p) this.highlightOption(p); else if (!c && v.length) this.highlightLastVisible();
+    };
+
+    OziSelect.prototype.ensureOptionVisible = function (opt) {
+        if (!opt) return;
+        var list = this.list;
+        var oT = opt.offsetTop;
+        var oB = oT + opt.offsetHeight;
+        var lT = list.scrollTop;
+        var lB = lT + list.clientHeight;
+        if (oT < lT) list.scrollTop = oT;
+        else if (oB > lB) list.scrollTop = oB - list.clientHeight;
+    };
+
+    OziSelect.prototype.syncHighlightAfterRender = function (preferLast) {
+        var v = this.getVisibleOptions(); var s = this.getSelectedVisibleOption();
+        if (!v.length) {
+            Array.prototype.forEach.call(this.list.querySelectorAll('.ozi-select-option'), function (o) { o.classList.remove('is-highlighted'); });
+            return;
+        }
+        if (s) this.highlightOption(s);
+        else if (preferLast) this.highlightLastVisible();
+        else this.highlightFirstVisible();
+    };
 
     /* ─── validação ────────────────────────────────────────────────── */
 
-    OziSelect.prototype.focusControl = function () { if (!this.isDisabled()) this.$control.trigger('focus'); };
+    OziSelect.prototype.focusControl = function () { if (!this.isDisabled()) this.control.focus(); };
 
     OziSelect.prototype.markInvalid = function (focusControl) {
         // [FIX-A] fallback neutro OZI em vez de 'is-invalid' (BS5)
         var cls = _classMap('invalid', 'ozi-invalid');
-        this.$control.addClass(cls).attr('aria-invalid', 'true');
-        this.$feedback.text(this.requiredMessage).addClass('is-visible');
+        _classListOp(this.control, cls, 'add');
+        this.control.setAttribute('aria-invalid', 'true');
+        this.feedback.textContent = this.requiredMessage;
+        this.feedback.classList.add('is-visible');
         if (focusControl !== false) this.focusControl();
     };
 
     OziSelect.prototype.clearInvalid = function () {
         // [FIX-A] fallback neutro OZI em vez de 'is-invalid' (BS5)
         var cls = _classMap('invalid', 'ozi-invalid');
-        this.$control.removeClass(cls).attr('aria-invalid', 'false');
-        this.$feedback.removeClass('is-visible');
+        _classListOp(this.control, cls, 'remove');
+        this.control.setAttribute('aria-invalid', 'false');
+        this.feedback.classList.remove('is-visible');
     };
 
     OziSelect.prototype.validate = function (focusControl) {
@@ -805,17 +989,28 @@
         this.markInvalid(focusControl !== false); return false;
     };
 
-    /* ─── emit ─────────────────────────────────────────────────────── */
+    /* ─── emit — contrato v2, sem dual-dispatch ────────────────────── */
+    // Nomes ozi:* preservados; payload posicional jQuery '(event, items)' que
+    // 2 arquivos do Central RH ainda consomem e responsabilidade do shim em
+    // integrations/adapters/ozi-change-v1-compat.shim.js (nunca do componente).
 
-    OziSelect.prototype.emit = function (eventName) {
-        var detail = { key: this.key, value: this.getValue(), items: this.getSelectedItems(), instance: this };
-        this.$root.trigger(eventName, [detail.items, this, detail]);
-        if (this.$root && this.$root[0] && typeof CustomEvent === 'function') {
-            this.$root[0].dispatchEvent(new CustomEvent(eventName, { bubbles: true, detail: detail }));
+    OziSelect.prototype.emit = function (eventName, source) {
+        var detail = {
+            component: 'ozi-select',
+            name:      this.key,
+            value:     this.getValue(),
+            items:     this.getSelectedItems(),
+            source:    source || 'user'
+        };
+        var helpers = window.OZI && window.OZI.helpers;
+        if (helpers && typeof helpers.emit === 'function') {
+            helpers.emit(this.root, eventName, detail);
+        } else if (typeof CustomEvent === 'function') {
+            this.root.dispatchEvent(new CustomEvent(eventName, { bubbles: true, detail: detail }));
         }
     };
 
-    OziSelect.prototype.emitChange = function () { this.emit('ozi:change'); };
+    OziSelect.prototype.emitChange = function (source) { this.emit('ozi:change', source); };
 
     /* ─── API de leitura / escrita ─────────────────────────────────── */
 
@@ -832,21 +1027,21 @@
             this.selectedItems = values.map(function (v) { return self.findOptionByValue(v); }).filter(Boolean);
         }
         this.syncHiddenInputs(); this.updateUI();
-        this.renderOptions(this.$search ? (this.$search.val() || '') : '');
-        this.validate(false); this.emitChange();
+        this.renderOptions(this.search ? (this.search.value || '') : '');
+        this.validate(false); this.emitChange('api');
     };
 
     OziSelect.prototype.setDisabled = function (state) {
         this.isDisabledConfig = !!state;
-        if (this.isDisabledConfig) { this.$root.attr('data-ozi-select-disabled', 'disabled'); }
-        else                       { this.$root.removeAttr('data-ozi-select-disabled'); }
+        if (this.isDisabledConfig) { this.root.setAttribute('data-ozi-select-disabled', 'disabled'); }
+        else                       { this.root.removeAttribute('data-ozi-select-disabled'); }
         this.applyStateStyles(); this.syncHiddenInputs(); this.updateUI(); this.validate(false);
     };
 
     OziSelect.prototype.setRequired = function (state) {
         this.isRequiredConfig = !!state;
-        if (this.isRequiredConfig) { this.$root.attr('data-ozi-select-required', 'required'); }
-        else                       { this.$root.removeAttr('data-ozi-select-required'); }
+        if (this.isRequiredConfig) { this.root.setAttribute('data-ozi-select-required', 'required'); }
+        else                       { this.root.removeAttribute('data-ozi-select-required'); }
         this.validate(false);
     };
 
@@ -884,7 +1079,7 @@
         this.renderOptions(query || ''); this.syncHighlightAfterRender(false);
     };
 
-    OziSelect.prototype.setRemoteLoading = function (state) { this.$ui.toggleClass('is-loading', !!state); };
+    OziSelect.prototype.setRemoteLoading = function (state) { this.ui.classList.toggle('is-loading', !!state); };
 
     OziSelect.prototype.handleSearchInput = function (query) {
         var self = this; var text = String(query || '').trim();
@@ -912,9 +1107,10 @@
         this.remoteAbortController = typeof AbortController !== 'undefined' ? new AbortController() : null;
         this.setRemoteLoading(true);
 
-        var csrf   = $('meta[name="csrf-token"]').attr('content');
-        var method = this.zldMethod === 'GET' ? 'GET' : 'POST';
-        var headers = { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' };
+        var csrfMeta = document.querySelector('meta[name="csrf-token"]');
+        var csrf     = csrfMeta ? csrfMeta.getAttribute('content') : null;
+        var method   = this.zldMethod === 'GET' ? 'GET' : 'POST';
+        var headers  = { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' };
         if (csrf) headers['X-CSRF-TOKEN'] = csrf;
 
         var url = this.zldUrl;
@@ -942,7 +1138,7 @@
                     }
                     if (!response.ok) return null;
                     var options   = self.extractOptionsFromRemoteResponse(json);
-                    var liveQuery = self.$search ? (self.$search.val() || '') : query;
+                    var liveQuery = self.search ? (self.search.value || '') : query;
                     self.applyRemoteOptions(options, liveQuery);
                     return options;
                 });
@@ -959,20 +1155,22 @@
 
     OziSelect.prototype.destroy = function () {
         this.abortRemoteRequest();
-        $(document).off(this.ns);
-        if (this.$form && this.$form.length) this.$form.off(this.ns);
-        if (this.$ui)             { this.$ui.off(); this.$ui.remove(); }
-        if (this.$feedback)       this.$feedback.remove();
-        if (this.$hiddenContainer) this.$hiddenContainer.remove();
-        this.$root
-            .removeData('ozi-select-initialized')
-            .removeClass('ozi-select-root')
-            .empty();
+        if (this._onDocumentClick) document.removeEventListener('click', this._onDocumentClick);
+        if (this.form) {
+            if (this._onFormSubmit) this.form.removeEventListener('submit', this._onFormSubmit);
+            if (this._onFormReset)  this.form.removeEventListener('reset',  this._onFormReset);
+        }
+        if (this.ui)              this.ui.remove();
+        if (this.feedback)        this.feedback.remove();
+        if (this.hiddenContainer) this.hiddenContainer.remove();
+        delete this.root.__oziSelectInitialized;
+        this.root.classList.remove('ozi-select-root');
+        this.root.innerHTML = '';
         delete instances[this.key];
     };
 
     OziSelect.prototype.reload = function () {
-        var root = this.$root[0];
+        var root = this.root;
         this.destroy();
         instances[this.key] = new OziSelect(root);
         return instances[this.key];
@@ -983,31 +1181,32 @@
     var selectAPI = {
 
         init: function (scope) {
-            var $targets;
+            var targets;
 
             if (!scope) {
-                $targets = $('[data-ozi-select]');
+                targets = Array.prototype.slice.call(document.querySelectorAll('[data-ozi-select]'));
             } else {
-                var $scope = $(scope);
-                $targets = $scope.filter('[data-ozi-select]').add($scope.find('[data-ozi-select]'));
+                var root = (scope.nodeType === 1) ? scope : document.querySelector(scope);
+                if (!root) return this;
+                targets = root.matches && root.matches('[data-ozi-select]') ? [root] : [];
+                targets = targets.concat(Array.prototype.slice.call(root.querySelectorAll('[data-ozi-select]')));
             }
 
-            $targets.each(function () {
-                var $el = $(this);
-                var key = String($el.attr('data-ozi-select') || '').trim();
+            targets.forEach(function (el) {
+                var key = String(el.getAttribute('data-ozi-select') || '').trim();
                 if (!key) return;
 
                 var existing = instances[key];
                 if (existing) {
-                    var sameEl   = existing.$root && existing.$root[0] === this;
-                    var oldInDom = existing.$root && document.contains(existing.$root[0]);
-                    if (sameEl && $el.data('ozi-select-initialized')) return;
+                    var sameEl   = existing.root === el;
+                    var oldInDom = existing.root && document.contains(existing.root);
+                    if (sameEl && el.__oziSelectInitialized) return;
                     if (!sameEl && !oldInDom) { existing.destroy(); }
                     else if (!sameEl && oldInDom) { return; }
                 }
 
                 try {
-                    instances[key] = new OziSelect(this);
+                    instances[key] = new OziSelect(el);
                 } catch (e) {
                     console.warn('[OZI:select] erro init "' + key + '":', e.message);
                 }
@@ -1021,7 +1220,14 @@
             return this;
         },
 
-        get:     function (s) { if (!s) return null; if (typeof s === 'string' && !s.startsWith('#') && !s.startsWith('.')) return instances[s] || null; var $el = $(s).first(); if (!$el.length) return null; return instances[String($el.attr('data-ozi-select') || '').trim()] || null; },
+        get: function (s) {
+            if (!s) return null;
+            if (typeof s === 'string' && s.charAt(0) !== '#' && s.charAt(0) !== '.') return instances[s] || null;
+            var el = (s.nodeType === 1) ? s : document.querySelector(s);
+            if (!el) return null;
+            return instances[String(el.getAttribute('data-ozi-select') || '').trim()] || null;
+        },
+
         getAll:  function () { return Object.values(instances); },
         destroy: function (s) { var i = this.get(s); if (i) i.destroy(); },
         reload:  function (s) { var i = this.get(s); return i ? i.reload() : null; },
@@ -1053,9 +1259,8 @@
             mutations.forEach(function (mutation) {
                 Array.prototype.forEach.call(mutation.addedNodes || [], function (node) {
                     if (!node || node.nodeType !== 1) return;
-                    var $node = $(node);
-                    if ($node.is('[data-ozi-select]'))           { selectAPI.init($node); return; }
-                    if ($node.find('[data-ozi-select]').length)   { selectAPI.init($node); }
+                    if (node.matches && node.matches('[data-ozi-select]')) { selectAPI.init(node); return; }
+                    if (node.querySelectorAll && node.querySelectorAll('[data-ozi-select]').length) { selectAPI.init(node); }
                 });
             });
         });
@@ -1068,11 +1273,12 @@
         var validate = window.OZI && window.OZI.modules && window.OZI.modules.validate;
         if (!validate || typeof validate.registerAdapter !== 'function') return;
         validate.registerAdapter({
-            name:     'ozi-select',
-            match:    function ($el) { return $el.is('[data-ozi-select]'); },
-            isValid:  function ($el) { var inst = selectAPI.get($el[0]); return inst ? inst.validate(false) : true; },
-            getValue: function ($el) { var inst = selectAPI.get($el[0]); return inst ? inst.getValue() : null; },
-            setState: function ($el, state) { var inst = selectAPI.get($el[0]); if (!inst) return; if (state === 'invalid') inst.markInvalid(false); else inst.clearInvalid(); }
+            name:          'ozi-select',
+            nativeElement: true, // v2 — recebe Element puro, sem envelopar em jQuery
+            match:    function (el) { return el.hasAttribute('data-ozi-select'); },
+            isValid:  function (el) { var inst = selectAPI.get(el); return inst ? inst.validate(false) : true; },
+            getValue: function (el) { var inst = selectAPI.get(el); return inst ? inst.getValue() : null; },
+            setState: function (el, state) { var inst = selectAPI.get(el); if (!inst) return; if (state === 'invalid') inst.markInvalid(false); else inst.clearInvalid(); }
         });
     }
 
@@ -1102,6 +1308,10 @@
 
     window.OziSelect = selectAPI;
 
-    $(function () { _boot(); });
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', _boot);
+    } else {
+        _boot();
+    }
 
-})(jQuery);
+})();

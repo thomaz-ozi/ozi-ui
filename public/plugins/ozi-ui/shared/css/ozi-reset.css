@@ -1,12 +1,19 @@
 /**
  * shared/css/ozi-reset.css
- * Versão: 1.0.1
+ * Versão: 1.0.2
  *
  * Reset mínimo do OZI-UI.
  * Normaliza apenas os elementos usados pelos componentes OZI.
  * Não interfere com Bootstrap, Tailwind ou CSS existente.
  *
  * Changelog:
+ *   - v1.0.2: [REMOVE] Blocos BUTTONS, INPUTS e LISTS removidos — o reset
+ *     genérico '[class*="ozi-"]' capturava elementos do app dentro dos
+ *     componentes e conflitava com os temas (Bootstrap 5 no Central RH).
+ *     Decisão do arquiteto (2026-07-03): normalização visual é papel do
+ *     tema (tokens.css/overrides.css), não de reset global. Mantidos apenas
+ *     BOX SIZING e SVG (estruturais, sem efeito visual de tema).
+ *     Oficializa o hotfix aplicado em produção (Central RH).
  *   - v1.0.1: [FIX] Box-sizing corrigido — seletores atualizados de
  *     '.ozi-select-wrap', '.ozi-autocomplete-wrap', '.ozi-editor-wrap', '.ozi-audio__main'
  *     (v0.x, inexistentes) para '[class*="ozi-"] *' (genérico, cobre todos os componentes).
@@ -20,39 +27,6 @@
 [class*="ozi-"] *::before,
 [class*="ozi-"] *::after {
     box-sizing: border-box;
-}
-
-/* ─── BUTTONS ───────────────────────────────────────── */
-
-[class*="ozi-"] button,
-[class*="ozi-"] [role="button"] {
-    font-family: inherit;
-    font-size:   inherit;
-    line-height: inherit;
-    cursor:      pointer;
-    border:      none;
-    background:  transparent;
-    padding:     0;
-    margin:      0;
-}
-
-/* ─── INPUTS ────────────────────────────────────────── */
-
-[class*="ozi-"] input,
-[class*="ozi-"] textarea,
-[class*="ozi-"] select {
-    font-family: inherit;
-    font-size:   inherit;
-    line-height: inherit;
-}
-
-/* ─── LISTS ─────────────────────────────────────────── */
-
-[class*="ozi-"] ul,
-[class*="ozi-"] ol {
-    list-style: none;
-    margin:     0;
-    padding:    0;
 }
 
 /* ─── SVG ───────────────────────────────────────────── */

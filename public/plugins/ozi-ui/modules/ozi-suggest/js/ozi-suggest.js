@@ -3,8 +3,8 @@
  * ------------------------------------------
  * ozi-suggest
  * ------------------------------------------
- * Ver: 1.0.1
- * 2026-04-27
+ * Ver: 2.0.0
+ * 2026-07-04
  *
  * * Responsabilidade:
  *   - Prover logica de busca local e remota compartilhada
@@ -18,19 +18,22 @@
  *   - Nao conhece DOM de componentes especificos
  *   - Nao acessa OZI.components.*
  *
- * Dependencias: ozi.js (OZI.helpers para normalize)
+ * Dependencias: ozi.js (OZI.helpers para normalize) — zero jQuery
+ *   (contrato de camadas v2 §2). Modulo interno consumido por ozi-select e
+ *   ozi-autocomplete (ja migrados).
  * Expoe: OZI.modules.suggest, window.OziSuggest (compat)
  *
  * Changelog:
- *   - Corrigido: guard singleton adicionado
- *   - Corrigido: registro no namespace dentro do $(function) — garante OZI bootado
- *   - Corrigido: Object.assign substituido por merge ES5 em normalizeOptions
- *   - Corrigido: get isLoading() ES6 substituido por isLoading() function ES5
- *   - Adicionado: hook OZI.hooks.afterRender registrado como 'module:suggest'
- *   - Adicionado: window.OziSuggest alias para consistencia com outros modulos
+ *   - v2.0.0: [V2-F2] Zero jQuery. Os 3 usos residuais foram trocados por API
+ *       nativa: loadFromScriptTag usa querySelector/textContent; o CSRF token usa
+ *       querySelector('meta[...]').getAttribute; o boot $(fn) virou
+ *       readyState/DOMContentLoaded. O nucleo (fetch/AbortController/FormData/
+ *       filtro/normalize) ja era vanilla.
+ *   - v1.0.1: guard singleton; registro no $(function); merge ES5; isLoading()
+ *       ES5; hook module:suggest; window.OziSuggest alias.
  */
 
-(function ($, window, document) {
+(function (window, document) {
     'use strict';
 
     // ---------------------------------------------
@@ -105,11 +108,11 @@
         if (!key || !attrName) return [];
 
         var selector = 'script[type="application/json"][' + attrName + '="' + key + '"]';
-        var $script  = $(selector);
-        if (!$script.length) return [];
+        var script   = document.querySelector(selector);
+        if (!script) return [];
 
         try {
-            var raw = $script.text().trim();
+            var raw = String(script.textContent || '').trim();
             if (!raw) return [];
             var parsed = JSON.parse(raw);
             // aceita array direto ou { options: [...] }
@@ -330,7 +333,8 @@
                 ? new AbortController()
                 : null;
 
-            var token   = $('meta[name="csrf-token"]').attr('content');
+            var _meta   = document.querySelector('meta[name="csrf-token"]');
+            var token   = _meta ? _meta.getAttribute('content') : null;
             var headers = { 'Accept': 'application/json' };
             if (token) headers['X-CSRF-TOKEN'] = token;
 
@@ -467,7 +471,7 @@
     // alias objeto — imediato (sem depender do OZI)
     window.OziSuggest = suggest;
 
-    $(function () {
+    function _boot() {
         // namespace OZI
         if (window.OZI && window.OZI.modules) {
             window.OZI.modules.suggest = suggest;
@@ -480,7 +484,13 @@
             });
         }
 
-        _log('ozi-suggest v1.0.1 pronto.');
-    });
+        _log('ozi-suggest v2.0.0 pronto.');
+    }
 
-})(jQuery, window, document);
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', _boot);
+    } else {
+        _boot();
+    }
+
+})(window, document);

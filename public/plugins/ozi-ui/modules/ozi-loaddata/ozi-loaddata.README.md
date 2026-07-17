@@ -1,9 +1,11 @@
 # ozi-loaddata.js
 
-**Versão:** 1.0.0  
+**Versão:** 5.0.0 (v2 F2 #3 — migrado para JS puro, 2026-07-03)
 **Camada:** `modules/ozi-loaddata/`  
-**Dependências:** `ozi-core.js`, `ozi-helpers.js`, `ozi-validate.js` (opcional), `ozi-actions.js` (opcional)  
+**Dependências:** `ozi-core.js`, `ozi-helpers.js`, `ozi-validate.js` (opcional), `ozi-actions.js` (opcional) — zero jQuery
 **Expõe:** `OZI.modules.loadData`, `window.oziLoadData`
+
+**Nota v2:** motor 100% JS puro (contrato `dev-hard/docs/ozi-ui-v2-contratos.md`). AJAX já era via `fetch`; o que mudou foi DOM (querySelector/classList/insertAdjacentHTML) e delegação de eventos (addEventListener + closest). API pública e todos os aliases de compat v0.x inalterados.
 
 ---
 

@@ -1,0 +1,66 @@
+/**
+ * themes/_template/overrides.css
+ * Template de ajustes de componentes para um tema custom do OZI-UI.
+ *
+ * Objetivo: fazer os componentes OZI se parecerem "nativos" do seu design
+ * system. Use SEMPRE tokens --ozi-* (definidos em tokens.css) — nunca cores
+ * ou medidas hardcoded, para o dark.css funcionar automaticamente.
+ *
+ * Carregue APÓS: (o CSS do seu framework, se houver) + tokens.css +
+ * themes/default/overrides.css (base agnóstica que você está sobrescrevendo).
+ *
+ * Referência completa: themes/bootstrap5/overrides.css e
+ * themes/tailwind/overrides.css. As classes-alvo abaixo são as reais dos
+ * componentes v2 — preencha só as que quiser customizar.
+ */
+
+/* ─── FORM CONTROL — ozi-select / ozi-autocomplete ──────── */
+.ozi-select-control,
+.ozi-autocomplete-input {
+    /* padding: ; font-size: var(--ozi-font-size-base);
+       color: var(--ozi-color-gray-900);
+       background-color: var(--ozi-select-bg);
+       border: var(--ozi-border-width) solid var(--ozi-border-color);
+       border-radius: var(--ozi-radius-md); */
+}
+.ozi-select-control:focus,
+.ozi-autocomplete-input:focus {
+    /* border-color: var(--ozi-border-color-focus); outline: 0;
+       box-shadow: /* seu anel de foco */; */
+}
+
+/* ─── DROPDOWN — ozi-select / ozi-autocomplete ──────────── */
+.ozi-select-dropdown,
+.ozi-autocomplete-dropdown {
+    /* background: var(--ozi-select-bg);
+       border: var(--ozi-border-width) solid var(--ozi-border-color);
+       border-radius: var(--ozi-radius-md);
+       box-shadow: var(--ozi-shadow-lg); z-index: var(--ozi-z-dropdown); */
+}
+.ozi-select-option        { /* padding: ; */ }
+.ozi-select-option:hover  { /* background: var(--ozi-color-gray-100); */ }
+.ozi-select-option.is-selected { /* background: var(--ozi-color-primary-light); color: var(--ozi-color-primary); */ }
+.ozi-select-search        { /* border-bottom: var(--ozi-border-width) solid var(--ozi-border-color); */ }
+.ozi-select-tag           { /* background: var(--ozi-color-primary-light); color: var(--ozi-color-primary); border-radius: var(--ozi-radius-full); */ }
+
+/* ─── EDITOR — ozi-editor ───────────────────────────────── */
+.ozi-editor-content,
+.ozi-editor-source        { /* border: var(--ozi-border-width) solid var(--ozi-border-color); background: var(--ozi-editor-content-bg); */ }
+.ozi-editor-toolbar       { /* background: var(--ozi-editor-toolbar-bg); border: var(--ozi-border-width) solid var(--ozi-border-color); */ }
+.ozi-editor-btn           { /* color: var(--ozi-color-gray-700); */ }
+.ozi-editor-btn--active   { /* background: var(--ozi-color-primary-light); color: var(--ozi-color-primary); */ }
+
+/* ─── AUDIO — ozi-audio (o componente tem CSS próprio) ──── */
+.ozi-audio__main          { /* background: var(--ozi-audio-bg); border: var(--ozi-border-width) solid var(--ozi-border-color); border-radius: var(--ozi-radius-lg); */ }
+
+/* ─── VALIDAÇÃO ─────────────────────────────────────────── */
+/* Select/autocomplete aplicam `.ozi-invalid` no controle — já coberto por
+   default/overrides.css (border-color: var(--ozi-invalid-border)).
+   O ozi-editor aplica classMap.invalid no `.ozi-editor-wrap`; se o seu
+   classMap.invalid não for `ozi-invalid`, propague a cor de erro: */
+/*
+.ozi-editor-wrap.SUA-CLASSE-INVALID .ozi-editor-content,
+.ozi-editor-wrap.SUA-CLASSE-INVALID .ozi-editor-toolbar {
+    border-color: var(--ozi-color-danger);
+}
+*/

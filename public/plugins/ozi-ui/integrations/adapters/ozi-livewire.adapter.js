@@ -3,31 +3,48 @@
  * ------------------------------------------
  * ozi-livewire.adapter
  * ------------------------------------------
- * Ver: 1.0.0
- * 2026-05-27
+ * Ver: 2.0.0
+ * 2026-07-05
  *
  *
  * Responsabilidade:
  *   - Adaptar plugins OZI ao Livewire 3 e 4 (auto-detect)
- *   - Binding bidirecional: ozi:change → component.set()
+ *   - Propagar ozi:change (CustomEvent, contrato v2) → Livewire
  *   - Receber opções atualizadas via Livewire.on() / dispatch
  *   - Sincronizar valor inicial via data-ozi-livewire-value
  *   - Eventos DOM imperativos: ozi:set-value, ozi:set-options
  *
+ * Dois modos de propagação (o adapter escolhe automaticamente):
+ *   A) wire:model NATIVO (preferido) — data-ozi-livewire-native aponta o input
+ *      wire:model; no ozi:change o adapter faz dispatch de `input`+`change`
+ *      nativos nele → o Livewire trata pela própria máquina de wire:model
+ *      (respeita .live/.debounce/.lazy). É o caminho robusto para timing.
+ *   B) component.set() (compat) — data-ozi-livewire-model + component.set(prop).
+ *
  * Atributos HTML reconhecidos:
- *   data-ozi-livewire-model         → propriedade Livewire (valor)
- *   data-ozi-livewire-text-model    → propriedade Livewire (texto, opcional)
+ *   data-ozi-livewire-model         → propriedade Livewire (modo B)
+ *   data-ozi-livewire-text-model    → propriedade Livewire (texto, opcional; modo B)
+ *   data-ozi-livewire-native        → modo A: ''/'true' = o próprio el é o input
+ *                                     wire:model; ou um seletor CSS p/ o input
  *   data-ozi-livewire-options-event → evento que atualiza opções
  *   data-ozi-livewire-value         → valor inicial (sobrescreve opções)
  *
  * Dependências:
  *   - ozi-integrations.js (OZI.integrations.registerAdapter)
  *   - Livewire 3 ou 4 (detectado automaticamente)
+ *   - Re-init pós-morph: papel do OZI.hooks (fontes livewire3/livewire4) — o
+ *     adapter NÃO instala hooks de render próprios.
  *
- * Baseado em: ozi-livewire.adapter.js real (código analisado)
- * Resolve:
- *   - ozi-autocomplete.livewire.js obsoleto → absorvido aqui
- *   - Rescan via eventos DOM próprios → OZI.hooks.afterRender
+ * Changelog:
+ *   - v2.0.0: [V2-F4] Contrato v2. Guard por `e.detail.source === 'api'`:
+ *     mudanças programáticas (setValue, tipicamente originadas do próprio
+ *     Livewire) não repropagam — elimina o loop wire:model→setValue→ozi:change→
+ *     set de forma alinhada ao contrato (§1.3), além do guard secundário por
+ *     valor. Novo modo A (dispatch nativo em wire:model) via
+ *     data-ozi-livewire-native; component.set() vira fallback. Zero jQuery
+ *     (sempre foi). Header alinhado ao boot nativo do core.
+ *   - v1.0.0: binding ozi:change → component.set(); options via Livewire.on();
+ *     eventos imperativos ozi:set-value/ozi:set-options; valor inicial.
  */
 
 (function (window, document) {
@@ -48,6 +65,7 @@
     var ATTR = {
         model:        'data-ozi-livewire-model',
         textModel:    'data-ozi-livewire-text-model',
+        native:       'data-ozi-livewire-native',
         optionsEvent: 'data-ozi-livewire-options-event',
         value:        'data-ozi-livewire-value',
         bound:        'data-ozi-livewire-bound',
@@ -104,8 +122,53 @@
 
 
     // ─────────────────────────────────────────────
+    // [3b] PROPAGAÇÃO v2 — modo A (wire:model nativo) | modo B (component.set)
+    // ─────────────────────────────────────────────
+
+    // Resolve o alvo de dispatch nativo:
+    //   ''/'true'  → o próprio elemento é o input wire:model
+    //   '<seletor>'→ aponta para o input wire:model (ex: '#uf-hidden')
+    function _nativeTarget(el) {
+        var sel = el.getAttribute(ATTR.native);
+        if (sel === null) return null;
+        if (sel === '' || sel === 'true') return el;
+        try { return document.querySelector(sel); } catch (e) { return null; }
+    }
+
+    // Modo A: seta o valor e dispara input+change nativos (bubbling) — o Livewire
+    // trata pela própria máquina de wire:model (respeita .live/.debounce/.lazy).
+    function _dispatchNative(target, value) {
+        var v = (value === null || value === undefined) ? ''
+              : (typeof value === 'object' ? JSON.stringify(value) : value);
+        if ('value' in target) target.value = v;
+        target.dispatchEvent(new Event('input',  { bubbles: true }));
+        target.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    // Propaga o valor do componente OZI para o Livewire.
+    // Preferência v2: modo A (wire:model nativo). Fallback: modo B (component.set).
+    function _propagate(el, modelProp, textProp, value, detail) {
+        var target = _nativeTarget(el);
+        if (target) { _dispatchNative(target, value); return; }
+
+        if (!modelProp) return;
+        var comp = _getComponent(el);
+        if (!comp) return;
+        try {
+            comp.set(modelProp, value);
+            // text-model (autocomplete — label além do value)
+            if (textProp && detail && detail.label !== undefined) {
+                comp.set(textProp, detail.label || '');
+            }
+        } catch (err) {
+            console.warn('[OZI:livewire] component.set falhou:', err.message);
+        }
+    }
+
+
+    // ─────────────────────────────────────────────
     // [4] BIND DE UM ELEMENTO
-    // Amarra ozi:change → component.set()
+    // Amarra ozi:change → Livewire (componente OZI é a fonte da verdade)
     // ─────────────────────────────────────────────
 
     function _bindElement(el, plugin) {
@@ -116,9 +179,11 @@
         var textProp   = el.getAttribute(ATTR.textModel);
         var optEvent   = el.getAttribute(ATTR.optionsEvent);
         var initValue  = el.getAttribute(ATTR.value);
+        var nativeAttr = el.getAttribute(ATTR.native);   // v2 — modo wire:model nativo
 
-        // suporta optionsEvent sem model (ex: ozi-search recebe novos itens sem sync de valor)
-        if (!modelProp && !optEvent) return;
+        // suporta: optionsEvent sem model (ex: ozi-search recebe itens sem sync de valor);
+        // e modo nativo (wire:model) sem model.
+        if (!modelProp && !optEvent && nativeAttr === null) return;
 
         // — valor inicial — (só quando há model)
         if (modelProp && !_isBlank(initValue)) {
@@ -128,32 +193,25 @@
             }, 0);
         }
 
-        // — ozi:change → Livewire component.set() — (só quando há model)
-        if (modelProp) {
+        // — ozi:change → Livewire — (modo A nativo e/ou modo B component.set)
+        if (modelProp || nativeAttr !== null) {
             el.addEventListener(plugin.changeEvent || 'ozi:change', function (e) {
+                // v2 (contrato §1.3): source:'api' = mudança programática (setValue,
+                // tipicamente originada do próprio Livewire) — não repropaga, senão
+                // vira loop wire:model → setValue → ozi:change → set.
+                if (e.detail && e.detail.source === 'api') return;
+
                 var inst = plugin.getInstance(el);
                 if (!inst) return;
 
                 var value    = plugin.getValue(inst);
                 var valueStr = _stableStr(value);
 
-                // evita loop: só propaga se valor realmente mudou
+                // guard secundário: só propaga se o valor realmente mudou
                 if (el.getAttribute(ATTR.lastValue) === valueStr) return;
                 el.setAttribute(ATTR.lastValue, valueStr);
 
-                var comp = _getComponent(el);
-                if (!comp) return;
-
-                try {
-                    comp.set(modelProp, value);
-
-                    // text-model (autocomplete — label além do value)
-                    if (textProp && e.detail && e.detail.label !== undefined) {
-                        comp.set(textProp, e.detail.label || '');
-                    }
-                } catch (err) {
-                    console.warn('[OZI:livewire] component.set falhou:', err.message);
-                }
+                _propagate(el, modelProp, textProp, value, e.detail);
             });
         }
 
@@ -184,7 +242,8 @@
         var elements = [];
         if (scope.querySelectorAll) {
             var sel = plugin.selector + '[' + ATTR.model + '],' +
-                      plugin.selector + '[' + ATTR.optionsEvent + ']';
+                      plugin.selector + '[' + ATTR.optionsEvent + '],' +
+                      plugin.selector + '[' + ATTR.native + ']';
             elements = scope.querySelectorAll(sel);
         }
 

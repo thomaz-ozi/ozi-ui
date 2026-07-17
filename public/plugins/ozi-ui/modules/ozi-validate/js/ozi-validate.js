@@ -2,8 +2,8 @@
  * ------------------------------------------
  * ozi-validate
  * ------------------------------------------
- * Ver: 1.0.3
- * 2026-06-26
+ * Ver: 2.1.0
+ * 2026-07-03
  *
  * Responsabilidade:
  *   - Motor generico de validacao de campos por container
@@ -16,11 +16,29 @@
  *   - Nao conhece componentes especificos — adapters registram o contrato
  *   - Nao conhece zldCatchGroupId / zldCatchItemName — responsabilidade do collector
  *
- * Dependencias: ozi.js (OZI.conf, OZI.helpers, OZI.lang)
+ * Dependencias: ozi.js (OZI.conf, OZI.helpers, OZI.lang) — zero jQuery (contrato de camadas v2).
  * Consumido por: ozi-loaddata-collector.js, qualquer plugin OZI
  * Expoe: OZI.modules.validate, window.oziValidateContainer (compat)
  *
  * Changelog:
+ *   - v2.1.0: [V2-F2] registerAdapter() aceita flag `nativeElement: true` —
+ *     adapters que ja migraram (ex: ozi-select) recebem Element puro em vez
+ *     de serem envelopados em jQuery por _wrapLegacy(). Adapters sem a flag
+ *     (ainda-v1: autocomplete, editor, audio) continuam recebendo jQuery.
+ *   - v2.0.0: [V2-F2] Migracao para JS puro (docs/ozi-ui-v2-contratos.md, dev-hard):
+ *       - Motor interno (coleta, estado visual, validacao interativa) 100% nativo:
+ *         querySelectorAll/closest/classList/addEventListener no lugar de jQuery.
+ *       - Validacao interativa usa delegacao nativa em document (input/change/focusout —
+ *         focusout no lugar de blur porque blur nao faz bubble).
+ *       - Adapters registrados por componentes ainda v1 (ozi-select, ozi-autocomplete,
+ *         ozi-editor, ozi-audio — pendentes na F2) continuam recebendo o elemento
+ *         envelopado em jQuery: ponte de transicao via _wrapLegacy() (guard-ok),
+ *         removida quando cada um desses componentes migrar. O adapter nativo passa
+ *         a receber sempre Element puro.
+ *       - `container()`/`field()` aceitam Element nativo, jQuery ou seletor via
+ *         `OZI.helpers.toElement/toElements` (contrato de helpers de transicao).
+ *       - `invalidFields[].el` substitui `invalidFields[].$el` (nao ha consumidor
+ *         externo do campo — grep confirmou uso só de `.name`).
  *   - v1.0.3: [FIX-P3] Coleta passa a preservar hidden gerado por componentes OZI.
  *     Antes, _collectFields/$elements descartavam TODO [type="hidden"], jogando fora
  *     o valor de componentes que submetem via hidden (ex: ozi-select em form ZLD).
@@ -41,7 +59,7 @@
  *   - v1.0.1: Removido acoplamento a Select2/CKEditor (adapter pattern resolve)
  */
 
-(function ($, window, document) {
+(function (window, document) {
     'use strict';
 
     // ---------------------------------------------
@@ -76,19 +94,54 @@
         return (lang && typeof lang.t === 'function') ? lang.t(key) : key;
     }
 
-    function _parseBool($el, attr, fallback) {
+    function _parseBool(el, attr, fallback) {
         var nativeBool = ['required', 'disabled', 'checked', 'multiple', 'readonly'];
         if (nativeBool.indexOf(attr) !== -1) {
-            return $el.prop(attr) === true;
+            return el[attr] === true;
         }
 
-        var val = $el.attr(attr);
-        if (val === undefined || val === null) return fallback || false;
+        var val = el.getAttribute(attr);
+        if (val === null) return fallback || false;
         return val === 'true' || val === '1' || val === 'required' || val === attr;
     }
 
-    function _isDisabled($el) {
-        return $el.prop('disabled') === true;
+    function _isDisabled(el) {
+        return el.disabled === true;
+    }
+
+    function _classListOp(el, classString, method) {
+        if (!classString) return;
+        classString.trim().split(/\s+/).forEach(function (c) {
+            if (c) el.classList[method](c);
+        });
+    }
+
+    function _findFeedbackSibling(el, classString) {
+        if (!classString || !el.parentNode) return null;
+        var selector = '.' + classString.trim().split(/\s+/).join('.');
+        var siblings = el.parentNode.children;
+        for (var i = 0; i < siblings.length; i++) {
+            if (siblings[i] !== el && siblings[i].matches(selector)) return siblings[i];
+        }
+        return null;
+    }
+
+    // ponte de transicao — adapters registrados por componentes ainda v1
+    // (ozi-autocomplete, ozi-editor, ozi-audio) esperam objeto jQuery
+    // ($el.is/$el[0]); removida quando cada um migrar (F2). Adapters v2
+    // (ex: ozi-select) marcam `nativeElement: true` no registerAdapter()
+    // para receber Element puro, sem envelopar.
+    function _wrapLegacy(el) {
+        return (typeof window.jQuery !== 'undefined') ? window.jQuery(el) : el; // guard-ok
+    }
+
+    function _adapterArg(adapter, el) {
+        return adapter.nativeElement ? el : _wrapLegacy(el);
+    }
+
+    function _call(adapter, method, el, extra) {
+        var arg = (adapter === _nativeAdapter) ? el : _adapterArg(adapter, el);
+        return extra === undefined ? adapter[method](arg) : adapter[method](arg, extra);
     }
 
 
@@ -97,30 +150,31 @@
     // Classes via classMap — sem Bootstrap hardcoded.
     // ---------------------------------------------
 
-    function _applyState($el, state) {
+    function _applyState(el, state) {
         var clsInvalid  = _classMap('invalid',  'ozi-invalid');
         var clsValid    = _classMap('valid',     'ozi-valid');
         var clsFeedback = _classMap('feedback',  'ozi-feedback');
 
-        $el.removeClass(clsInvalid + ' ' + clsValid);
+        _classListOp(el, clsInvalid, 'remove');
+        _classListOp(el, clsValid,   'remove');
 
         if (state === 'invalid') {
-            $el.addClass(clsInvalid);
-            var msg = $el.attr('data-ozi-required-message')
-                || $el.attr('data-zld-required-message')
+            _classListOp(el, clsInvalid, 'add');
+            var msg = el.getAttribute('data-ozi-required-message')
+                || el.getAttribute('data-zld-required-message')
                 || _t('common.required');
-            var $feedback = $el.siblings('.' + clsFeedback);
-            if ($feedback.length) $feedback.text(msg).show();
+            var feedback = _findFeedbackSibling(el, clsFeedback);
+            if (feedback) { feedback.textContent = msg; feedback.style.display = ''; }
 
         } else if (state === 'valid') {
-            $el.addClass(clsValid);
-            var $fb = $el.siblings('.' + clsFeedback);
-            if ($fb.length) $fb.hide();
+            _classListOp(el, clsValid, 'add');
+            var fb = _findFeedbackSibling(el, clsFeedback);
+            if (fb) fb.style.display = 'none';
 
         } else {
             // reset
-            var $fbReset = $el.siblings('.' + clsFeedback);
-            if ($fbReset.length) $fbReset.hide();
+            var fbReset = _findFeedbackSibling(el, clsFeedback);
+            if (fbReset) fbReset.style.display = 'none';
         }
     }
 
@@ -132,29 +186,31 @@
     var _nativeAdapter = {
         name: 'native',
 
-        match: function ($el) {
-            return $el.is('input, select, textarea');
+        match: function (el) {
+            var tag = el.tagName;
+            return tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA';
         },
 
-        isValid: function ($el) {
-            var type     = ($el.attr('type') || 'text').toLowerCase();
-            var required = _parseBool($el, 'required', false)
-                || _parseBool($el, 'data-ozi-required', false);
+        isValid: function (el) {
+            var type     = (el.getAttribute('type') || 'text').toLowerCase();
+            var required = _parseBool(el, 'required', false)
+                || _parseBool(el, 'data-ozi-required', false);
 
-            if (_isDisabled($el)) return true;
+            if (_isDisabled(el)) return true;
             if (!required) return true;
 
-            var val = $el.val();
+            var val = el.value;
 
-            if (type === 'checkbox') return $el.prop('checked');
+            if (type === 'checkbox') return el.checked;
 
             if (type === 'radio') {
-                var name = $el.attr('name');
-                return name ? $('[name="' + name + '"]:checked').length > 0 : $el.prop('checked');
+                var name = el.name;
+                if (!name) return el.checked;
+                return document.querySelector('[name="' + name + '"]:checked') !== null;
             }
 
             if (type === 'file') {
-                return $el[0] && $el[0].files && $el[0].files.length > 0;
+                return !!(el.files && el.files.length > 0);
             }
 
             if (type === 'email') {
@@ -162,49 +218,51 @@
                 return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim());
             }
 
-            var minLen = parseInt($el.attr('minlength') || '0', 10);
+            var minLen = parseInt(el.getAttribute('minlength') || '0', 10);
             if (minLen > 0 && (!val || val.length < minLen)) return false;
 
-            var maxLen = parseInt($el.attr('maxlength') || '0', 10);
+            var maxLen = parseInt(el.getAttribute('maxlength') || '0', 10);
             if (maxLen > 0 && val && val.length > maxLen) return false;
 
-            var min = $el.attr('min');
-            var max = $el.attr('max');
-            if (min !== undefined && val !== '' && parseFloat(val) < parseFloat(min)) return false;
-            if (max !== undefined && val !== '' && parseFloat(val) > parseFloat(max)) return false;
+            var min = el.getAttribute('min');
+            var max = el.getAttribute('max');
+            if (min !== null && val !== '' && parseFloat(val) < parseFloat(min)) return false;
+            if (max !== null && val !== '' && parseFloat(val) > parseFloat(max)) return false;
 
             return val !== null && val !== undefined && String(val).trim() !== '';
         },
 
-        getValue: function ($el) {
-            var type = ($el.attr('type') || 'text').toLowerCase();
+        getValue: function (el) {
+            var type = (el.getAttribute('type') || 'text').toLowerCase();
 
             if (type === 'checkbox') {
-                return $el.prop('checked') ? ($el.val() || '1') : null;
+                return el.checked ? (el.value || '1') : null;
             }
 
             if (type === 'radio') {
-                var checked = $('[name="' + $el.attr('name') + '"]:checked');
-                return checked.length ? checked.val() : null;
+                var checked = el.name
+                    ? document.querySelector('[name="' + el.name + '"]:checked')
+                    : (el.checked ? el : null);
+                return checked ? checked.value : null;
             }
 
             if (type === 'file') {
-                return ($el[0] && $el[0].files) ? $el[0].files : null;
+                return (el.files && el.files.length) ? el.files : null;
             }
 
-            if ($el.is('select[multiple]')) {
+            if (el.tagName === 'SELECT' && el.multiple) {
                 var selected = [];
-                $el.find('option:selected').each(function () {
-                    selected.push($(this).val());
-                });
+                for (var i = 0; i < el.options.length; i++) {
+                    if (el.options[i].selected) selected.push(el.options[i].value);
+                }
                 return selected.length ? selected : null;
             }
 
-            return $el.val();
+            return el.value;
         },
 
-        setState: function ($el, state) {
-            _applyState($el, state);
+        setState: function (el, state) {
+            _applyState(el, state);
         }
     };
 
@@ -213,10 +271,10 @@
     // [6] SELECAO DE ADAPTER PARA ELEMENTO
     // ---------------------------------------------
 
-    function _getAdapter($el) {
+    function _getAdapter(el) {
         for (var i = 0; i < _adapters.length; i++) {
             try {
-                if (_adapters[i].match($el)) return _adapters[i];
+                if (_adapters[i].match(_adapterArg(_adapters[i], el))) return _adapters[i];
             } catch (e) {}
         }
         return _nativeAdapter;
@@ -232,15 +290,20 @@
     // real da selecao — esse precisa ser coletado. O componente marca seu
     // container com [data-ozi-component-hidden].
     function _isInfraHidden(el) {
-        return el.type === 'hidden'
-            && $(el).closest('[data-ozi-component-hidden]').length === 0;
+        return el.type === 'hidden' && !el.closest('[data-ozi-component-hidden]');
     }
 
-    function _collectFields($scope) {
-        return $scope
-            .find('input, select, textarea, [data-ozi-required]')
-            .not('.select2-search__field')
-            .not(function () { return _isInfraHidden(this); });
+    function _isCollectible(el) {
+        var tag = el.tagName;
+        if (tag !== 'INPUT' && tag !== 'SELECT' && tag !== 'TEXTAREA' && !el.hasAttribute('data-ozi-required')) return false;
+        if (el.classList.contains('select2-search__field')) return false;
+        if (_isInfraHidden(el)) return false;
+        return true;
+    }
+
+    function _collectFields(scope) {
+        var all = scope.querySelectorAll('input, select, textarea, [data-ozi-required]');
+        return Array.prototype.filter.call(all, _isCollectible);
     }
 
 
@@ -251,33 +314,33 @@
     function _container(config) {
         config = config || {};
 
-        var silent        = config.silent      === true;
-        var focusOnError  = config.focusOnError === true;
+        var silent       = config.silent      === true;
+        var focusOnError = config.focusOnError === true;
 
         var formData      = config.formData || new FormData();
         var data          = {};
         var invalidFields = [];
-        var $firstInvalid = null;
+        var firstInvalid  = null;
         var _radioSeen    = {};
         var _selectSeen   = {};
 
-        var $fields;
-        if (config.$elements && config.$elements.length) {
-            $fields = config.$elements.filter('input, select, textarea, [data-ozi-required]')
-                .not('.select2-search__field')
-                .not(function () { return _isInfraHidden(this); });
+        var helpers = window.OZI && window.OZI.helpers;
+
+        var fields;
+        if (config.$elements) {
+            var rawEls = helpers.toElements(config.$elements);
+            fields = rawEls.filter(_isCollectible);
         } else {
-            var $scope = config.$container ? $(config.$container) : $(document);
-            $fields = _collectFields($scope);
+            var scopeEl = config.$container ? helpers.toElement(config.$container) : document;
+            fields = _collectFields(scopeEl);
         }
 
-        $fields.each(function () {
-            var $el      = $(this);
-            var adapter  = _getAdapter($el);
-            var type     = ($el.attr('type') || '').toLowerCase();
-            var name     = $el.attr('name') || $el.attr('id') || '';
-            var required = _parseBool($el, 'required', false)
-                || _parseBool($el, 'data-ozi-required', false);
+        fields.forEach(function (el) {
+            var adapter  = _getAdapter(el);
+            var type     = (el.getAttribute('type') || '').toLowerCase();
+            var name     = el.getAttribute('name') || el.id || '';
+            var required = _parseBool(el, 'required', false)
+                || _parseBool(el, 'data-ozi-required', false);
 
             if (!name) return;
 
@@ -286,13 +349,13 @@
                 _radioSeen[name] = true;
             }
 
-            if ($el.is('select[multiple]')) {
+            if (el.tagName === 'SELECT' && el.multiple) {
                 if (_selectSeen[name]) return;
                 _selectSeen[name] = true;
             }
 
-            var valid = adapter.isValid($el);
-            var value = adapter.getValue($el);
+            var valid = _call(adapter, 'isValid', el);
+            var value = _call(adapter, 'getValue', el);
 
             if (value instanceof FileList) {
                 Array.prototype.forEach.call(value, function (f) {
@@ -312,19 +375,19 @@
             }
 
             if (!silent && required) {
-                adapter.setState($el, valid ? 'valid' : 'invalid');
+                _call(adapter, 'setState', el, valid ? 'valid' : 'invalid');
             } else if (!silent && !required) {
-                adapter.setState($el, 'reset');
+                _call(adapter, 'setState', el, 'reset');
             }
 
             if (required && !valid) {
-                invalidFields.push({ $el: $el, name: name, adapter: adapter.name });
-                if (!$firstInvalid) $firstInvalid = $el;
+                invalidFields.push({ el: el, name: name, adapter: adapter.name });
+                if (!firstInvalid) firstInvalid = el;
             }
         });
 
-        if (focusOnError && $firstInvalid) {
-            try { $firstInvalid.focus(); } catch (e) {}
+        if (focusOnError && firstInvalid) {
+            try { firstInvalid.focus(); } catch (e) {}
         }
 
         return {
@@ -343,26 +406,29 @@
     // ---------------------------------------------
 
     var _interactiveBound = false;
+    var _interactiveSelector = '[data-ozi-validate] input, [data-ozi-validate] select, [data-ozi-validate] textarea';
+
+    function _onInteractiveEvent(e) {
+        var el = e.target.closest(_interactiveSelector);
+        if (!el) return;
+
+        var adapter  = _getAdapter(el);
+        var required = _parseBool(el, 'required', false)
+            || _parseBool(el, 'data-ozi-required', false);
+        if (!required) return;
+
+        var valid = _call(adapter, 'isValid', el);
+        _call(adapter, 'setState', el, valid ? 'valid' : 'invalid');
+    }
 
     function _initInteractive() {
         if (_interactiveBound) return;
         _interactiveBound = true;
 
-        var events = 'input.oziValidate change.oziValidate blur.oziValidate';
-
-        $(document).on(
-            events,
-            '[data-ozi-validate] input, [data-ozi-validate] select, [data-ozi-validate] textarea',
-            function () {
-                var $el     = $(this);
-                var adapter = _getAdapter($el);
-                var required = _parseBool($el, 'required', false)
-                    || _parseBool($el, 'data-ozi-required', false);
-                if (!required) return;
-                var valid = adapter.isValid($el);
-                adapter.setState($el, valid ? 'valid' : 'invalid');
-            }
-        );
+        // 'focusout' no lugar de 'blur' — blur nao faz bubble, delegacao precisa de bubble
+        document.addEventListener('input',    _onInteractiveEvent);
+        document.addEventListener('change',   _onInteractiveEvent);
+        document.addEventListener('focusout', _onInteractiveEvent);
     }
 
 
@@ -388,25 +454,29 @@
 
         container: _container,
 
-        applyState: function ($el, state) {
-            var adapter = _getAdapter($el);
-            adapter.setState($el, state);
+        applyState: function (elArg, state) {
+            var helpers = window.OZI && window.OZI.helpers;
+            var el = helpers.toElement(elArg);
+            if (!el) return;
+            var adapter = _getAdapter(el);
+            _call(adapter, 'setState', el, state);
         },
 
         initInteractive: _initInteractive,
 
-        field: function ($el) {
-            $el = $($el);
-            if (!$el.length) return { valid: true, value: null };
+        field: function (elArg) {
+            var helpers = window.OZI && window.OZI.helpers;
+            var el = helpers.toElement(elArg);
+            if (!el) return { valid: true, value: null };
 
-            var adapter  = _getAdapter($el);
-            var required = _parseBool($el, 'required', false)
-                || _parseBool($el, 'data-ozi-required', false);
-            var valid    = adapter.isValid($el);
-            var value    = adapter.getValue($el);
+            var adapter  = _getAdapter(el);
+            var required = _parseBool(el, 'required', false)
+                || _parseBool(el, 'data-ozi-required', false);
+            var valid    = _call(adapter, 'isValid', el);
+            var value    = _call(adapter, 'getValue', el);
 
             if (required) {
-                adapter.setState($el, valid ? 'valid' : 'invalid');
+                _call(adapter, 'setState', el, valid ? 'valid' : 'invalid');
             }
 
             return { valid: valid, value: value };
@@ -440,7 +510,7 @@
 
     window.OziValidate = validate;
 
-    $(function () {
+    function _expose() {
         if (window.OZI && window.OZI.modules) {
             window.OZI.modules.validate = validate;
         }
@@ -457,6 +527,12 @@
                 _initInteractive();
             });
         }
-    });
+    }
 
-})(jQuery, window, document);
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', _expose);
+    } else {
+        _expose();
+    }
+
+})(window, document);

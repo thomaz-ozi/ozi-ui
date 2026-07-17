@@ -2,8 +2,8 @@
  * ------------------------------------------
  * ozi-check
  * ------------------------------------------
- * Ver: 2.2.0
- * 2026-06-01
+ * Ver: 3.0.0
+ * 2026-07-04
  *
  * Responsabilidade:
  *   - Gerenciar checkboxes hierárquicos em 3 níveis por grupo
@@ -17,9 +17,29 @@
  *   data-ozi-check-group="grupo"             ← marca/desmarca todos os items do grupo
  *   data-ozi-check-item="grupo"              ← checkbox individual
  *
- * Dependências: ozi.js (OZI.hooks)
+ * Dependências: ozi.js (OZI.hooks, OZI.helpers) — zero jQuery (contrato de camadas v2).
  * Expõe: OZI.components.check, window.OziCheck (compat)
  * Eventos: ozi:check-change
+ *
+ * Changelog:
+ *   - v3.0.0: [V2-F2] Migracao para JS puro (docs/ozi-ui-v2-contratos.md, dev-hard):
+ *       - Coleta/estado via querySelectorAll/classList/propriedades nativas
+ *         (checked/indeterminate/disabled) — zero jQuery.
+ *       - Delegacao de 'change' nativa em document (closest() por seletor,
+ *         3 listeners independentes — switch/group/item — mesma estrutura da v1).
+ *       - Fim do dual-dispatch: _emit() usa somente OZI.helpers.emit(). O
+ *         payload original tinha uma chave `source` ('switch'|'group'|'item')
+ *         que colidia com o `source` do contrato ('user'|'api') — renomeada
+ *         para `level`; demais chaves preservadas no detail.
+ *       - Removido o listener de evento jQuery customizado 'oziCheck:initFetched'
+ *         do componente (nao pode existir em modules/components/behaviors —
+ *         contrato de camadas v2 §2). Documentado como compat opcional em
+ *         integrations/adapters/ozi-check-v1-events.shim.js para hosts que
+ *         ainda disparam esse evento via jQuery. O alias por chamada direta
+ *         window.oziCheckInitFetched(root) continua funcionando sem jQuery.
+ *       - API publica inalterada: OZI.components.check.{init,refresh,getGroups,
+ *         getGroupElements,isGroupEnabled,setGroupEnabledState,setAllItems,
+ *         syncGroup,syncAllGroups}; window.OziCheck mantido.
  *
  * Changelog v2.2.0:
  *   - [BREAKING] data-ozi-check-enabled    → data-ozi-check-switch
@@ -48,7 +68,7 @@
  *   - Mantido: compatibilidade oziCheckInitFetched + zldConf.zldHooks.afterRender
  */
 
-(function ($, window, document) {
+(function (window, document) {
     'use strict';
 
     // ─────────────────────────────────────────────
@@ -84,32 +104,34 @@
 
     /**
      * getGroupElements(group, scope)
-     * Retorna { $switch, $group, $items } para o grupo dentro do scope.
-     * $switch inclui tanto match exato quanto switch multi-grupo CSV.
+     * Retorna { switchEls, groupEls, itemEls } (Array<Element>) para o
+     * grupo dentro do scope. switchEls inclui tanto match exato quanto
+     * switch multi-grupo CSV.
      */
     function getGroupElements(group, scope) {
-        var $scope = scope ? $(scope) : $(document);
-        var isDoc  = !scope || scope === document;
+        var root = scope || document;
 
         function find(attr) {
             var sel = '[' + attr + '="' + group + '"]';
-            return isDoc ? $(sel) : $scope.find(sel);
+            return Array.prototype.slice.call(root.querySelectorAll(sel));
         }
 
         // switch exato: data-ozi-check-switch="norte"
-        var $switchExact = find('data-ozi-check-switch');
+        var switchExact = find('data-ozi-check-switch');
 
         // switch multi-grupo: data-ozi-check-switch="nordeste,norte"
-        var $switchMulti = (isDoc ? $(SEL_SWITCH) : $scope.find(SEL_SWITCH))
-            .filter(function () {
-                var groups = _parseGroupList($(this).attr('data-ozi-check-switch'));
-                return groups.length > 1 && groups.indexOf(group) !== -1;
-            });
+        var switchMulti = Array.prototype.filter.call(root.querySelectorAll(SEL_SWITCH), function (el) {
+            var groups = _parseGroupList(el.getAttribute('data-ozi-check-switch'));
+            return groups.length > 1 && groups.indexOf(group) !== -1;
+        });
+
+        var switchEls = switchExact.slice();
+        switchMulti.forEach(function (el) { if (switchEls.indexOf(el) === -1) switchEls.push(el); });
 
         return {
-            $switch: $switchExact.add($switchMulti),
-            $group:  find('data-ozi-check-group'),
-            $items:  find('data-ozi-check-item')
+            switchEls: switchEls,
+            groupEls:  find('data-ozi-check-group'),
+            itemEls:   find('data-ozi-check-item')
         };
     }
 
@@ -119,18 +141,15 @@
      * Expande CSV do switch em grupos individuais.
      */
     function getGroups(scope) {
-        var $scope = scope ? $(scope) : $(document);
-        var isDoc  = !scope || scope === document;
+        var root   = scope || document;
         var groups = [];
 
-        var $all = isDoc
-            ? $(SEL_SWITCH + ', ' + SEL_GROUP + ', ' + SEL_ITEM)
-            : $scope.find(SEL_SWITCH + ', ' + SEL_GROUP + ', ' + SEL_ITEM);
+        var all = root.querySelectorAll(SEL_SWITCH + ', ' + SEL_GROUP + ', ' + SEL_ITEM);
 
-        $all.each(function () {
-            var raw = $(this).attr('data-ozi-check-switch')
-                || $(this).attr('data-ozi-check-group')
-                || $(this).attr('data-ozi-check-item')
+        Array.prototype.forEach.call(all, function (el) {
+            var raw = el.getAttribute('data-ozi-check-switch')
+                || el.getAttribute('data-ozi-check-group')
+                || el.getAttribute('data-ozi-check-item')
                 || '';
 
             _parseGroupList(raw).forEach(function (g) {
@@ -152,22 +171,20 @@
      */
     function isGroupEnabled(group, scope) {
         var els = getGroupElements(group, scope);
-        if (!els.$switch.length) return true;
-        return els.$switch.first().prop('checked') === true;
+        if (!els.switchEls.length) return true;
+        return els.switchEls[0].checked === true;
     }
 
     /**
-     * _applyDisabledVisual($els, disabled)
+     * _applyDisabledVisual(els, disabled)
      * Aplica/remove prop disabled + classe CSS .ozi-check-disabled.
      * NÃO toca em checked ou indeterminate.
      */
-    function _applyDisabledVisual($els, disabled) {
-        $els.prop('disabled', disabled);
-        if (disabled) {
-            $els.addClass(CSS_DISABLED);
-        } else {
-            $els.removeClass(CSS_DISABLED);
-        }
+    function _applyDisabledVisual(els, disabled) {
+        els.forEach(function (el) {
+            el.disabled = disabled;
+            el.classList.toggle(CSS_DISABLED, disabled);
+        });
     }
 
     /**
@@ -179,12 +196,12 @@
         var els = getGroupElements(group, scope);
 
         if (!enabled) {
-            _applyDisabledVisual(els.$group, true);
-            _applyDisabledVisual(els.$items, true);
+            _applyDisabledVisual(els.groupEls, true);
+            _applyDisabledVisual(els.itemEls, true);
             _emit(group, { group: group, enabled: false, source: 'switch' }, scope);
         } else {
-            _applyDisabledVisual(els.$group, false);
-            _applyDisabledVisual(els.$items, false);
+            _applyDisabledVisual(els.groupEls, false);
+            _applyDisabledVisual(els.itemEls, false);
             syncGroup(group, scope);
             _emit(group, { group: group, enabled: true, source: 'switch' }, scope);
         }
@@ -196,7 +213,7 @@
      */
     function setAllItems(group, checked, scope) {
         var els = getGroupElements(group, scope);
-        els.$items.not(':disabled').prop('checked', !!checked);
+        els.itemEls.forEach(function (el) { if (!el.disabled) el.checked = !!checked; });
         syncGroup(group, scope);
         _emit(group, { group: group, checked: checked, source: 'group' }, scope);
     }
@@ -209,19 +226,25 @@
     function syncGroup(group, scope) {
         var els = getGroupElements(group, scope);
 
-        if (!els.$group.length) return;
+        if (!els.groupEls.length) return;
 
-        var $activeItems = els.$items.not(':disabled');
-        var total        = $activeItems.length;
-        var checkedCount = $activeItems.filter(':checked').length;
+        var activeItems  = els.itemEls.filter(function (el) { return !el.disabled; });
+        var total        = activeItems.length;
+        var checkedCount = activeItems.filter(function (el) { return el.checked; }).length;
 
+        var checkedState, indeterminateState;
         if (total === 0 || checkedCount === 0) {
-            els.$group.prop('checked', false).prop('indeterminate', false);
+            checkedState = false; indeterminateState = false;
         } else if (checkedCount === total) {
-            els.$group.prop('checked', true).prop('indeterminate', false);
+            checkedState = true; indeterminateState = false;
         } else {
-            els.$group.prop('checked', false).prop('indeterminate', true);
+            checkedState = false; indeterminateState = true;
         }
+
+        els.groupEls.forEach(function (el) {
+            el.checked = checkedState;
+            el.indeterminate = indeterminateState;
+        });
     }
 
     /**
@@ -234,82 +257,98 @@
             var enabled = isGroupEnabled(group, scope);
             var els     = getGroupElements(group, scope);
 
-            _applyDisabledVisual(els.$group, !enabled);
-            _applyDisabledVisual(els.$items, !enabled);
+            _applyDisabledVisual(els.groupEls, !enabled);
+            _applyDisabledVisual(els.itemEls, !enabled);
             syncGroup(group, scope);
         });
     }
 
 
     // ─────────────────────────────────────────────
-    // [5] EVENTOS — delegação no document
+    // [5] EVENTOS — delegação nativa no document
     // ─────────────────────────────────────────────
 
     function _bindSwitch() {
-        $(document)
-            .off('change.oziCheckSwitch')
-            .on('change.oziCheckSwitch', SEL_SWITCH, function () {
-                var raw = ($(this).attr('data-ozi-check-switch') || '').trim();
-                if (!raw) return;
+        document.addEventListener('change', function (e) {
+            var el = e.target.closest(SEL_SWITCH);
+            if (!el) return;
 
-                var enabled = $(this).prop('checked') === true;
+            var raw = (el.getAttribute('data-ozi-check-switch') || '').trim();
+            if (!raw) return;
 
-                // itera cada grupo do CSV
-                _parseGroupList(raw).forEach(function (group) {
-                    setGroupEnabledState(group, enabled);
-                });
+            var enabled = el.checked === true;
+
+            // itera cada grupo do CSV
+            _parseGroupList(raw).forEach(function (group) {
+                setGroupEnabledState(group, enabled);
             });
+        });
     }
 
     function _bindGroup() {
-        $(document)
-            .off('change.oziCheckGroup')
-            .on('change.oziCheckGroup', SEL_GROUP, function () {
-                var group = ($(this).attr('data-ozi-check-group') || '').trim();
-                if (!group) return;
+        document.addEventListener('change', function (e) {
+            var el = e.target.closest(SEL_GROUP);
+            if (!el) return;
 
-                if (!isGroupEnabled(group)) return;
+            var group = (el.getAttribute('data-ozi-check-group') || '').trim();
+            if (!group) return;
 
-                var checked = $(this).prop('checked') === true;
-                setAllItems(group, checked);
-            });
+            if (!isGroupEnabled(group)) return;
+
+            setAllItems(group, el.checked === true);
+        });
     }
 
     function _bindItem() {
-        $(document)
-            .off('change.oziCheckItem')
-            .on('change.oziCheckItem', SEL_ITEM, function () {
-                var group = ($(this).attr('data-ozi-check-item') || '').trim();
-                if (!group) return;
+        document.addEventListener('change', function (e) {
+            var el = e.target.closest(SEL_ITEM);
+            if (!el) return;
 
-                if (!isGroupEnabled(group)) return;
+            var group = (el.getAttribute('data-ozi-check-item') || '').trim();
+            if (!group) return;
 
-                syncGroup(group);
-                _emit(group, {
-                    group:   group,
-                    source:  'item',
-                    checked: $(this).prop('checked'),
-                    value:   $(this).val()
-                });
+            if (!isGroupEnabled(group)) return;
+
+            syncGroup(group);
+            _emit(group, {
+                group:   group,
+                source:  'item',
+                checked: el.checked,
+                value:   el.value
             });
+        });
     }
 
 
     // ─────────────────────────────────────────────
-    // [6] EMIT
+    // [6] EMIT — contrato v2, sem dual-dispatch
+    // Nota: o payload original usa `source` para indicar o nivel
+    // (switch/group/item) — renomeado para `level` para nao colidir com
+    // o `source` do contrato ('user'|'api').
     // ─────────────────────────────────────────────
 
-    function _emit(group, payload) {
-        var els      = getGroupElements(group);
-        var $targets = els.$switch.add(els.$group).add(els.$items);
+    function _emit(group, payload, scope) {
+        payload = payload || {};
+        var els    = getGroupElements(group, scope);
+        var origin = els.switchEls[0] || els.groupEls[0] || els.itemEls[0] || document;
 
-        $targets.first().trigger('ozi:check-change', [payload]);
+        var detail = {
+            component: 'ozi-check',
+            name:      group,
+            value:     (payload.checked !== undefined) ? payload.checked : (payload.enabled !== undefined ? payload.enabled : null),
+            source:    'user'
+        };
+        Object.keys(payload).forEach(function (k) {
+            if (k === 'source') { detail.level = payload.source; return; }
+            if (k === 'group')  return; // ja e o "name"
+            detail[k] = payload[k];
+        });
 
-        if (typeof CustomEvent === 'function') {
-            document.dispatchEvent(new CustomEvent('ozi:check-change', {
-                bubbles: true,
-                detail:  payload
-            }));
+        var helpers = window.OZI && window.OZI.helpers;
+        if (helpers && typeof helpers.emit === 'function') {
+            helpers.emit(origin, 'ozi:check-change', detail);
+        } else if (typeof CustomEvent === 'function') {
+            origin.dispatchEvent(new CustomEvent('ozi:check-change', { bubbles: true, detail: detail }));
         }
     }
 
@@ -359,23 +398,21 @@
 
     window.oziCheckInitFetched = function (root) {
         console.warn('[OZI] oziCheckInitFetched depreciado. Use OZI.components.check.refresh().');
-        var target = root instanceof jQuery ? root[0] : root;
+        var isJq = root && typeof window.jQuery !== 'undefined' && root instanceof window.jQuery; // guard-ok: compat v1, sem dependência
+        var target = isJq ? root[0] : root;
         refresh(target || document);
     };
 
 
     // ─────────────────────────────────────────────
     // [10] COMPAT ZLD — zldConf.zldHooks.afterRender
+    // Nota: o listener do evento jQuery customizado 'oziCheck:initFetched'
+    // saiu daqui (contrato de camadas v2 §2 — jQuery só em integrations/).
+    // Disponivel como shim opcional em
+    // integrations/adapters/ozi-check-v1-events.shim.js.
     // ─────────────────────────────────────────────
 
     function _bindZldCompat() {
-        $(document)
-            .off('oziCheck:initFetched')
-            .on('oziCheck:initFetched', function (e, root) {
-                var target = root instanceof jQuery ? root[0] : root;
-                refresh(target || document);
-            });
-
         if (
             window.zldConf &&
             window.zldConf.zldHooks &&
@@ -387,7 +424,8 @@
 
             if (!alreadyBound) {
                 var hook = function (root) {
-                    var target = root instanceof jQuery ? root[0] : root;
+                    var isJq = root && typeof window.jQuery !== 'undefined' && root instanceof window.jQuery; // guard-ok: compat v1, sem dependência
+                    var target = isJq ? root[0] : root;
                     refresh(target || document);
                 };
                 hook.__oziCheckAfterRender = true;
@@ -401,7 +439,7 @@
     // [11] AUTO-INIT E HOOKS
     // ─────────────────────────────────────────────
 
-    $(function () {
+    function _boot() {
         init();
         _bindZldCompat();
 
@@ -410,6 +448,12 @@
                 refresh();
             });
         }
-    });
+    }
 
-})(jQuery, window, document);
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', _boot);
+    } else {
+        _boot();
+    }
+
+})(window, document);

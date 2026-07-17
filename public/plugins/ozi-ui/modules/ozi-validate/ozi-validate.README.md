@@ -1,8 +1,8 @@
 # ozi-validate.js
 
-**Versão:** 1.0.0  
+**Versão:** 2.0.0 (v2 F2 #1 — primeiro componente migrado, 2026-07-03)
 **Camada:** `modules/`  
-**Dependências:** `ozi-core.js` (OZI.conf, OZI.helpers, OZI.lang)  
+**Dependências:** `ozi-core.js` (OZI.conf, OZI.helpers, OZI.lang) — zero jQuery
 **Expõe:** `OZI.modules.validate`, `window.oziValidateContainer` (compat)
 
 ---
@@ -11,6 +11,8 @@
 
 Motor genérico de validação de campos do OZI-UI.  
 Extraído do `oziValidateContainer` do `oziLoadData v3.9.4` com adapter pattern para substituir os acoplamentos a Select2 e CKEditor.
+
+**Nota v2:** o motor interno é 100% JS puro (contrato `dev-hard/docs/ozi-ui-v2-contratos.md`). `container()`/`field()`/`applyState()` continuam aceitando Element nativo, jQuery ou seletor CSS (normalizado via `OZI.helpers.toElement`/`toElements`). Adapters registrados por componentes ainda não migrados (`ozi-select`, `ozi-autocomplete`, `ozi-editor`, `ozi-audio`) continuam recebendo o elemento envelopado em jQuery — ponte de transição temporária, removida à medida que cada um migrar na F2.
 
 ---
 
@@ -126,7 +128,7 @@ if (result.isValid) {
     data:          object,     // { campo: valor }
     isValid:       boolean,
     invalidFields: [           // campos inválidos
-        { $el, name, adapter }
+        { el, name, adapter }  // el = Element nativo (v2; era $el/jQuery na v1)
     ],
     // compat v0.x:
     ldValidate:      boolean,

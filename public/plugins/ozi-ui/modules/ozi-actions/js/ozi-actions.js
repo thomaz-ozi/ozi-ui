@@ -2,8 +2,8 @@
  * ------------------------------------------
  * ozi-actions
  * ------------------------------------------
- * Ver: 1.0.1
- * 2026-05-27
+ * Ver: 2.0.0
+ * 2026-07-04
  *
  * Responsabilidade:
  *   - Executar acoes declarativas retornadas pelo backend Laravel
@@ -15,17 +15,25 @@
  *   - Nao conhece Bootstrap, Tailwind ou qualquer UI framework diretamente
  *   - Nao faz requisicoes HTTP — usa OZI.modules.loadData para zld-load
  *
- * Dependencias: ozi.js (OZI.conf, OZI.lang)
- * Expoe: OZI.modules.actions, window.zldActions (compat)
+ * Dependencias: ozi.js (OZI.conf, OZI.lang) — zero jQuery (contrato de camadas
+ *   v2 §2). Modulo interno consumido por ozi-loaddata (ja migrado). Integra com
+ *   Bootstrap 5 via API NATIVA (window.bootstrap.Modal/Offcanvas/Toast), nunca jQuery.
+ * Expoe: OZI.modules.actions, window.OziActions, window.zldActions (compat)
  *
- * Changelog v1.0.1:
- *   - Corrigido: guard singleton adicionado
- *   - Corrigido: registro no namespace dentro do $(function) — garante OZI bootado
- *   - Corrigido: Object.assign substituido por _extend ES5 — consistencia com o projeto
- *   - Adicionado: hook OZI.hooks.afterRender registrado como 'module:actions'
+ * Changelog:
+ *   - v2.0.0: [V2-F2] Zero jQuery. Adapters de tema (bootstrap5/default/tailwind)
+ *       reescritos em DOM nativo (createElement/querySelector/classList/style).
+ *       Toast BS5 via document.body.appendChild; toast default troca $.fadeOut por
+ *       transicao de opacidade. **Removido o fallback `$.fn.modal('show'|'hide')`**
+ *       (plugin jQuery estilo BS4 — morto no BS5): modal/offcanvas usam SOMENTE a
+ *       API nativa `window.bootstrap.*`. Boot $(fn) -> readyState/DOMContentLoaded.
+ *       Nucleo (registry, run, handlers universais, set-value/set-options via
+ *       CustomEvent) ja era vanilla.
+ *   - v1.0.1: guard singleton; registro no $(function); _extend ES5;
+ *       hook module:actions.
  */
 
-(function ($, window, document) {
+(function (window, document) {
     'use strict';
 
     // ---------------------------------------------
@@ -38,9 +46,7 @@
     // ---------------------------------------------
     // [2] REGISTRY DE HANDLERS E ADAPTERS
     // handlers: { type -> fn(action, ctx) }
-    //   handlers customizados registrados pelo dev
     // themeAdapters: { theme -> { type -> fn } }
-    //   handlers por tema (bootstrap5, tailwind, default)
     // ---------------------------------------------
 
     var _handlers      = {};
@@ -82,17 +88,26 @@
         return _extend({}, source);
     }
 
+    // resolve id (com ou sem '#') para Element
+    function _byId(id) {
+        if (!id) return null;
+        return document.querySelector(id.charAt(0) === '#' ? id : '#' + id);
+    }
+
+    function _all(selector) {
+        return Array.prototype.slice.call(document.querySelectorAll(selector));
+    }
+
 
     // ---------------------------------------------
     // [4] ADAPTERS DE TEMA — BUILT-IN
     //
-    // Cada tema declara handlers para os tipos padrao.
     // Handler recebe (action, ctx):
     //   action: { type, payload, ... }
     //   ctx:    { trigger, result }
     // ---------------------------------------------
 
-    // ── bootstrap5 ────────────────────────────────
+    // ── bootstrap5 (API NATIVA — sem jQuery) ──────
 
     _themeAdapters['bootstrap5'] = {
 
@@ -102,7 +117,7 @@
             var level   = p.level || p.type || 'info';
             var delay   = p.delay || 4000;
 
-            // UIToast (Up-Bond theme)
+            // UIToast (tema Up-Bond)
             if (typeof window.UIToast === 'function') {
                 window.UIToast({ message: message, type: level, delay: delay });
                 return;
@@ -114,15 +129,21 @@
             }
             // bootstrap 5 toast nativo
             if (window.bootstrap && window.bootstrap.Toast) {
-                var $toast = $('<div class="toast align-items-center text-bg-' + level + ' border-0 position-fixed bottom-0 end-0 m-3" role="alert">' +
+                var toast = document.createElement('div');
+                toast.className = 'toast align-items-center text-bg-' + level +
+                    ' border-0 position-fixed bottom-0 end-0 m-3';
+                toast.setAttribute('role', 'alert');
+                toast.innerHTML =
                     '<div class="d-flex">' +
                     '<div class="toast-body">' + message + '</div>' +
                     '<button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>' +
-                    '</div></div>');
-                $('body').append($toast);
-                var t = new window.bootstrap.Toast($toast[0], { delay: delay });
+                    '</div>';
+                document.body.appendChild(toast);
+                var t = new window.bootstrap.Toast(toast, { delay: delay });
                 t.show();
-                $toast[0].addEventListener('hidden.bs.toast', function () { $toast.remove(); });
+                toast.addEventListener('hidden.bs.toast', function () {
+                    if (toast.parentNode) toast.parentNode.removeChild(toast);
+                });
                 return;
             }
             // fallback: console
@@ -131,63 +152,47 @@
 
         'modal-open': function (action) {
             var p  = action.payload || action;
-            var id = p.id || p.target || p.selector || '';
-            if (!id) return;
-            var $el = $(id.charAt(0) === '#' ? id : '#' + id);
-            if (!$el.length) return;
+            var el = _byId(p.id || p.target || p.selector || '');
+            if (!el) return;
             if (window.bootstrap && window.bootstrap.Modal) {
-                window.bootstrap.Modal.getOrCreateInstance($el[0]).show();
-            } else if ($.fn.modal) {
-                $el.modal('show');
+                window.bootstrap.Modal.getOrCreateInstance(el).show();
             }
         },
 
         'modal-close': function (action) {
+            if (!(window.bootstrap && window.bootstrap.Modal)) return;
             var p  = action.payload || action;
             var id = p.id || p.target || p.selector || '';
             if (id) {
-                var $el = $(id.charAt(0) === '#' ? id : '#' + id);
-                if (window.bootstrap && window.bootstrap.Modal) {
-                    var inst = window.bootstrap.Modal.getInstance($el[0]);
-                    if (inst) inst.hide();
-                } else if ($.fn.modal) {
-                    $el.modal('hide');
-                }
+                var el = _byId(id);
+                if (el) { var inst = window.bootstrap.Modal.getInstance(el); if (inst) inst.hide(); }
             } else {
                 // fecha todos os modais abertos
-                if (window.bootstrap && window.bootstrap.Modal) {
-                    $('.modal.show').each(function () {
-                        var inst = window.bootstrap.Modal.getInstance(this);
-                        if (inst) inst.hide();
-                    });
-                } else if ($.fn.modal) {
-                    $('.modal').modal('hide');
-                }
+                _all('.modal.show').forEach(function (m) {
+                    var inst = window.bootstrap.Modal.getInstance(m);
+                    if (inst) inst.hide();
+                });
             }
         },
 
         'offcanvas-open': function (action) {
             var p  = action.payload || action;
-            var id = p.id || p.target || p.selector || '';
-            if (!id) return;
-            var $el = $(id.charAt(0) === '#' ? id : '#' + id);
-            if (!$el.length) return;
+            var el = _byId(p.id || p.target || p.selector || '');
+            if (!el) return;
             if (window.bootstrap && window.bootstrap.Offcanvas) {
-                window.bootstrap.Offcanvas.getOrCreateInstance($el[0]).show();
+                window.bootstrap.Offcanvas.getOrCreateInstance(el).show();
             }
         },
 
         'offcanvas-close': function (action) {
-            var p  = action.payload || action;
-            var id = p.id || p.target || p.selector || '';
-            var $el = id
-                ? $(id.charAt(0) === '#' ? id : '#' + id)
-                : $('.offcanvas.show');
-            $el.each(function () {
-                if (window.bootstrap && window.bootstrap.Offcanvas) {
-                    var inst = window.bootstrap.Offcanvas.getInstance(this);
-                    if (inst) inst.hide();
-                }
+            if (!(window.bootstrap && window.bootstrap.Offcanvas)) return;
+            var p    = action.payload || action;
+            var id   = p.id || p.target || p.selector || '';
+            var list = id ? [_byId(id)] : _all('.offcanvas.show');
+            list.forEach(function (el) {
+                if (!el) return;
+                var inst = window.bootstrap.Offcanvas.getInstance(el);
+                if (inst) inst.hide();
             });
         }
     };
@@ -200,42 +205,48 @@
             var p       = action.payload || action;
             var message = p.message || p.msg || '';
             var level   = p.level || 'info';
-            var $toast  = $('<div class="ozi-toast ozi-toast-' + level + '">' + message + '</div>');
-            $('body').append($toast);
+            var toast   = document.createElement('div');
+            toast.className = 'ozi-toast ozi-toast-' + level;
+            toast.innerHTML = message;
+            document.body.appendChild(toast);
             setTimeout(function () {
-                $toast.fadeOut(300, function () { $(this).remove(); });
+                toast.style.transition = 'opacity 300ms';
+                toast.style.opacity    = '0';
+                setTimeout(function () { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 300);
             }, 3500);
         },
 
         'modal-open': function (action) {
-            var p = action.payload || action;
-            var id = p.id || p.target || p.selector || '';
-            if (id) $(id.charAt(0) === '#' ? id : '#' + id).show();
+            var p  = action.payload || action;
+            var el = _byId(p.id || p.target || p.selector || '');
+            if (el) el.style.display = 'block';
         },
 
         'modal-close': function (action) {
-            var p = action.payload || action;
+            var p  = action.payload || action;
             var id = p.id || p.target || p.selector || '';
             if (id) {
-                $(id.charAt(0) === '#' ? id : '#' + id).hide();
+                var el = _byId(id);
+                if (el) el.style.display = 'none';
             } else {
-                $('.ozi-modal').hide();
+                _all('.ozi-modal').forEach(function (m) { m.style.display = 'none'; });
             }
         },
 
         'offcanvas-open': function (action) {
-            var p = action.payload || action;
-            var id = p.id || p.target || p.selector || '';
-            if (id) $(id.charAt(0) === '#' ? id : '#' + id).addClass('ozi-open');
+            var p  = action.payload || action;
+            var el = _byId(p.id || p.target || p.selector || '');
+            if (el) el.classList.add('ozi-open');
         },
 
         'offcanvas-close': function (action) {
-            var p = action.payload || action;
+            var p  = action.payload || action;
             var id = p.id || p.target || p.selector || '';
             if (id) {
-                $(id.charAt(0) === '#' ? id : '#' + id).removeClass('ozi-open');
+                var el = _byId(id);
+                if (el) el.classList.remove('ozi-open');
             } else {
-                $('.ozi-offcanvas').removeClass('ozi-open');
+                _all('.ozi-offcanvas').forEach(function (el) { el.classList.remove('ozi-open'); });
             }
         }
     };
@@ -361,13 +372,6 @@
 
     var actions = {
 
-        /**
-         * run(actionsArr, ctx?)
-         * Executa lista de acoes retornadas pelo backend.
-         *
-         * @param {Array}  actionsArr — [{ type, payload, ... }]
-         * @param {object} [ctx]      — { trigger, result }
-         */
         run: function (actionsArr, ctx) {
             if (!Array.isArray(actionsArr) || !actionsArr.length) return;
             ctx = ctx || {};
@@ -376,14 +380,6 @@
             });
         },
 
-        /**
-         * registerHandler(type, fn)
-         * Registra handler customizado para um tipo de action.
-         * Tem prioridade sobre adapters de tema.
-         *
-         * @param {string}   type — ex: 'minha-action'
-         * @param {function} fn   — fn(action, ctx)
-         */
         registerHandler: function (type, fn) {
             if (!type || typeof fn !== 'function') {
                 _log('registerHandler: type e fn sao obrigatorios.');
@@ -393,13 +389,6 @@
             _log('handler registrado:', type);
         },
 
-        /**
-         * registerThemeAdapter(theme, handlers)
-         * Registra ou sobrescreve handlers de um tema.
-         *
-         * @param {string} theme    — ex: 'meu-tema'
-         * @param {object} handlers — { type: fn(action, ctx) }
-         */
         registerThemeAdapter: function (theme, handlers) {
             if (!theme || !handlers || typeof handlers !== 'object') {
                 _log('registerThemeAdapter: theme e handlers sao obrigatorios.');
@@ -409,10 +398,6 @@
             _log('theme adapter registrado:', theme);
         },
 
-        /**
-         * getHandlers()
-         * Lista handlers e adapters registrados. Util para debug.
-         */
         getHandlers: function () {
             return {
                 custom:    Object.keys(_handlers),
@@ -425,14 +410,12 @@
 
     // ---------------------------------------------
     // [8] EXPOSICAO
-    // Namespace e compat registrados dentro do DOMReady
-    // para garantir que OZI ja bootou.
     // ---------------------------------------------
 
     // alias objeto — imediato (sem depender do OZI)
     window.OziActions = actions;
 
-    $(function () {
+    function _boot() {
         // namespace OZI
         if (window.OZI && window.OZI.modules) {
             window.OZI.modules.actions = actions;
@@ -453,7 +436,13 @@
             });
         }
 
-        _log('ozi-actions v1.0.1 pronto. tema:', _theme());
-    });
+        _log('ozi-actions v2.0.0 pronto. tema:', _theme());
+    }
 
-})(jQuery, window, document);
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', _boot);
+    } else {
+        _boot();
+    }
+
+})(window, document);
