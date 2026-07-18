@@ -1,6 +1,6 @@
 /**
  * themes/tailwind/overrides.css
- * Versão: 1.0.0
+ * Versão: 1.0.1
  *
  * Ajustes dos componentes OZI-UI para integração com Tailwind CSS.
  * Faz os componentes OZI se comportarem visualmente como controles de
@@ -17,6 +17,10 @@
  * oziConf({ theme })).
  *
  * Changelog:
+ *   - v1.0.1: [FIX] .ozi-select-control não recebe mais display:block (só o
+ *     .ozi-autocomplete-input, que é um <input>). O block sobrescrevia o
+ *     display:flex do componente e empilhava ícone/valor/ações na vertical.
+ *     Detectado no dev-tw (aceite cross-tema visual — Estágio 1 da F5-B).
  *   - v1.0.0: [V2-F3] Criado (fechava a única lacuna estrutural dos temas).
  *     Seletor de invalidez do editor corrigido para `.ozi-editor-wrap`
  *     (classe raiz real do ozi-editor.js; `ozi-editor-root` nunca existiu).
@@ -27,7 +31,6 @@
 /* oziSelect / oziAutocomplete alinhados ao input padrão do Tailwind */
 .ozi-select-control,
 .ozi-autocomplete-input {
-    display:          block;
     width:            100%;
     padding:          .5rem .75rem;           /* px-3 py-2 */
     font-size:        var(--ozi-font-size-base);
@@ -40,6 +43,11 @@
     transition:       border-color var(--ozi-transition-fast), box-shadow var(--ozi-transition-fast);
     cursor:           pointer;
 }
+
+/* [FIX v1.0.1] Só o input real do autocomplete recebe display:block.
+   O .ozi-select-control mantém o display:flex do componente (ícone + valor +
+   ações lado a lado); o block anterior quebrava esse layout (empilhava). */
+.ozi-autocomplete-input { display: block; }
 
 .ozi-select-control:focus,
 .ozi-select-control:focus-within,
