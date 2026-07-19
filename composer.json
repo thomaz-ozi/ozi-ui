@@ -1,6 +1,6 @@
 {
   "name": "ozi-ui/core",
-  "version": "2.0.0-dev",
+  "version": "2.0.0-beta.1",
   "description": "Orquestrador do ecossistema ozi-ui — plugins front-end para Laravel (v2: JS puro, zero dependência de terceiros)",
   "type": "library",
   "license": "MIT",
