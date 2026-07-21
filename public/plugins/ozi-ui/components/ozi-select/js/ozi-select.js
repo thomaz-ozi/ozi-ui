@@ -2,10 +2,18 @@
  * ------------------------------------------
  * ozi-select
  * ------------------------------------------
- * Ver: 6.0.0
- * 2026-07-03
+ * Ver: 6.0.1
+ * 2026-07-20
  *
  * Changelog:
+ *   - v6.0.1: [V2-F5B] Fix: init()/get() aceitam Document/DocumentFragment.
+ *       O OZI.hooks.afterRender chama init(root) com `document` (ozi-hooks.js
+ *       converte root null -> document). Como document.nodeType === 9 (e nao 1),
+ *       o argumento caia no ramo de seletor e estourava
+ *       "DOMException: document.querySelector('[object HTMLDocument]')".
+ *       Agora a resolucao e por tipo: string -> querySelector; no com
+ *       querySelectorAll (Element/Document/Fragment) -> escopo direto; senao null.
+ *       get() retorna null p/ nao-Element (precisa de getAttribute).
  *   - v6.0.0: [V2-F2] Migracao para JS puro (docs/ozi-ui-v2-contratos.md, dev-hard):
  *       - Zero jQuery: DOM via document.createElement/querySelector/classList;
  *         Element.after()/before() nativos no lugar de .after()/.before() jQuery.
@@ -1186,7 +1194,8 @@
             if (!scope) {
                 targets = Array.prototype.slice.call(document.querySelectorAll('[data-ozi-select]'));
             } else {
-                var root = (scope.nodeType === 1) ? scope : document.querySelector(scope);
+                var root = (typeof scope === 'string') ? document.querySelector(scope)
+                         : (scope.querySelectorAll ? scope : null);
                 if (!root) return this;
                 targets = root.matches && root.matches('[data-ozi-select]') ? [root] : [];
                 targets = targets.concat(Array.prototype.slice.call(root.querySelectorAll('[data-ozi-select]')));
@@ -1223,7 +1232,8 @@
         get: function (s) {
             if (!s) return null;
             if (typeof s === 'string' && s.charAt(0) !== '#' && s.charAt(0) !== '.') return instances[s] || null;
-            var el = (s.nodeType === 1) ? s : document.querySelector(s);
+            var el = (typeof s === 'string') ? document.querySelector(s)
+                   : (s.nodeType === 1 ? s : null);
             if (!el) return null;
             return instances[String(el.getAttribute('data-ozi-select') || '').trim()] || null;
         },

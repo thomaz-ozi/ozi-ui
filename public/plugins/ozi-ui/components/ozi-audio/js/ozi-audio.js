@@ -2,10 +2,17 @@
  * ------------------------------------------
  * ozi-audio
  * ------------------------------------------
- * Ver: 4.0.0
- * 2026-07-05
+ * Ver: 4.0.1
+ * 2026-07-20
  *
  * Changelog:
+ *   - v4.0.1: [V2-F5B] Fix: init() aceita Document/DocumentFragment.
+ *       O OZI.hooks.afterRender chama init(root) com `document` (ozi-hooks.js
+ *       converte root null -> document). Como document.nodeType === 9 (e não 1),
+ *       o argumento caía no ramo de seletor e estourava
+ *       "DOMException: document.querySelector('[object HTMLDocument]')".
+ *       Agora a resolução é por tipo: string -> querySelector; nó com
+ *       querySelectorAll (Element/Document/Fragment) -> escopo direto; senão null.
  *   - v4.0.0: [V2-F2] Migração para JS puro (docs/ozi-ui-v2-contratos.md, dev-hard):
  *       - Zero jQuery. Toda a UI construída com document.createElement (helper _el);
  *         manipulação via classList/textContent/style/setAttribute nativos.
@@ -923,7 +930,8 @@
             if (!scope) {
                 targets = Array.prototype.slice.call(document.querySelectorAll('[data-ozi-audio]'));
             } else {
-                var root = (scope.nodeType === 1) ? scope : document.querySelector(scope);
+                var root = (typeof scope === 'string') ? document.querySelector(scope)
+                         : (scope.querySelectorAll ? scope : null);
                 if (!root) return this;
                 targets = (root.matches && root.matches('[data-ozi-audio]')) ? [root] : [];
                 targets = targets.concat(Array.prototype.slice.call(root.querySelectorAll('[data-ozi-audio]')));

@@ -2,10 +2,17 @@
  * ------------------------------------------
  * ozi-autocomplete
  * ------------------------------------------
- * Ver: 4.0.0
- * 2026-07-04
+ * Ver: 4.0.1
+ * 2026-07-20
  *
  * Changelog:
+ *   - v4.0.1: [V2-F5B] Fix: init() aceita Document/DocumentFragment.
+ *       O OZI.hooks.afterRender chama init(root) com `document` (ozi-hooks.js
+ *       converte root null -> document). Como document.nodeType === 9 (e nao 1),
+ *       o argumento caia no ramo de seletor e estourava
+ *       "DOMException: document.querySelector('[object HTMLDocument]')".
+ *       Agora a resolucao e por tipo: string -> querySelector; no com
+ *       querySelectorAll (Element/Document/Fragment) -> escopo direto; senao null.
  *   - v4.0.0: [V2-F2] Migracao para JS puro (docs/ozi-ui-v2-contratos.md, dev-hard):
  *       - Zero jQuery: DOM via document.createElement/querySelector/classList;
  *         "wrap" do input feito manualmente (insertBefore + appendChild) no
@@ -761,7 +768,9 @@
 
     var autocompleteAPI = {
         init: function (root) {
-            var scope = root ? ((root.nodeType === 1) ? root : document.querySelector(root)) : document;
+            var scope = !root ? document
+                      : (typeof root === 'string' ? document.querySelector(root)
+                        : (root.querySelectorAll ? root : null));
             if (!scope) return;
 
             var targets = (scope.nodeType === 1 && scope.matches && scope.matches('[data-ozi-autocomplete]')) ? [scope] : [];
