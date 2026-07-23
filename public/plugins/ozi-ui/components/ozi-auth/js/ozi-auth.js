@@ -2,8 +2,8 @@
  * ------------------------------------------
  * ozi-auth
  * ------------------------------------------
- * Ver: 4.0.0
- * 2026-07-04
+ * Ver: 4.0.1
+ * 2026-07-23
  *
  * Responsabilidade:
  *   - Validacao de senha/confirmacao/email/usuario aplicada a um <form> inteiro
@@ -24,6 +24,12 @@
  * Eventos: ozi:init, ozi:auth-change, ozi:auth-ready, ozi:auth-broken, ozi:destroy
  *
  * Changelog:
+ *   - v4.0.1: [i18n] Adicionadas 5 chaves de lang que o JS referencia mas os
+ *       dicionarios nao tinham (caiam no fallback PT embutido; console avisava
+ *       "chave nao encontrada" e en/es viam portugues): auth.mailRequired (193),
+ *       auth.remaining (448), auth.exceeded (450), auth.summaryValid (473),
+ *       auth.summaryInvalid (353/474). Adicionadas em pt-BR/en/es. Sem mudanca de
+ *       logica no JS. (Cacado pelo piloto do Central RH, revenda/empresa/form.)
  *   - v4.0.0: [V2-F2] Migracao para JS puro (docs/ozi-ui-v2-contratos.md, dev-hard):
  *       - Zero jQuery. Toda manipulacao de DOM via APIs nativas
  *         (querySelector/classList/insertAdjacentElement/wrap manual).

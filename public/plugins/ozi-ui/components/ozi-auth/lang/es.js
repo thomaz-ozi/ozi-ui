@@ -20,7 +20,12 @@
             noSpace:       'Sin espacios',
             noEmailParts:  'La contraseña no puede contener partes del correo',
             confirm:       'Las contraseñas coinciden',
-            userMin:       'Usuario: mínimo {min} caracteres'
+            userMin:       'Usuario: mínimo {min} caracteres',
+            mailRequired:  'Email obligatorio',
+            remaining:     'faltan',
+            exceeded:      'excedido',
+            summaryValid:  'Contraseña lista para guardar.',
+            summaryInvalid:'Cumple los criterios anteriores para continuar.'
         }
     });
 })(window);

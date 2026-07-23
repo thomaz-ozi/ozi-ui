@@ -21,7 +21,12 @@
             noSpace:       'Sem espaços',
             noEmailParts:  'Senha não pode conter partes do email',
             confirm:       'Senhas coincidem',
-            userMin:       'Usuário: mínimo {min} caracteres'
+            userMin:       'Usuário: mínimo {min} caracteres',
+            mailRequired:  'Preencher email obrigatório',
+            remaining:     'faltam',
+            exceeded:      'excedido',
+            summaryValid:  'Senha pronta para salvar.',
+            summaryInvalid:'Preencha os critérios acima para continuar.'
         }
     });
 })(window);

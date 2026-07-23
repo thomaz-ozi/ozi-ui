@@ -20,7 +20,12 @@
             noSpace:       'No spaces',
             noEmailParts:  'Password cannot contain parts of the email',
             confirm:       'Passwords match',
-            userMin:       'Username: minimum {min} characters'
+            userMin:       'Username: minimum {min} characters',
+            mailRequired:  'Email is required',
+            remaining:     'remaining',
+            exceeded:      'exceeded',
+            summaryValid:  'Password ready to save.',
+            summaryInvalid:'Meet the criteria above to continue.'
         }
     });
 })(window);
