@@ -219,18 +219,10 @@
 
         // ── behaviors ──────────────────────────────
 
-        'copy': {
-            deps: [],
-            js:   'behaviors/ozi-copy/js/ozi-copy.js',
-            css:  'behaviors/ozi-copy/css/ozi-copy.css',
-            lang: 'behaviors/ozi-copy/lang/{lang}.js'
-        },
-        'paste': {
-            deps: [],
-            js:   'behaviors/ozi-paste/js/ozi-paste.js',
-            css:  'behaviors/ozi-paste/css/ozi-paste.css',
-            lang: 'behaviors/ozi-paste/lang/{lang}.js'
-        },
+        // 'copy' e 'paste' ARQUIVADOS no corte 2.0.0 — descontinuados na v2
+        // (uso zero medido na F0). Substitutos: receitas Alpine em
+        // ozi-ui-docs/dev/_meta/receitas-alpine.md. Codigo na tag v1-final.
+
         'toggle': {
             deps: [],
             js:   'behaviors/ozi-toggle/js/ozi-toggle.js',
@@ -282,13 +274,6 @@
             lang: null
         },
 
-        'copy-plugin': {
-            deps: ['copy'],
-            js:   'integrations/plugins/ozi-copy.plugin.js',
-            css:  null,
-            lang: null
-        },
-
         'search-plugin': {
             deps: ['search'],
             js:   'integrations/plugins/ozi-search.plugin.js',
@@ -326,15 +311,12 @@
         'auth',
         'check',
         'search',
-        'copy',
-        'paste',
         'toggle',
         'editor-plugin',
         'autocomplete-plugin',
         'audio-plugin',
         'auth-plugin',
         'check-plugin',
-        'copy-plugin',
         'search-plugin',
         'toggle-plugin',
         'select-plugin',

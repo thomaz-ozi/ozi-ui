@@ -4,11 +4,11 @@
  * ozi
  * ------------------------------------------
  * Ver: 2.0.0
- * 2026-07-05
+ * 2026-08-02
  *
  * v2.0.0 — índice de versão da geração v2 (JS puro, zero dependência de terceiros).
  *   ozi.js é o marcador de versão da biblioteca. Bump 1.0.7 → 2.0.0 no corte v2.
- *   (Release formal 2.0.0 no Packagist acontece na F5; este é o índice do dev line.)
+ *   Release formal 2.0.0 no Packagist: corte de 2026-08-02.
  *
  *
  * Ponto de entrada único do OZI-UI.
@@ -29,8 +29,18 @@
  *   4. Carrega subsistemas do core (ozi-conf, ozi-hooks, ozi-lang, ozi-helpers, ozi-integrations)
  *   5. Aplica oziConf() pendente se houver
  *   6. Carrega plugins declarados (default: todos)
- *   7. Instala ponte de hooks (zldConf ↔ OZI.hooks) — unidirecional com flag de reentrada
- *   8. OZI.isReady = true → dispara callbacks OZI.ready()
+ *   7. OZI.isReady = true → dispara callbacks OZI.ready()
+ *
+ * Changelog 2.0.0 (corte, 2026-08-02):
+ *   - [CORTE] _bridgeHooks REMOVIDO — era redundante. O ozi-loaddata ja dispara
+ *     OZI.hooks.afterRender direto no fim de zldRenderDependencies() ([FIX-HOOKS]
+ *     da v4.0.5). Como window.__zldConf E o zldConf interno do loaddata, manter
+ *     os dois rodava o afterRender DUAS VEZES por render ZLD. Ver secao [9].
+ *   - [CORTE] ozi-copy / ozi-paste arquivados (descontinuados na v2, uso zero
+ *     medido na F0) — fora do _pluginMap; substitutos = receitas Alpine.
+ *   - MANTIDOS de proposito (rampa de migracao documentada em migration.md):
+ *     shims v1 em integrations/adapters/, aliases zld*, core/jquery-3.7.1.min.js.
+ *     Remocao desses fica para a 3.0.0, apos janela de depreciacao.
  *
  * Changelog v1.0.0:
  *   - [FIX-D] Versao alinhada para 1.0.0 — release oficial.
@@ -202,52 +212,18 @@
     }
 
     /* ─────────────────────────────────────────────
-     * [9] PONTE DE HOOKS
+     * [9] PONTE DE HOOKS — REMOVIDA no corte 2.0.0
      *
-     * Direção: zldConf.zldHooks.afterRender → OZI.hooks.afterRender
-     * UNIDIRECIONAL — nunca o contrário.
+     * A ponte zldConf.zldHooks -> OZI.hooks que vivia aqui (_bridgeHooks)
+     * ficou REDUNDANTE: o proprio ozi-loaddata dispara OZI.hooks.afterRender
+     * direto, no fim de zldRenderDependencies() (ozi-loaddata.js, [FIX-HOOKS]
+     * da v4.0.5) — justamente porque a ponte NAO existe no caminho @oziScripts.
      *
-     * Flag _running previne reentrada:
-     *   zldConf.afterRender (relay)
-     *     → OZI.hooks.afterRender.run()
-     *       → (sem compat:zld-hooks — removido do ozi-hooks.js)
+     * Como window.__zldConf E o zldConf interno do loaddata (ozi-loaddata.js:961),
+     * manter as duas rodava OZI.hooks.afterRender DUAS VEZES por render ZLD.
+     * A remocao elimina a dupla execucao; o re-init continua garantido pelo
+     * loaddata em qualquer caminho de boot (ozi.js ou @oziScripts).
      * ───────────────────────────────────────────── */
-
-    function _bridgeHooks() {
-        var zldInternals = window.__zldConf;
-        if (!zldInternals ||
-            !zldInternals.zldHooks ||
-            !Array.isArray(zldInternals.zldHooks.afterRender)) {
-            return;
-        }
-
-        var already = zldInternals.zldHooks.afterRender.some(function (fn) {
-            return fn && fn.__oziBridge === true;
-        });
-        if (already) return;
-
-        var _running = false;
-
-        var relay = function (root, ctx) {
-            if (_running) return;
-
-            if (OZI.hooks &&
-                OZI.hooks.afterRender &&
-                typeof OZI.hooks.afterRender.run === 'function') {
-                _running = true;
-                try {
-                    OZI.hooks.afterRender.run(root, ctx);
-                } finally {
-                    _running = false;
-                }
-            }
-        };
-
-        relay.__oziBridge = true;
-        zldInternals.zldHooks.afterRender.push(relay);
-
-        _log('info', 'bridge hooks: zldConf.zldHooks -> OZI.hooks (unidirecional, reentrada protegida)');
-    }
 
     /* ─────────────────────────────────────────────
      * [10] COMPAT RETROATIVA — aliases v0.x
@@ -375,10 +351,6 @@
                 return OZI.loader.loadPlugins(loadList, conf.core && conf.core.log, _urlBase);
             })
             .then(function () {
-
-                // ponte instalada APÓS plugins carregarem
-                // garante que __zldConf do ozi-loaddata já existe
-                _bridgeHooks();
 
                 // isReady sobe apenas aqui — depois de todos os plugins prontos
                 OZI.isReady = true;
