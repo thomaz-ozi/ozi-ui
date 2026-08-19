@@ -2,10 +2,13 @@
  * ------------------------------------------
  * ozi-audio
  * ------------------------------------------
- * Ver: 4.0.2
+ * Ver: 4.1.0
  * 2026-08-19
  *
  * Changelog:
+ *   - v4.1.0: [SKIN] Novo visual flat (accent laranja do ozi, ver ozi-audio.css v1.1.0).
+ *       [FEAT] Ciclo de velocidade agora 1 → 1.25 → 1.5 → 1.75 → 2 → 0.5 → 1
+ *       (antes o passo lento era 0.75). Botão .ozi-audio__speed já existia (showSpeed).
  *   - v4.0.2: [FIX] i18n — 13 chaves audio.* faltavam nos 3 dicionários e caíam no
  *       fallback embutido (play/pause/record/stopRecord/save/volume/speed/sending/
  *       saved/saveError/senderError/noRecording/noDestiny), adicionadas em pt-BR/en/es.
@@ -671,7 +674,7 @@
         else if (c === 1.25) n = 1.5;
         else if (c === 1.5)  n = 1.75;
         else if (c === 1.75) n = 2;
-        else if (c === 2)    n = 0.75;
+        else if (c === 2)    n = 0.5;
         this.audio.playbackRate = n;
         this.speed.textContent = n + 'x';
     };

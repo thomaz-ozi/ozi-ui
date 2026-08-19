@@ -1,8 +1,12 @@
 /**
  * components/ozi-audio/css/ozi-audio.css
- * Versão: 1.0.2
+ * Versão: 1.1.0
  *
  * Changelog:
+ *   - v1.1.0: [SKIN 4.1] Novo visual flat com accent laranja do ozi
+ *     (--ozi-audio-accent). Trilhos cinza-claro, ícones desacoplados
+ *     (--ozi-audio-icon), pill de velocidade cinza→laranja no hover,
+ *     container mais flat (sombra/borda suaves). Base p/ skins alternativos.
  *   - v1.0.2: [FIX-P1] --ozi-audio-record-bg e --ozi-audio-save-bg
  *     agora usam var(--ozi-color-danger) e var(--ozi-color-success)
  *     em vez de #dc3545 e #198754 (BS5 hardcoded).
@@ -16,17 +20,21 @@
  */
 
 :root {
-    /* — paleta própria do audio (visual distinto) — */
-    --ozi-audio-color:           #b8b8b9;
-    --ozi-audio-color-secondary: var(--ozi-color-primary, #3b82f6);
+    /* — skin 4.1 (flat, accent laranja do ozi); sobrescreva --ozi-audio-accent p/ outros skins — */
+    --ozi-audio-accent:          #e74526;
+    --ozi-audio-accent-hover:    #f1871e;
+
+    --ozi-audio-color:           #e5e7eb;                               /* trilhos (track) — cinza claro flat */
+    --ozi-audio-color-secondary: var(--ozi-audio-accent);              /* preenchimentos — accent laranja */
+    --ozi-audio-icon:            var(--ozi-color-gray-500,  #6b7280);   /* play/volume icons (desacoplado do track) */
 
     --ozi-audio-text:            var(--ozi-color-gray-500,  #6b7280);
     --ozi-audio-text-secondary:  var(--ozi-color-gray-200,  #e5e7eb);
 
     /* [FIX-B] background via token global do tema */
-    --ozi-audio-bg-local:        var(--ozi-audio-bg,        rgba(255, 255, 255, 0.9));
-    --ozi-audio-shadow:          rgba(0, 0, 0, 0.12);
-    --ozi-audio-border-color:    var(--ozi-border-color,    rgba(255, 255, 255, 0.22));
+    --ozi-audio-bg-local:        var(--ozi-audio-bg,        #ffffff);
+    --ozi-audio-shadow:          rgba(0, 0, 0, 0.06);
+    --ozi-audio-border-color:    var(--ozi-border-color,    #eceef1);
 
     --ozi-audio-progress-bg:     var(--ozi-audio-color);
     --ozi-audio-progress-fill:   var(--ozi-audio-color-secondary);
@@ -34,9 +42,10 @@
     --ozi-audio-volume-bg:       var(--ozi-audio-color);
     --ozi-audio-volume-fill:     var(--ozi-audio-color-secondary);
 
-    --ozi-audio-speed-bg:        var(--ozi-audio-color);
-    --ozi-audio-speed-bg-hover:  var(--ozi-audio-color-secondary);
-    --ozi-audio-speed-text:      var(--ozi-audio-text-secondary);
+    --ozi-audio-speed-bg:         var(--ozi-audio-color);
+    --ozi-audio-speed-bg-hover:   var(--ozi-audio-accent-hover);
+    --ozi-audio-speed-text:       var(--ozi-color-gray-600, #4b5563);
+    --ozi-audio-speed-text-hover: var(--ozi-color-white,    #ffffff);
 
     /* [FIX-P1] record e save via tokens semânticos OZI */
     --ozi-audio-record-bg:       var(--ozi-color-danger,    #ef4444);
@@ -249,7 +258,7 @@
     min-width:  30px;
     height:     30px;
     background: transparent;
-    color:      var(--ozi-audio-color);
+    color:      var(--ozi-audio-icon);
     padding:    0;
 }
 
@@ -327,7 +336,7 @@
 
 .ozi-audio__volume-btn {
     background: transparent;
-    color:      var(--ozi-audio-color);
+    color:      var(--ozi-audio-icon);
     padding:    0;
     min-width:  20px;
     width:      20px;
@@ -376,7 +385,7 @@
     padding:       0;
 }
 
-.ozi-audio__speed:hover:not(:disabled) { background: var(--ozi-audio-speed-bg-hover); }
+.ozi-audio__speed:hover:not(:disabled) { background: var(--ozi-audio-speed-bg-hover); color: var(--ozi-audio-speed-text-hover); }
 
 
 /* ─── RECORD ────────────────────────────────────────── */
