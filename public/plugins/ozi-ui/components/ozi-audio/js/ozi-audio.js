@@ -2,10 +2,15 @@
  * ------------------------------------------
  * ozi-audio
  * ------------------------------------------
- * Ver: 4.0.1
- * 2026-07-20
+ * Ver: 4.0.2
+ * 2026-08-19
  *
  * Changelog:
+ *   - v4.0.2: [FIX] i18n — 13 chaves audio.* faltavam nos 3 dicionários e caíam no
+ *       fallback embutido (play/pause/record/stopRecord/save/volume/speed/sending/
+ *       saved/saveError/senderError/noRecording/noDestiny), adicionadas em pt-BR/en/es.
+ *       [FIX] CSS — .ozi-audio__time ganhou width:75px + flex-shrink:0 + white-space:nowrap
+ *       (não sofrer influência de classes externas; o tempo quebrava em 2 linhas).
  *   - v4.0.1: [V2-F5B] Fix: init() aceita Document/DocumentFragment.
  *       O OZI.hooks.afterRender chama init(root) com `document` (ozi-hooks.js
  *       converte root null -> document). Como document.nodeType === 9 (e não 1),

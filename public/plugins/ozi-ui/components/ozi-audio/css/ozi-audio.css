@@ -298,7 +298,9 @@
     align-items: center;
     gap:         2px;
     font-size:   var(--ozi-font-size-xs, 0.75rem);
-    min-width:   58px;
+    width:       75px;
+    flex-shrink: 0;
+    white-space: nowrap;
 }
 
 .ozi-audio__time-current,

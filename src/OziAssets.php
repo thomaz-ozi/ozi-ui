@@ -101,7 +101,7 @@ class OziAssets
 
     public function __construct()
     {
-        $this->base    = rtrim(asset('plugins/ozi-ui'), '/') . '/';
+        $this->base    = rtrim(asset(config('ozi-ui.base_path', 'plugins/ozi-ui')), '/') . '/';
         $this->version = $this->resolveVersion();
         $this->locale  = $this->resolveLocale();
     }
