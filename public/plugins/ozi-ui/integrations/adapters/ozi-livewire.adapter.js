@@ -3,8 +3,8 @@
  * ------------------------------------------
  * ozi-livewire.adapter
  * ------------------------------------------
- * Ver: 2.0.0
- * 2026-07-05
+ * Ver: 2.1.0
+ * 2026-08-20
  *
  *
  * Responsabilidade:
@@ -28,6 +28,8 @@
  *                                     wire:model; ou um seletor CSS p/ o input
  *   data-ozi-livewire-options-event → evento que atualiza opções
  *   data-ozi-livewire-value         → valor inicial (sobrescreve opções)
+ *   data-ozi-select-footer-call     → método Livewire chamado no clique do rodapé do
+ *                                     ozi-select (via evento ozi:select-footer)
  *
  * Dependências:
  *   - ozi-integrations.js (OZI.integrations.registerAdapter)
@@ -36,6 +38,12 @@
  *     adapter NÃO instala hooks de render próprios.
  *
  * Changelog:
+ *   - v2.1.0: [FEAT] Modo `-footer-call` do rodapé do ozi-select. No evento
+ *     `ozi:select-footer` (emitido pelo botão de rodapé, ozi-select v6.2.0), lê
+ *     `data-ozi-select-footer-call` no root do select e chama `component.call(metodo)`
+ *     no componente Livewire ancestral. Extensão dos modos A/B: agora um `component.call()`
+ *     p/ ação (não só `set`). Mantém o framework isolado no adapter — o componente ozi-select
+ *     só emite o evento neutro (R6). Aditivo → MINOR.
  *   - v2.0.0: [V2-F4] Contrato v2. Guard por `e.detail.source === 'api'`:
  *     mudanças programáticas (setValue, tipicamente originadas do próprio
  *     Livewire) não repropagam — elimina o loop wire:model→setValue→ozi:change→
@@ -285,6 +293,25 @@
         if (!el) return;
 
         try { plugin.setOptions(el, detail.options || []); } catch (err) {}
+    });
+
+
+    // ─────────────────────────────────────────────
+    // [6b] RODAPÉ DO OZI-SELECT — data-ozi-select-footer-call → component.call()
+    // O botão de rodapé (ozi-select v6.2.0) emite `ozi:select-footer` (bubbles). Se o root do
+    // select declarar `data-ozi-select-footer-call="metodo"`, chamamos o método no componente
+    // Livewire ancestral. Framework isolado aqui — o componente só emite o evento neutro (R6).
+    // ─────────────────────────────────────────────
+
+    document.addEventListener('ozi:select-footer', function (e) {
+        var el = e.target;
+        if (!el || !el.getAttribute) return;
+        var method = el.getAttribute('data-ozi-select-footer-call');
+        if (!method) return;
+        var comp = _getComponent(el);
+        if (!comp || typeof comp.call !== 'function') return;
+        try { comp.call(method); }
+        catch (err) { console.warn('[OZI:livewire] footer-call falhou:', err.message); }
     });
 
 

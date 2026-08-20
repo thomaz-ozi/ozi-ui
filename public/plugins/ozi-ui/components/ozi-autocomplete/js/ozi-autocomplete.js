@@ -2,10 +2,15 @@
  * ------------------------------------------
  * ozi-autocomplete
  * ------------------------------------------
- * Ver: 4.0.1
- * 2026-07-20
+ * Ver: 4.1.0
+ * 2026-08-20
  *
  * Changelog:
+ *   - v4.1.0: [DEBUG] Flag local `data-ozi-autocomplete-log` (convenção `data-ozi-{plugin}-log`,
+ *       espelha o zldLog do ozi-loaddata): método _dbg loga init()/destroy() deste widget com
+ *       prefixo [OZI:autocomplete#<uid>]; destroy() com console.trace p/ apontar quem chamou.
+ *       Complementa o `data-ozi-autocomplete-zld-log` existente (esse é só do fetch ZLD, mantido).
+ *       Zero custo/ruído quando ausente/false; por instância. Atributo novo → MINOR (staged 2.3.0).
  *   - v4.0.1: [V2-F5B] Fix: init() aceita Document/DocumentFragment.
  *       O OZI.hooks.afterRender chama init(root) com `document` (ozi-hooks.js
  *       converte root null -> document). Como document.nodeType === 9 (e nao 1),
@@ -88,6 +93,9 @@
         this.zldMin    = this._parseIntAttr('data-ozi-autocomplete-zld-min',   1);
         this.zldDelay  = this._parseIntAttr('data-ozi-autocomplete-zld-delay', 300);
         this.zldLog    = this._parseBoolAttr('data-ozi-autocomplete-zld-log');
+        // debug local de ciclo de vida (convenção `data-ozi-{plugin}-log`, espelha o zldLog do
+        // ozi-loaddata). Complementa o `data-ozi-autocomplete-zld-log` (esse é só do fetch ZLD).
+        this.debug     = this._parseBoolAttr('data-ozi-autocomplete-log');
 
         this.uniqueGroup   = String(this.input.getAttribute('data-ozi-autocomplete-unique') || '').trim();
         this.uniqueMessage = String(this.input.getAttribute('data-ozi-autocomplete-unique-message') || 'Value already selected').trim();
@@ -115,6 +123,16 @@
     }
 
     /* ─── HELPERS ───────────────────────────────── */
+
+    // Log de debug local (só quando `data-ozi-autocomplete-log` está ligado neste widget).
+    // `trace:true` usa console.trace p/ capturar QUEM chamou (ex.: destroy vindo do host).
+    OziAutocomplete.prototype._dbg = function (msg, data, trace) {
+        if (!this.debug) return;
+        var prefix = '[OZI:autocomplete#' + this.uid + ']';
+        var fn = trace ? console.trace : console.log;
+        if (data !== undefined) fn.call(console, prefix, msg, data);
+        else                    fn.call(console, prefix, msg);
+    };
 
     OziAutocomplete.prototype._parseBoolAttr = function (a) {
         if (!this.input.hasAttribute(a)) return false;
@@ -247,6 +265,7 @@
         if (this.input.__oziAutocompleteInitialized) return;
         this.input.__oziAutocompleteInitialized = true;
 
+        this._dbg('init()' + (this.zldUrl ? ' (zld=' + this.zldUrl + ')' : ''));
         this.aliasMap        = this._parseAliasMap();
         this.options         = this._normalizeOptions(this._loadOptions());
         this.initialOptions  = this._cloneOptions(this.options);
@@ -724,6 +743,7 @@
     };
 
     OziAutocomplete.prototype.destroy = function () {
+        this._dbg('destroy() chamado — trace de quem chamou:', undefined, true);
         this._abortRemote();
         if (this.uniqueToast) { this.uniqueToast.remove(); this.uniqueToast = null; }
         if (this._onDocumentClick) document.removeEventListener('click', this._onDocumentClick);

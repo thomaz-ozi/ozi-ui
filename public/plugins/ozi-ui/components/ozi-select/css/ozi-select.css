@@ -1,8 +1,12 @@
 /**
  * components/ozi-select/css/ozi-select.css
- * Versão: 1.0.1
+ * Versão: 1.1.0
  *
  * Changelog:
+ *   - v1.1.0: [FEAT] Rodapé de ação (.ozi-select-footer / .ozi-select-footer-btn /
+ *     .ozi-select-footer-icon) — barra sticky-bottom no dropdown, espelha o search-wrap.
+ *     Tokens novos (com fallback): --ozi-select-footer-color, --ozi-select-footer-hover-bg.
+ *     Acompanha o ozi-select.js v6.2.0.
  *   - v1.0.1: [FIX-P3/P4] Tokens locais --ozi-select-* agora consomem
  *     os tokens globais --ozi-* do tema ativo em vez de valores hardcoded BS5.
  *     Ex: --ozi-select-border-color: var(--ozi-border-color) em vez de #ced4da.
@@ -235,6 +239,44 @@
     overflow-y:     auto;
     overflow-x:     hidden;
     scrollbar-gutter: stable;
+}
+
+/* ─── FOOTER (rodapé de ação, v6.2.0) ───────────────── */
+/* Sticky-bottom, espelha o search-wrap (sticky-top). Em modo slot, o host injeta o
+   próprio botão dentro de .ozi-select-footer; no modo declarativo estilizamos o botão
+   gerado .ozi-select-footer-btn. Só tokens --ozi-* com fallback (sem classe de framework). */
+
+.ozi-select-footer {
+    position:         sticky;
+    bottom:           0;
+    z-index:          2;
+    background-color: var(--ozi-select-search-bg, var(--ozi-select-bg, #fff));
+    border-top:       1px solid var(--ozi-color-gray-200, #e5e7eb);
+}
+.ozi-select-footer-btn {
+    display:        flex;
+    align-items:    center;
+    gap:            0.5rem;
+    width:          100%;
+    margin:         0;
+    padding:        0.5rem 0.75rem;
+    font:           inherit;
+    text-align:     left;
+    color:          var(--ozi-select-footer-color, var(--ozi-color-primary, #2563eb));
+    background:     transparent;
+    border:         0;
+    cursor:         pointer;
+}
+.ozi-select-footer-btn:hover,
+.ozi-select-footer-btn:focus {
+    background-color: var(--ozi-select-footer-hover-bg, var(--ozi-select-option-hover-bg, rgba(0, 0, 0, 0.04)));
+    outline:          0;
+}
+.ozi-select-footer-icon {
+    display:     inline-flex;
+    align-items: center; justify-content: center;
+    min-width:   18px; width: 18px; height: 18px; line-height: 1;
+    flex-shrink: 0;
 }
 
 /* ─── OPTIONS ───────────────────────────────────────── */

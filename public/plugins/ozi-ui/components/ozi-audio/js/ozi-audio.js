@@ -2,10 +2,27 @@
  * ------------------------------------------
  * ozi-audio
  * ------------------------------------------
- * Ver: 4.1.0
+ * Ver: 4.2.0
  * 2026-08-19
  *
  * Changelog:
+ *   - v4.2.0: [SKIN/UX] Fim do <audio controls> NATIVO na revisão pós-gravação —
+ *       os modos `recorder` E `full` passam a usar só o skin próprio do player
+ *       (o nativo escuro sobrepunha o tema). O `recorder` ganhou revelação
+ *       progressiva (3 etapas: gravar → gravando → parado p/ escutar) via classe
+ *       `is-empty` no root (play/timeline/volume/speed escondidos até existir
+ *       gravação); no stop, ambos os modos chamam _attachRecordedToPlayer e mostram
+ *       status 'Parado' (nova chave i18n audio.stopped, pt-BR/en/es). No `recorder`,
+ *       salvar com sucesso reseta ao estado inicial (_resetRecorder — só gravar, volta
+ *       a `is-empty` pronto p/ nova gravação); o `full` NÃO reseta.
+ *       [DEBUG] Novo flag local `data-ozi-audio-log` (convenção `data-ozi-{plugin}-log`,
+ *       espelha o zldLog do ozi-loaddata): quando ligado, o método _dbg loga o ciclo de
+ *       vida deste widget (init/record/gravado/save ok|erro/reset/destroy) com prefixo
+ *       [OZI:audio#<uid>]; o destroy() sai com console.trace p/ apontar QUEM chamou
+ *       (o caso do incidente SNDesk). Zero ruído quando ausente/false. Removidos: o
+ *       preview nativo (DOM/CSS/estado + data-ozi-audio-preview) e o método morto
+ *       _buildRecorderBox. Como há atributo novo (data-ozi-audio-log), no pacote entra
+ *       como MINOR (ozi-ui/core 2.2.0) — feature aditiva não cabe em PATCH (versionamento.md §2).
  *   - v4.1.0: [SKIN] Novo visual flat (accent laranja do ozi, ver ozi-audio.css v1.1.0).
  *       [FEAT] Ciclo de velocidade agora 1 → 1.25 → 1.5 → 1.75 → 2 → 0.5 → 1
  *       (antes o passo lento era 0.75). Botão .ozi-audio__speed já existia (showSpeed).
@@ -205,7 +222,9 @@
         this.title       = String(this.root.getAttribute('data-ozi-audio-title') || '').trim();
         this.showVolume  = this._parseBoolAttr('data-ozi-audio-volume',  true);
         this.showSpeed   = this._parseBoolAttr('data-ozi-audio-speed',   true);
-        this.showPreview = this._parseBoolAttr('data-ozi-audio-preview', true);
+        // debug local por instância (convenção `data-ozi-{plugin}-log`, espelha o zldLog do
+        // ozi-loaddata). Ligado só neste widget; zero ruído quando ausente/false.
+        this.debug       = this._parseBoolAttr('data-ozi-audio-log',     false);
         this.saveUrl     = String(this.root.getAttribute('data-ozi-audio-save-url')   || '').trim();
         this.saveField   = String(this.root.getAttribute('data-ozi-audio-save-field') || 'audio_file').trim();
 
@@ -222,7 +241,6 @@
         this.recordedBlob     = null;
         this.recordedFile     = null;
         this.recordedMimeType = '';
-        this.previewUrl       = '';
         this.isRecording      = false;
 
         this._listeners = []; // { el, type, handler } — removidos no destroy
@@ -233,7 +251,7 @@
         this.volumeWrap = null; this.volumeBtn = null;
         this.volumeBar = null; this.volumeFill = null;
         this.speed = null; this.record = null; this.status = null;
-        this.previewWrap = null; this.preview = null; this.save = null;
+        this.save = null;
     }
 
     /* ─────────────────────────────────────────────
@@ -252,6 +270,16 @@
         if (r === null || r === '') return true;
         r = String(r).trim().toLowerCase();
         return !(r === 'false' || r === '0' || r === 'no' || r === 'off');
+    };
+
+    // Log de debug local (só quando `data-ozi-audio-log` está ligado neste widget).
+    // `trace:true` usa console.trace p/ capturar QUEM chamou (ex.: destroy vindo do host).
+    OziAudio.prototype._dbg = function (msg, data, trace) {
+        if (!this.debug) return;
+        var prefix = '[OZI:audio#' + this.uid + ']';
+        var fn = trace ? console.trace : console.log;
+        if (data !== undefined) fn.call(console, prefix, msg, data);
+        else                    fn.call(console, prefix, msg);
     };
 
     // Valor canônico serializável para o evento (contrato v2: nunca instância/DOM).
@@ -430,25 +458,6 @@
         this.ui.appendChild(this.save);
     };
 
-    OziAudio.prototype._buildRecorderBox = function () {
-        var meta = _el('div', { class: 'ozi-audio__meta' });
-        var time = _el('div', { class: 'ozi-audio__time' });
-        this.timeCurrent = _el('span', { class: 'ozi-audio__time-current', text: '0:00' });
-        time.appendChild(this.timeCurrent);
-        this.status = _el('div', { class: 'ozi-audio__status', text: _t('audio.ready', 'Pronto') });
-        _append(meta, time, this.status);
-        this.box.appendChild(meta);
-
-        if (this.showPreview) {
-            this.previewWrap = _el('div', { class: 'ozi-audio__preview-wrap', hidden: true });
-            this.preview     = _el('audio', { class: 'ozi-audio__preview', controls: true });
-            this.previewWrap.appendChild(this.preview);
-            this.box.appendChild(this.previewWrap);
-        }
-
-        if (this.saveUrl) this._buildSaveButton();
-    };
-
     /* ─────────────────────────────────────────────
      * [8] INIT POR MODO
      * ───────────────────────────────────────────── */
@@ -457,6 +466,7 @@
         if (this.root.__oziAudioInitialized) return;
         this.root.__oziAudioInitialized = true;
 
+        this._dbg('init() mode=' + this.mode);
         if      (this.mode === 'player')   this._initPlayer();
         else if (this.mode === 'recorder') this._initRecorder();
         else if (this.mode === 'full')     this._initFull();
@@ -483,12 +493,24 @@
 
     OziAudio.prototype._initRecorder = function () {
         this._buildShell();
-        this.root.classList.add('ozi-audio-recorder');
+        // `is-empty`: etapas 1-2 (gravar/gravando) escondem o skin do player via CSS;
+        // no stop a classe é removida e o player revelado (revelação progressiva).
+        this.root.classList.add('ozi-audio-recorder', 'is-empty');
         this.box = this._appendTitleBox(this.ui);
-        this._buildRecorderBox();
+        this._buildPlayerControls();            // skin próprio (play/timeline/volume/speed) — igual ao `full`
+
+        this.status = _el('div', { class: 'ozi-audio__status', text: _t('audio.ready', 'Pronto') });
+        var meta = this.box.querySelector('.ozi-audio__meta');
+        if (meta) meta.appendChild(this.status);
+
         this._buildRecorderControls();
+        if (this.saveUrl) this._buildSaveButton();
+
+        this._bindPlayerEvents();
         this._bindRecorderEvents();
+        this._updateTime(0, 0);
         this._updateRecorderTime(0);
+        this._syncPlayerAvailability(false);    // player desabilitado enquanto não há gravação
         this._setStatus(_t('audio.ready', 'Pronto'));
     };
 
@@ -501,13 +523,6 @@
         this.status = _el('div', { class: 'ozi-audio__status', text: _t('audio.ready', 'Pronto') });
         var meta = this.box.querySelector('.ozi-audio__meta');
         if (meta) meta.appendChild(this.status);
-
-        if (this.showPreview) {
-            this.previewWrap = _el('div', { class: 'ozi-audio__preview-wrap', hidden: true });
-            this.preview     = _el('audio', { class: 'ozi-audio__preview', controls: true });
-            this.previewWrap.appendChild(this.preview);
-            this.box.appendChild(this.previewWrap);
-        }
 
         this._buildRecorderControls();
         if (this.saveUrl) this._buildSaveButton();
@@ -728,7 +743,10 @@
             self.mediaRecorder.start();
             self.isRecording = true;
             self._setRecordState(true);
+            // recorder: re-gravar recolapsa o player (volta às etapas 1-2)
+            if (self.mode === 'recorder') self.root.classList.add('is-empty');
             self._setStatus(_t('audio.recording', 'Gravando...'));
+            self._dbg('record start (mime=' + (mimeType || '?') + ')');
             self._startRecorderLoop();
             self.emit('ozi:audio-record-start', { source: source || 'user', mode: self.mode });
 
@@ -768,18 +786,13 @@
         this.recordedMimeType = mimeType;
         this.recordDuration   = Math.max(0, duration);
 
-        if (this.showPreview && this.preview && this.previewWrap) {
-            this._revokePreviewUrl();
-            this.previewUrl = URL.createObjectURL(blob);
-            this.preview.setAttribute('src', this.previewUrl);
-            this.previewWrap.hidden = false;
-        }
-
-        if (this.mode === 'full') this._attachRecordedToPlayer(blob);
+        // recorder e full: a revisão pós-gravação usa o skin próprio do player (nunca o
+        // <audio controls> nativo). O display de tempo (0:00 / duração) fica a cargo do
+        // player (loadedmetadata), não do contador de gravação.
+        this._attachRecordedToPlayer(blob);
+        if (this.mode === 'recorder') this.root.classList.remove('is-empty'); // revela o player (etapa 3)
         if (this.save) this.save.disabled = false;
-
-        this._setStatus(_t('audio.ready', 'Pronto'));
-        this._updateRecorderTime(this.recordDuration);
+        this._setStatus(_t('audio.stopped', 'Parado'));
         this._cleanupRecorderMedia();
 
         var payload = {
@@ -788,6 +801,7 @@
             size:     file.size || blob.size || 0,
             file:     file
         };
+        this._dbg('gravado', { duration: payload.duration, size: payload.size, mime: mimeType });
         this.emit('ozi:audio-recorded', payload);
         // Contrato v2: nova gravação = mudança de valor canônico.
         this.emit('ozi:change', { file: file, duration: payload.duration });
@@ -825,16 +839,39 @@
         if (this.status) this.status.textContent = String(text || '').trim();
     };
 
+    // recorder: volta ao estado inicial (etapa 1 — pronto p/ gravar de novo) após salvar.
+    // O `full` NÃO reseta — mantém o áudio no player para reouvir/re-salvar.
+    OziAudio.prototype._resetRecorder = function () {
+        this._dbg('reset → idle (modo só gravar)');
+        if (this.audio) { this.audio.pause(); this.audio.src = ''; }
+        if (this.playerObjectUrl) {
+            try { URL.revokeObjectURL(this.playerObjectUrl); } catch (e) {}
+            this.playerObjectUrl = '';
+        }
+        this.recordedBlob     = null;
+        this.recordedFile     = null;
+        this.recordDuration   = 0;
+        this.recordedMimeType = '';
+        this.root.classList.add('is-empty');     // recolhe o player (volta às etapas 1-2)
+        this._setPlayState(false);
+        this._updateProgress(0);
+        this._updateTime(0, 0);
+        this._updateRecorderTime(0);
+        this._syncPlayerAvailability(false);
+        if (this.save) this.save.disabled = true;
+    };
+
     OziAudio.prototype._saveRecording = function () {
         var self   = this;
         var sender = window.oziLoadData || window.oziLoaddata || null;
 
-        if (!this.recordedFile) { this._setStatus(_t('audio.noRecording', 'Sem gravação'));    return; }
-        if (!this.saveUrl)      { this._setStatus(_t('audio.noDestiny',   'Sem destino'));      return; }
-        if (!sender)            { this._setStatus(_t('audio.senderError', 'ZLD indisponível')); return; }
+        if (!this.recordedFile) { this._dbg('save abortado: sem gravação');   this._setStatus(_t('audio.noRecording', 'Sem gravação'));    return; }
+        if (!this.saveUrl)      { this._dbg('save abortado: sem save-url');   this._setStatus(_t('audio.noDestiny',   'Sem destino'));      return; }
+        if (!sender)            { this._dbg('save abortado: oziLoadData ausente'); this._setStatus(_t('audio.senderError', 'ZLD indisponível')); return; }
 
         if (this.save) this.save.disabled = true;
         this._setStatus(_t('audio.sending', 'Enviando...'));
+        this._dbg('save() → ' + this.saveUrl + ' (campo=' + this.saveField + ')');
 
         var payload = {
             zldUrl:        this.saveUrl,
@@ -860,18 +897,26 @@
         if (result && typeof result.then === 'function') {
             result.then(function (res) {
                 if (res && res.ok === true) {
+                    self._dbg('save ok (HTTP ' + (res.status || '?') + ')');
                     self._setStatus(_t('audio.saved', 'Salvo'));
                     self.emit('ozi:audio-saved', { response: res });
+                    // recorder é "só gravar": após salvar volta ao início (pronto p/ nova gravação).
+                    // O status "Salvo" fica visível na visão recolhida até o próximo record.
+                    if (self.mode === 'recorder') self._resetRecorder();
                 } else {
+                    self._dbg('save falhou (res.ok!==true)', res);
                     self._setStatus(_t('audio.saveError', 'Erro ao salvar'));
                     self.emit('ozi:audio-save-error', { response: res });
                 }
             }).catch(function (err) {
+                self._dbg('save rejeitado', err && err.message ? err.message : err);
                 self._setStatus(_t('audio.saveError', 'Erro ao salvar'));
                 self.emit('ozi:audio-save-error', { error: err });
             }).then(function () {
-                // .finally() substituído por .then() para compat com browsers legados
-                if (self.save) self.save.disabled = false;
+                // .finally() substituído por .then() para compat com browsers legados.
+                // Após reset do recorder (recordedFile=null) o salvar segue desabilitado;
+                // em erro, recordedFile permanece → salvar reabilita para nova tentativa.
+                if (self.save) self.save.disabled = !self.recordedFile;
             });
             return;
         }
@@ -887,15 +932,12 @@
         this.mediaRecorder = null;
     };
 
-    OziAudio.prototype._revokePreviewUrl = function () {
-        if (this.previewUrl) { URL.revokeObjectURL(this.previewUrl); this.previewUrl = ''; }
-    };
-
     /* ─────────────────────────────────────────────
      * [12] DESTROY
      * ───────────────────────────────────────────── */
 
     OziAudio.prototype.destroy = function () {
+        this._dbg('destroy() chamado — trace de quem chamou:', undefined, true);
         this._stopPlayerLoop();
         this._stopRecorderLoop();
 
@@ -914,7 +956,6 @@
         if (this.audio) { this.audio.pause(); this.audio.src = ''; this.audio = null; }
 
         this._cleanupRecorderMedia();
-        this._revokePreviewUrl();
 
         this.emit('ozi:destroy', { source: 'api' });
 

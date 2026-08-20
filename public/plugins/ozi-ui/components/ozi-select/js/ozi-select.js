@@ -2,10 +2,29 @@
  * ------------------------------------------
  * ozi-select
  * ------------------------------------------
- * Ver: 6.0.1
- * 2026-07-20
+ * Ver: 6.2.0
+ * 2026-08-20
  *
  * Changelog:
+ *   - v6.2.0: [FEAT] Rodapé de ação no dropdown (`data-ozi-select-footer`). Um botão
+ *       persistente no pé do dropdown (ex.: "Gerenciar contas de e-mail"), fora da lista de
+ *       opções — sobrevive à busca, é pulado pela navegação por seta, e NÃO é valor p/ o
+ *       ozi-validate. Dois modos de autoria:
+ *         • SLOT: <template data-ozi-select-footer="<key>"> declarado FORA do root (o root é
+ *           limpo por innerHTML='' no buildUI/destroy); o conteúdo do template é movido p/ o
+ *           rodapé. O host coloca a ação no próprio markup (wire:click/wire:ignore/@click);
+ *           o componente só reposiciona e fecha o dropdown no clique.
+ *         • DECLARATIVO: `data-ozi-select-footer-label` (+ `-footer-icon`) gera o botão.
+ *       Em ambos os modos o clique FECHA o dropdown e emite `ozi:select-footer` (contrato v2,
+ *       source:'user') — SEM preventDefault/stopPropagation (senão mataria o wire:click do
+ *       host). A ação declarativa é amarrada pelo host (x-on:ozi:select-footer) ou pelo
+ *       adapter Livewire via `data-ozi-select-footer-call` (component.call). O componente
+ *       nunca conhece framework (R6). Aditivo → MINOR (pacote 2.2.0).
+ *   - v6.1.0: [DEBUG] Flag local `data-ozi-select-log` (convenção `data-ozi-{plugin}-log`,
+ *       espelha o zldLog do ozi-loaddata): método _dbg loga init()/destroy() deste widget
+ *       com prefixo [OZI:select#<uid>]; destroy() sai com console.trace p/ apontar quem
+ *       chamou. Zero custo/ruído quando ausente/false; por instância. Atributo novo →
+ *       no pacote entra numa MINOR (entra junto do rodapé na 2.2.0).
  *   - v6.0.1: [V2-F5B] Fix: init()/get() aceitam Document/DocumentFragment.
  *       O OZI.hooks.afterRender chama init(root) com `document` (ozi-hooks.js
  *       converte root null -> document). Como document.nodeType === 9 (e nao 1),
@@ -128,11 +147,20 @@
         this.valueIcon         = String(this.root.dataset.oziSelectValueIcon || '').trim();
         this.searchIcon        = String(this.root.dataset.oziSelectSearchIcon || '').trim();
 
+        // rodapé de ação (v6.2.0) — slot (<template data-ozi-select-footer="<key>">) ou
+        // botão gerado por label. O slot vive FORA do root (o buildUI/destroy limpam o root).
+        this.footerLabel = String(this.root.dataset.oziSelectFooterLabel || '').trim();
+        this.footerIcon  = String(this.root.dataset.oziSelectFooterIcon  || '').trim();
+        this.footer      = null;   // região do rodapé no dropdown
+        this.footerSlot  = null;   // <template> de origem (modo slot)
+
         this.hasSubmitFieldsConfig = this.root.hasAttribute('data-ozi-select-submit-fields');
         this.submitFieldsRaw       = String(this.root.getAttribute('data-ozi-select-submit-fields') || '');
 
         this.isDisabledConfig = this.parseBooleanAttr('data-ozi-select-disabled');
         this.isRequiredConfig = this.parseBooleanAttr('data-ozi-select-required');
+        // debug local por instância (convenção `data-ozi-{plugin}-log`, espelha o zldLog do ozi-loaddata)
+        this.debug            = this.parseBooleanAttr('data-ozi-select-log');
         this.requiredMessage  = String(this.root.getAttribute('data-ozi-select-required-message') || _t('select.requiredMessage', 'Selecione uma opção.'));
 
         this.zldUrl      = String(this.root.dataset.oziSelectZldUrl      || '').trim();
@@ -192,6 +220,16 @@
         return isNaN(parsed) ? fallback : parsed;
     };
 
+    // Log de debug local (só quando `data-ozi-select-log` está ligado neste widget).
+    // `trace:true` usa console.trace p/ capturar QUEM chamou (ex.: destroy vindo do host).
+    OziSelect.prototype._dbg = function (msg, data, trace) {
+        if (!this.debug) return;
+        var prefix = '[OZI:select#' + this.uid + ']';
+        var fn = trace ? console.trace : console.log;
+        if (data !== undefined) fn.call(console, prefix, msg, data);
+        else                    fn.call(console, prefix, msg);
+    };
+
     /* ─── alias map ────────────────────────────────────────────────── */
 
     OziSelect.prototype.parseAliasMap = function () {
@@ -238,6 +276,7 @@
         if (this.root.__oziSelectInitialized) return;
         this.root.__oziSelectInitialized = true;
 
+        this._dbg('init() key=' + this.key + ' mode=' + this.mode);
         this.parseImageDimension();
 
         this.submitMode = this.normalizeSubmitMode(
@@ -403,10 +442,41 @@
 
         this.dropdown.appendChild(searchWrap);
         this.dropdown.appendChild(this.list);
+        this.buildFooter();   // rodapé de ação (v6.2.0) — 3º filho, fora da lista
         this.ui.appendChild(this.control);
         this.ui.appendChild(this.dropdown);
         this.root.appendChild(this.ui);
         this.root.appendChild(this.feedback);
+    };
+
+    /* ─── rodapé de ação (v6.2.0) ──────────────────────────────────── */
+    // Fica em .ozi-select-dropdown DEPOIS de .ozi-select-list — fora do listbox, então
+    // renderOptions() não o toca (sobrevive à busca) e a navegação por seta o ignora.
+    OziSelect.prototype.buildFooter = function () {
+        this.footerSlot = document.querySelector('template[data-ozi-select-footer="' + this.key + '"]');
+        if (!this.footerSlot && !this.footerLabel) return;   // sem rodapé configurado
+
+        this.footer = _make('div', { class: 'ozi-select-footer' });
+
+        if (this.footerSlot) {
+            // modo SLOT: move o conteúdo (nós reais) do <template> p/ o rodapé. Conteúdo de
+            // <template> é inerte; ao entrar no DOM vivo o wire:click do host passa a valer
+            // (o Livewire delega o clique no document). O <template> fica FORA do root, então
+            // sobrevive ao root.innerHTML='' — no destroy devolvemos o conteúdo p/ ele.
+            this.footer.appendChild(this.footerSlot.content);
+        } else {
+            // modo DECLARATIVO: botão gerado a partir de label + ícone opcional.
+            var btn = _make('button', { type: 'button', class: 'ozi-select-footer-btn' });
+            if (this.footerIcon) {
+                var ic = _make('span', { class: 'ozi-select-footer-icon', 'aria-hidden': 'true' });
+                ic.appendChild(_make('i', { class: this.footerIcon }));
+                btn.appendChild(ic);
+            }
+            btn.appendChild(document.createTextNode(this.footerLabel));
+            this.footer.appendChild(btn);
+        }
+
+        this.dropdown.appendChild(this.footer);
     };
 
     OziSelect.prototype.applyStateStyles = function () {
@@ -465,6 +535,16 @@
                 if (self.isDisabled()) return;
                 var item = self.findOptionByValue(match.getAttribute('data-value'));
                 if (item) self.toggleItem(item);
+                return;
+            }
+
+            // rodapé de ação (v6.2.0): fecha o dropdown e emite ozi:select-footer.
+            // NÃO preventDefault / NÃO stopPropagation — deixa o wire:click/@click do host
+            // (modo slot) e o adapter Livewire (data-ozi-select-footer-call) dispararem.
+            match = target.closest('.ozi-select-footer');
+            if (match) {
+                self.close(true);
+                self.emit('ozi:select-footer', 'user');
                 return;
             }
 
@@ -1162,11 +1242,17 @@
     /* ─── destroy / reload ─────────────────────────────────────────── */
 
     OziSelect.prototype.destroy = function () {
+        this._dbg('destroy() chamado — trace de quem chamou:', undefined, true);
         this.abortRemoteRequest();
         if (this._onDocumentClick) document.removeEventListener('click', this._onDocumentClick);
         if (this.form) {
             if (this._onFormSubmit) this.form.removeEventListener('submit', this._onFormSubmit);
             if (this._onFormReset)  this.form.removeEventListener('reset',  this._onFormReset);
+        }
+        // rodapé slot (v6.2.0): devolve o conteúdo ao <template> antes de limpar o root,
+        // p/ reload() reencontrar (no re-render do Livewire o template já vem recriado).
+        if (this.footerSlot && this.footer) {
+            while (this.footer.firstChild) this.footerSlot.content.appendChild(this.footer.firstChild);
         }
         if (this.ui)              this.ui.remove();
         if (this.feedback)        this.feedback.remove();

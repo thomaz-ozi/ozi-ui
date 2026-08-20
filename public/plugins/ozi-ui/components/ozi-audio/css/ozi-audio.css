@@ -1,8 +1,12 @@
 /**
  * components/ozi-audio/css/ozi-audio.css
- * Versão: 1.1.0
+ * Versão: 1.2.0
  *
  * Changelog:
+ *   - v1.2.0: [SKIN 4.2] Recorder com revelação progressiva — a classe `is-empty`
+ *     no root esconde play/timeline/volume/speed nas etapas 1-2 (gravar/gravando);
+ *     o JS a remove no stop e revela o player (etapa 3). Status do recorder ganhou
+ *     alinhamento à direita (igual ao `full`).
  *   - v1.1.0: [SKIN 4.1] Novo visual flat com accent laranja do ozi
  *     (--ozi-audio-accent). Trilhos cinza-claro, ícones desacoplados
  *     (--ozi-audio-icon), pill de velocidade cinza→laranja no hover,
@@ -430,18 +434,23 @@
 .ozi-audio__save:hover:not(:disabled) { background: var(--ozi-audio-save-bg-hover); }
 
 
-/* ─── PREVIEW ───────────────────────────────────────── */
-
-.ozi-audio__preview-wrap { margin-top: 8px; }
-.ozi-audio__preview { width: 100%; max-width: 100%; display: block; }
-
-
 /* ─── MODOS ─────────────────────────────────────────── */
 
 .ozi-audio-player .ozi-audio__main,
 .ozi-audio-full .ozi-audio__main,
 .ozi-audio-recorder .ozi-audio__main { align-items: flex-start; }
-.ozi-audio-full .ozi-audio__status   { min-width: 70px; text-align: right; }
+.ozi-audio-full .ozi-audio__status,
+.ozi-audio-recorder .ozi-audio__status { min-width: 70px; text-align: right; }
+
+/* recorder — revelação progressiva (skin 4.2): etapas 1-2 (gravar/gravando) escondem o
+   skin do player; ficam só o botão de gravar + tempo corrente + status. Ao parar, o JS
+   remove `is-empty` e o player aparece (etapa 3 — parado p/ escutar). */
+.ozi-audio-recorder.is-empty .ozi-audio__play,
+.ozi-audio-recorder.is-empty .ozi-audio__timeline,
+.ozi-audio-recorder.is-empty .ozi-audio__volume,
+.ozi-audio-recorder.is-empty .ozi-audio__speed,
+.ozi-audio-recorder.is-empty .ozi-audio__time-sep,
+.ozi-audio-recorder.is-empty .ozi-audio__time-length { display: none; }
 
 
 /* ─── RESPONSIVO ────────────────────────────────────── */

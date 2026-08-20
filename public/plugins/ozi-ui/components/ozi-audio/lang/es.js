@@ -17,6 +17,7 @@
             volume:         'Volumen',
             speed:          'Velocidad',
             ready:          'Listo',
+            stopped:        'Detenido',
             recording:      'Grabando...',
             processing:     'Procesando...',
             sending:        'Enviando...',

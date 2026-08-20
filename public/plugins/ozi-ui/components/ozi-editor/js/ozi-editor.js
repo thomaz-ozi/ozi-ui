@@ -2,8 +2,8 @@
  * ------------------------------------------
  * ozi-editor
  * ------------------------------------------
- * Ver: 4.0.0
- * 2026-07-04
+ * Ver: 4.1.0
+ * 2026-08-20
  *
  * Editor WYSIWYG (contenteditable) com toolbar declarativa, modos html/md,
  * dropdowns de heading/classes, source view, sanitizacao e validacao.
@@ -16,6 +16,10 @@
  * Eventos: ozi:init, ozi:change, ozi:destroy (CustomEvent nativos, contrato v2)
  *
  * Changelog:
+ *   - v4.1.0: [DEBUG] Flag local `data-ozi-editor-log` (convenção `data-ozi-{plugin}-log`,
+ *       espelha o zldLog do ozi-loaddata): método _dbg loga init()/destroy() deste widget
+ *       com prefixo [OZI:editor#<uid>]; destroy() com console.trace p/ apontar quem chamou.
+ *       Zero custo/ruído quando ausente/false; por instância. Atributo novo → MINOR (staged 2.3.0).
  *   - v4.0.0: [V2-F2] Migracao para JS puro (docs/ozi-ui-v2-contratos.md, dev-hard):
  *       - Zero jQuery. Build de UI via createElement; delegacao de eventos nativa
  *         em cada wrap (addEventListener + e.target.closest), rastreada por
@@ -386,6 +390,8 @@
 
         this.isDisabled      = _parseBool(this.textarea, 'data-ozi-editor-disabled', false);
         this.isRequired      = _parseBool(this.textarea, 'data-ozi-editor-required', false);
+        // debug local por instância (convenção `data-ozi-{plugin}-log`, espelha o zldLog do ozi-loaddata)
+        this.debug           = _parseBool(this.textarea, 'data-ozi-editor-log', false);
         this.requiredMessage = this.textarea.getAttribute('data-ozi-editor-required-message') || _t('common.required');
 
         this.classDefs = _parseClassDefs(this.textarea.getAttribute('data-ozi-editor-class') || '');
@@ -414,10 +420,21 @@
      * [9] LIFECYCLE
      * ───────────────────────────────────────────── */
 
+    // Log de debug local (só quando `data-ozi-editor-log` está ligado neste widget).
+    // `trace:true` usa console.trace p/ capturar QUEM chamou (ex.: destroy vindo do host).
+    OziEditor.prototype._dbg = function (msg, data, trace) {
+        if (!this.debug) return;
+        var prefix = '[OZI:editor#' + this.uid + ']';
+        var fn = trace ? console.trace : console.log;
+        if (data !== undefined) fn.call(console, prefix, msg, data);
+        else                    fn.call(console, prefix, msg);
+    };
+
     OziEditor.prototype.init = function () {
         if (_isInited(this.textarea, this.editorType)) return;
         _setInited(this.textarea, this.editorType, true);
 
+        this._dbg('init() key=' + this.key + ' type=' + this.editorType);
         this._buildUI();
         this._loadIcons();
         this._syncFromTextarea();
@@ -435,6 +452,7 @@
     };
 
     OziEditor.prototype.destroy = function () {
+        this._dbg('destroy() chamado — trace de quem chamou:', undefined, true);
         (this._listeners || []).forEach(function (l) { l.target.removeEventListener(l.type, l.handler); });
         this._listeners = [];
         if (this.wrap && this.wrap.parentNode) this.wrap.parentNode.removeChild(this.wrap);
