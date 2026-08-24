@@ -1,0 +1,85 @@
+/**
+ * themes/clarity/tokens.css
+ * Versão: 1.0.0
+ *
+ * Skin "clarity" do OZI-UI — geração visual do ozi-audio (Designer).
+ * Paleta: PLAY azul · progresso/volume ROXO · gravar VERMELHO · concluir VERDE,
+ * sobre card escuro (dark-first no uso). Segue a convenção da v2: esta base é o
+ * modo CLARO; o escuro (card #16181e) vem em `dark.css`.
+ *
+ * Princípio (v2): tema = dados. Só declaramos o que DIFERE do `default`;
+ * o resto herda de themes/default/tokens.css.
+ *
+ * Os acentos (azul/roxo/vermelho/verde) valem nos DOIS modos — não mudam no
+ * dark; só card/trilho/texto/ícone mudam (em dark.css).
+ *
+ * OPT-IN por marcador: os tokens ficam em `:root[data-ozi-skin~="clarity"]`
+ * (atributo no <html>) — sobe a especificidade (0,2,0) e vence o :root do
+ * components/ozi-audio/css/ozi-audio.css mesmo carregando ANTES dele (o ozi.js
+ * injeta o CSS do componente em runtime, sempre depois do <link> do tema). O
+ * js/ozi-audio-clarity.js seta esse atributo no boot; o app também pode pô-lo
+ * no <html> para evitar flash e para alternar default↔clarity.
+ *
+ * Changelog:
+ *   - v1.1.0: [FIX cascade] tokens escopados em :root[data-ozi-skin~="clarity"]
+ *     p/ vencer a base independente da ordem de carga.
+ *   - v1.0.0: [SKIN clarity] tokens. Play azul, progresso/volume roxo, título
+ *     caixa-alta, geometria mais larga/arredondada; vermelho/verde p/ Gravar/Concluir.
+ */
+
+:root[data-ozi-skin~="clarity"] {
+
+    /* ─── ACENTOS clarity (valem em claro e escuro) ─── */
+    --ozi-clarity-blue:          #3d7bfa;   /* play / ação primária */
+    --ozi-clarity-blue-hover:    #2f6ef0;
+    --ozi-clarity-purple:        #7c5cff;   /* progresso / volume / nível */
+    --ozi-clarity-purple-hover:  #6b4ef0;
+    --ozi-clarity-red:           #e0454f;   /* gravar (recorder/full) */
+    --ozi-clarity-green:         #1f9d63;   /* concluir/salvar (recorder/full) */
+
+    /* accent do componente = ROXO (alimenta progress/volume/timeline via var-chain) */
+    --ozi-color-primary:         var(--ozi-clarity-blue);
+    --ozi-color-primary-hover:   var(--ozi-clarity-blue-hover);
+
+    /* ─── OZI-AUDIO · skin clarity (modo claro) ─────── */
+
+    --ozi-audio-accent:          var(--ozi-clarity-purple);
+    --ozi-audio-accent-hover:    var(--ozi-clarity-purple-hover);
+
+    /* play tem cor PRÓPRIA (azul), separado do progresso (roxo) */
+    --ozi-audio-play-bg:         var(--ozi-clarity-blue);
+    --ozi-audio-play-bg-hover:   var(--ozi-clarity-blue-hover);
+
+    /* gravar/concluir — prontos p/ recorder/full */
+    --ozi-audio-record-bg:       var(--ozi-clarity-red);
+    --ozi-audio-record-bg-hover: color-mix(in srgb, var(--ozi-clarity-red) 85%, black);
+    --ozi-audio-save-bg:         var(--ozi-clarity-green);
+    --ozi-audio-save-bg-hover:   color-mix(in srgb, var(--ozi-clarity-green) 85%, black);
+
+    /* trilhos e superfícies (claro) */
+    --ozi-audio-color:           #e9ebef;   /* track vazio */
+    --ozi-audio-bg:              #ffffff;    /* card (alimenta --ozi-audio-bg-local) */
+    --ozi-audio-border-color:    #e6e8ec;
+    --ozi-audio-shadow:          rgba(17, 20, 26, 0.08);
+
+    /* ícones e texto (claro) */
+    --ozi-audio-icon:            #6f7784;
+    --ozi-audio-text:            #3a3f4a;
+    --ozi-audio-text-secondary:  #6f7784;
+    --ozi-audio-status:          #8b929e;
+
+    /* pill de velocidade — outline discreto, realce roxo no hover */
+    --ozi-audio-speed-bg:         transparent;
+    --ozi-audio-speed-bg-hover:   var(--ozi-audio-accent);
+    --ozi-audio-speed-text:       var(--ozi-audio-text-secondary);
+    --ozi-audio-speed-text-hover: #ffffff;
+
+    /* geometria — mais largo, mais arredondado, timeline mais grossa */
+    --ozi-audio-radius:          14px;
+    --ozi-audio-width-min:       280px;
+    --ozi-audio-width-max:       420px;
+    --ozi-audio-padding:         12px 14px;
+    --ozi-audio-gap:             12px;
+    --ozi-audio-timeline-height: 14px;
+    --ozi-audio-volume-height:   8px;
+}

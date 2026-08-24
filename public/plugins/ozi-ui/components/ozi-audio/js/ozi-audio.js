@@ -2,10 +2,17 @@
  * ------------------------------------------
  * ozi-audio
  * ------------------------------------------
- * Ver: 4.2.0
- * 2026-08-19
+ * Ver: 4.3.0
+ * 2026-08-21
  *
  * Changelog:
+ *   - v4.3.0: [FEAT] Pausar/retomar gravação — API pública nova `recordPause(id)` /
+ *       `recordResume(id)` (e métodos _pauseRecording/_resumeRecording). Usa
+ *       MediaRecorder.pause()/resume(); o cronômetro compensa o tempo pausado
+ *       (recordStartedAt ajustado no resume) para não pular. Estado `isPaused` no
+ *       root via classe `is-paused`; eventos `ozi:audio-record-pause`/`-resume`.
+ *       Aditivo, sem quebra — habilita o transporte do skin clarity (ozi-audio-clarity.js)
+ *       sem tocar no fluxo existente. No pacote: MINOR (ozi-ui/core 2.3.0).
  *   - v4.2.0: [SKIN/UX] Fim do <audio controls> NATIVO na revisão pós-gravação —
  *       os modos `recorder` E `full` passam a usar só o skin próprio do player
  *       (o nativo escuro sobrepunha o tema). O `recorder` ganhou revelação
@@ -242,6 +249,8 @@
         this.recordedFile     = null;
         this.recordedMimeType = '';
         this.isRecording      = false;
+        this.isPaused         = false;   // v4.3 — pausa da gravação (recordPause/Resume)
+        this.recordPausedAt   = 0;       // instante da pausa, p/ compensar o cronômetro
 
         this._listeners = []; // { el, type, handler } — removidos no destroy
 
@@ -742,6 +751,7 @@
 
             self.mediaRecorder.start();
             self.isRecording = true;
+            self.isPaused    = false;
             self._setRecordState(true);
             // recorder: re-gravar recolapsa o player (volta às etapas 1-2)
             if (self.mode === 'recorder') self.root.classList.add('is-empty');
@@ -759,6 +769,9 @@
     OziAudio.prototype._stopRecording = function () {
         if (!this.mediaRecorder || !this.isRecording) return;
         this.isRecording = false;
+        this.isPaused    = false;
+        this.recordPausedAt = 0;
+        this.root.classList.remove('is-paused');
         this._stopRecorderLoop();
         this._setRecordState(false);
         this._setStatus(_t('audio.processing', 'Processando...'));
@@ -768,6 +781,43 @@
             this.emit('ozi:audio-record-error', { message: err && err.message ? err.message : 'Erro ao parar gravação' });
             this._cleanupRecorderMedia();
         }
+    };
+
+    // v4.3 — pausa/retoma a gravação em andamento (MediaRecorder.pause/resume).
+    // O cronômetro roda por (now - recordStartedAt); no resume empurramos
+    // recordStartedAt para frente pelo tempo pausado, então o tempo não pula.
+    OziAudio.prototype._pauseRecording = function (source) {
+        if (!this.mediaRecorder || !this.isRecording || this.isPaused) return;
+        if (this.mediaRecorder.state !== 'recording') return;
+        try { this.mediaRecorder.pause(); }
+        catch (err) {
+            this.emit('ozi:audio-record-error', { message: err && err.message ? err.message : 'Erro ao pausar gravação' });
+            return;
+        }
+        this.isPaused = true;
+        this.recordPausedAt = Date.now();
+        this._stopRecorderLoop();
+        this.root.classList.add('is-paused');
+        this._setStatus(_t('audio.paused', 'Pausado'));
+        this._dbg('record pause');
+        this.emit('ozi:audio-record-pause', { source: source || 'user', mode: this.mode });
+    };
+
+    OziAudio.prototype._resumeRecording = function (source) {
+        if (!this.mediaRecorder || !this.isRecording || !this.isPaused) return;
+        try { this.mediaRecorder.resume(); }
+        catch (err) {
+            this.emit('ozi:audio-record-error', { message: err && err.message ? err.message : 'Erro ao retomar gravação' });
+            return;
+        }
+        if (this.recordPausedAt) this.recordStartedAt += (Date.now() - this.recordPausedAt);
+        this.recordPausedAt = 0;
+        this.isPaused = false;
+        this.root.classList.remove('is-paused');
+        this._startRecorderLoop();
+        this._setStatus(_t('audio.recording', 'Gravando...'));
+        this._dbg('record resume');
+        this.emit('ozi:audio-record-resume', { source: source || 'user', mode: this.mode });
     };
 
     OziAudio.prototype._handleRecorderStop = function () {
@@ -1028,6 +1078,8 @@
         record:     function (id) { var i = this.get(id); if (i) i._startRecording('api'); },
         stopRecord: function (id) { var i = this.get(id); if (i) i._stopRecording(); },
         save:       function (id) { var i = this.get(id); if (i) i._saveRecording(); },
+        recordPause:  function (id) { var i = this.get(id); if (i) i._pauseRecording('api'); },
+        recordResume: function (id) { var i = this.get(id); if (i) i._resumeRecording('api'); },
 
         setIconBase: function (path) {
             _iconCache   = {};
@@ -1103,6 +1155,8 @@
         record:      function (id)   { audioAPI.record(id); },
         stopRecord:  function (id)   { audioAPI.stopRecord(id); },
         save:        function (id)   { audioAPI.save(id); },
+        recordPause:  function (id)  { audioAPI.recordPause(id); },
+        recordResume: function (id)  { audioAPI.recordResume(id); },
         setIconBase: function (path) { audioAPI.setIconBase(path); },
         refresh:     function (root) { audioAPI.init(root); }
     };

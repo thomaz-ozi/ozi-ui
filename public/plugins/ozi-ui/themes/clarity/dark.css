@@ -1,0 +1,49 @@
+/**
+ * themes/clarity/dark.css
+ * Versão: 1.1.0
+ *
+ * Remapeamento dark do skin clarity — o card escuro (#191b21) do Designer.
+ * Ativado por [data-ozi-theme="dark"] ou @media (prefers-color-scheme: dark).
+ *
+ * OPT-IN + especificidade: escopado em `:root[data-ozi-skin~="clarity"]…`, que
+ * vence o bloco dark da base (components/ozi-audio/css/ozi-audio.css remapeia
+ * --ozi-audio-bg-local/-color/-text… em `[data-ozi-theme="dark"]`, 0,1,0). Como
+ * o CSS da base é injetado DEPOIS do <link> do tema, sem essa especificidade
+ * extra a base venceria — foi o que fazia o "1x" sumir no escuro.
+ *
+ * Mantenha os DOIS blocos com os mesmos remapeamentos (convenção v2).
+ *
+ * Changelog:
+ *   - v1.1.0: [FIX cascade] blocos dark escopados em :root[data-ozi-skin~="clarity"]
+ *     p/ vencer o bloco dark da base (o "1x"/textos sumiam no escuro).
+ *   - v1.0.0: [SKIN clarity] card escuro + trilhos/ícones/texto.
+ */
+
+/* auto — respeita preferência do sistema */
+@media (prefers-color-scheme: dark) {
+    :root[data-ozi-skin~="clarity"]:not([data-ozi-theme="light"]):not([data-bs-theme="light"]) {
+        --ozi-audio-bg:              #191b21;
+        --ozi-audio-bg-local:        #191b21;
+        --ozi-audio-color:           #333844;
+        --ozi-audio-border-color:    rgba(255, 255, 255, 0.07);
+        --ozi-audio-shadow:          rgba(0, 0, 0, 0.40);
+        --ozi-audio-icon:            #9aa2ae;
+        --ozi-audio-text:            #cfd4dc;
+        --ozi-audio-text-secondary:  #9aa2ae;
+        --ozi-audio-status:          #8b929e;
+    }
+}
+
+/* forçado via atributo */
+:root[data-ozi-skin~="clarity"][data-ozi-theme="dark"],
+:root[data-ozi-skin~="clarity"][data-bs-theme="dark"] {
+    --ozi-audio-bg:              #191b21;
+    --ozi-audio-bg-local:        #191b21;
+    --ozi-audio-color:           #333844;
+    --ozi-audio-border-color:    rgba(255, 255, 255, 0.07);
+    --ozi-audio-shadow:          rgba(0, 0, 0, 0.40);
+    --ozi-audio-icon:            #9aa2ae;
+    --ozi-audio-text:            #cfd4dc;
+    --ozi-audio-text-secondary:  #9aa2ae;
+    --ozi-audio-status:          #8b929e;
+}

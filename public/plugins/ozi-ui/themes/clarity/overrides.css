@@ -1,0 +1,311 @@
+/**
+ * themes/clarity/overrides.css
+ * Versão: 1.1.0
+ *
+ * Ajustes ESTRUTURAIS do skin clarity que os tokens sozinhos não alcançam.
+ *
+ * OPT-IN por marcador: todas as regras são escopadas em
+ * `[data-ozi-skin~="clarity"]` (posto no <html>). Isso sobe a especificidade
+ * (0,2,0+) e faz o clarity VENCER o components/ozi-audio/css/ozi-audio.css
+ * MESMO carregando antes dele — o ozi.js injeta o CSS do componente em runtime,
+ * então o <link> do tema sempre carrega primeiro. O marcador também permite
+ * alternar default↔clarity sem mexer nos <link> (é o que o js seta no boot).
+ *
+ * Regra da casa: cor via token (para o dark.css funcionar sozinho). Exceção: o
+ * glifo branco sobre o play/record/save.
+ *
+ * Changelog:
+ *   - v1.1.0: [FIX cascade] escopo em [data-ozi-skin~="clarity"] p/ vencer a base
+ *     independente da ordem de carga (o "1x" sumia no dark porque a base vencia).
+ *   - v1.0.0: [SKIN clarity] play azul, pill outline, título caixa-alta, transporte
+ *     do recorder/full (barra, badge, medidor, lixeira, Gravar/Concluir, salvo).
+ */
+
+/* ─── CARD ──────────────────────────────────────────── */
+
+[data-ozi-skin~="clarity"] .ozi-audio {
+    box-shadow: 0 1px 2px rgba(17, 20, 26, 0.04),
+                0 6px 20px -8px var(--ozi-audio-shadow);
+}
+
+/* ─── TÍTULO — caixa-alta com tracking ──────────────── */
+
+[data-ozi-skin~="clarity"] .ozi-audio__title {
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight:    700;
+    font-size:      11px;
+    margin-bottom:  6px;
+}
+
+/* ─── PLAY — círculo azul preenchido (assinatura) ───── */
+
+[data-ozi-skin~="clarity"] .ozi-audio__play {
+    width:         40px;
+    min-width:     40px;
+    height:        40px;
+    border-radius: 50%;
+    background:    var(--ozi-audio-play-bg);
+    color:         #ffffff;
+    transition:    background var(--ozi-transition-fast, 150ms ease),
+                   transform  var(--ozi-transition-fast, 150ms ease);
+}
+
+[data-ozi-skin~="clarity"] .ozi-audio__play:hover:not(:disabled) {
+    background: var(--ozi-audio-play-bg-hover);
+    color:      #ffffff;
+    transform:  translateY(-1px);
+}
+
+[data-ozi-skin~="clarity"] .ozi-audio__play:active:not(:disabled) { transform: translateY(0); }
+
+[data-ozi-skin~="clarity"] .ozi-audio__play-icon,
+[data-ozi-skin~="clarity"] .ozi-audio__pause-icon { width: 16px; height: 16px; }
+
+/* leve deslocamento óptico do ▶ dentro do círculo */
+[data-ozi-skin~="clarity"] .ozi-audio__play .ozi-audio__play-icon { margin-left: 2px; }
+
+/* ─── SPEED — pill em outline ───────────────────────── */
+
+[data-ozi-skin~="clarity"] .ozi-audio__speed {
+    background:  transparent;
+    border:      1px solid var(--ozi-audio-color);
+    color:       var(--ozi-audio-speed-text);
+    font-weight: 700;
+}
+
+[data-ozi-skin~="clarity"] .ozi-audio__speed:hover:not(:disabled) {
+    border-color: var(--ozi-audio-speed-bg-hover);
+    color:        var(--ozi-audio-speed-text);
+}
+
+/* ─── ALINHAMENTO ───────────────────────────────────── */
+
+/* com o play maior (40px), centraliza a coluna do transporte no player */
+[data-ozi-skin~="clarity"] .ozi-audio-player .ozi-audio__main { align-items: center; }
+[data-ozi-skin~="clarity"] .ozi-audio-player .ozi-audio__speed { margin-top: 0; }
+
+
+/* ═══════════════════════════════════════════════════════
+ * RECORDER / FULL — transporte clarity (estilo mensageiro)
+ * Estrutura injetada por js/ozi-audio-clarity.js.
+ * ═══════════════════════════════════════════════════════ */
+
+/* ── OCIOSO / SALVO — recolhe o card (só o mic, ou mic+player no salvo) ──
+ * SÓ quando NÃO está gravando/pausado. Durante a gravação a barra mantém o
+ * card (bg/borda/sombra) como o player e o full — padronização. */
+
+[data-ozi-skin~="clarity"] .ozi-audio-recorder.is-empty.ozi-clarity:not(.is-recording):not(.is-paused) {
+    display:       inline-flex;
+    background:    transparent;
+    border:        0;
+    box-shadow:    none;
+    padding:       0;
+    min-width:     0;
+}
+
+[data-ozi-skin~="clarity"] .ozi-audio__clarity-mic {
+    width:         52px;
+    min-width:     52px;
+    height:        52px;
+    border-radius: 50%;
+    border:        1px solid var(--ozi-audio-border-color);
+    background:    color-mix(in srgb, var(--ozi-audio-icon) 8%, transparent);
+    color:         var(--ozi-audio-icon);
+    display:       inline-flex;
+    align-items:   center;
+    justify-content: center;
+    cursor:        pointer;
+    transition:    color var(--ozi-transition-fast, 150ms ease),
+                   border-color var(--ozi-transition-fast, 150ms ease);
+}
+[data-ozi-skin~="clarity"] .ozi-audio__clarity-mic:hover { color: var(--ozi-audio-play-bg); border-color: var(--ozi-audio-play-bg); }
+[data-ozi-skin~="clarity"] .ozi-audio__clarity-mic svg { width: 22px; height: 22px; fill: currentColor; }
+
+/* ── BARRA de gravação/pausa (card expandido) ── */
+
+[data-ozi-skin~="clarity"] .ozi-audio__clarity-bar {
+    display:     flex;
+    align-items: center;
+    gap:         14px;
+}
+
+/* controle = botão + rótulo embaixo */
+[data-ozi-skin~="clarity"] .ozi-audio__clarity-ctrl {
+    display:        flex;
+    flex-direction: column;
+    align-items:    center;
+    gap:            4px;
+}
+[data-ozi-skin~="clarity"] .ozi-audio__clarity-label {
+    font-size:   10px;
+    font-weight: 600;
+    color:       var(--ozi-audio-text-secondary);
+    white-space: nowrap;
+}
+
+/* Pausar / Continuar — círculo azul */
+[data-ozi-skin~="clarity"] .ozi-audio__clarity-pause {
+    width:         36px;
+    height:        36px;
+    border-radius: 50%;
+    border:        0;
+    background:    var(--ozi-audio-play-bg);
+    color:         #ffffff;
+    display:       inline-flex;
+    align-items:   center;
+    justify-content: center;
+    cursor:        pointer;
+}
+[data-ozi-skin~="clarity"] .ozi-audio__clarity-pause:hover { background: var(--ozi-audio-play-bg-hover); }
+[data-ozi-skin~="clarity"] .ozi-audio__clarity-pause svg { width: 15px; height: 15px; fill: currentColor; }
+
+/* timer */
+[data-ozi-skin~="clarity"] .ozi-audio__clarity-timer {
+    font-size:            14px;
+    font-weight:          600;
+    font-variant-numeric: tabular-nums;
+    color:                var(--ozi-audio-text);
+    min-width:            34px;
+}
+
+/* badge de estado nomeado (●GRAVANDO / ●PAUSADO) */
+[data-ozi-skin~="clarity"] .ozi-audio__clarity-state {
+    display:        inline-flex;
+    align-items:    center;
+    gap:            6px;
+    font-size:      10px;
+    font-weight:    700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding:        4px 10px;
+    border-radius:  20px;
+    white-space:    nowrap;
+}
+[data-ozi-skin~="clarity"] .ozi-audio__clarity-state::before {
+    content: "";
+    width:   6px;
+    height:  6px;
+    border-radius: 50%;
+    background: currentColor;
+}
+[data-ozi-skin~="clarity"] .ozi-audio__clarity-state.is-recording {
+    color:      var(--ozi-clarity-red);
+    background: color-mix(in srgb, var(--ozi-clarity-red) 16%, transparent);
+}
+[data-ozi-skin~="clarity"] .ozi-audio__clarity-state.is-paused {
+    color:      #e0a53a;
+    background: color-mix(in srgb, #e0a53a 16%, transparent);
+}
+
+/* medidor / waveform */
+[data-ozi-skin~="clarity"] .ozi-audio__clarity-meter {
+    display:     flex;
+    align-items: center;
+    gap:         3px;
+    height:      24px;
+    flex:        1;
+    min-width:   40px;
+}
+[data-ozi-skin~="clarity"] .ozi-audio__clarity-meter span {
+    width:         3px;
+    border-radius: 2px;
+    background:    var(--ozi-audio-accent);
+    height:        40%;
+}
+[data-ozi-skin~="clarity"] .is-paused .ozi-audio__clarity-meter span { opacity: 0.4; }
+
+/* lixeira — descartar (sem rótulo) */
+[data-ozi-skin~="clarity"] .ozi-audio__clarity-discard {
+    width:         32px;
+    height:        32px;
+    border:        0;
+    background:    transparent;
+    color:         var(--ozi-audio-icon);
+    display:       inline-flex;
+    align-items:   center;
+    justify-content: center;
+    cursor:        pointer;
+    transition:    color var(--ozi-transition-fast, 150ms ease);
+}
+[data-ozi-skin~="clarity"] .ozi-audio__clarity-discard:hover { color: var(--ozi-clarity-red); }
+[data-ozi-skin~="clarity"] .ozi-audio__clarity-discard svg { width: 18px; height: 18px; fill: currentColor; }
+
+/* Concluir — o botão save da base vira círculo verde com check */
+[data-ozi-skin~="clarity"] .ozi-clarity .ozi-audio__save {
+    width:         40px;
+    min-width:     40px;
+    height:        40px;
+    padding:       0;
+    border-radius: 50%;
+    margin:        0;
+}
+[data-ozi-skin~="clarity"] .ozi-clarity .ozi-audio__save svg { margin: 0; }
+
+/* ── SALVO · COMBO — player + Gravar(vermelho) num card só ── */
+
+[data-ozi-skin~="clarity"] .ozi-audio__clarity-rec {
+    width:         44px;
+    min-width:     44px;
+    height:        44px;
+    border-radius: 50%;
+    border:        0;
+    background:    var(--ozi-audio-record-bg);
+    color:         #ffffff;
+    display:       inline-flex;
+    align-items:   center;
+    justify-content: center;
+    cursor:        pointer;
+}
+[data-ozi-skin~="clarity"] .ozi-audio__clarity-rec:hover:not(:disabled) { background: var(--ozi-audio-record-bg-hover); }
+[data-ozi-skin~="clarity"] .ozi-audio__clarity-rec svg { width: 18px; height: 18px; fill: currentColor; }
+
+/* ── TONALIDADE por estado (Gravar/Concluir) ──
+ * habilitado = vivo · desabilitado = apagado + DESSATURADO (não só opacidade). */
+[data-ozi-skin~="clarity"] .ozi-audio__clarity-rec:disabled,
+[data-ozi-skin~="clarity"] .ozi-clarity .ozi-audio__save:disabled {
+    opacity: 0.45;
+    filter:  saturate(0.45);
+    cursor:  not-allowed;
+}
+
+/* rótulo acompanha o estado do botão */
+[data-ozi-skin~="clarity"] .ozi-audio__clarity-ctrl:has(:disabled) .ozi-audio__clarity-label { opacity: 0.55; }
+
+/* ── SALVO · PADRÃO — microfone (ocioso) + player do take lado a lado ── */
+
+[data-ozi-skin~="clarity"] .ozi-audio__clarity-saved {
+    display:     inline-flex;
+    align-items: center;
+    gap:         16px;
+}
+
+
+/* ═══════════════════════════════════════════════════════
+ * CUSTOMIZAÇÃO POR INSTÂNCIA
+ * ═══════════════════════════════════════════════════════
+ *
+ * 1) Fundo do card off (atalho): data-ozi-audio-bg="off" (ou "none").
+ * 2) Cores/tokens por instância (poder total): use o `style` padrão com as
+ *    variáveis CSS — funciona sem código novo, ex.:
+ *      style="--ozi-audio-play-bg:#e91e63; --ozi-audio-accent:#7c3aed;
+ *             --ozi-audio-record-bg:#ff5722; --ozi-audio-save-bg:#009688;"
+ *    Tokens úteis: --ozi-audio-play-bg (play/pausar), --ozi-audio-accent
+ *    (progresso/volume/medidor), --ozi-audio-record-bg (Gravar),
+ *    --ozi-audio-save-bg (Concluir), --ozi-audio-color (trilho),
+ *    --ozi-audio-radius, --ozi-audio-width-max…
+ */
+
+[data-ozi-skin~="clarity"] .ozi-audio[data-ozi-audio-bg="off"],
+[data-ozi-skin~="clarity"] .ozi-audio[data-ozi-audio-bg="none"] {
+    background:    transparent;
+    border-color:  transparent;
+    box-shadow:    none;
+}
+
+/* progresso/volume leem --ozi-audio-accent DIRETO (sem a indireção que fica no
+ * :root), para que `style="--ozi-audio-accent:…"` por INSTÂNCIA propague. */
+[data-ozi-skin~="clarity"] .ozi-audio__progress,
+[data-ozi-skin~="clarity"] .ozi-audio__volume-fill {
+    background: var(--ozi-audio-accent);
+}
