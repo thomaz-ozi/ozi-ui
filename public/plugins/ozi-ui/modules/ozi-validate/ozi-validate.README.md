@@ -1,6 +1,6 @@
 # ozi-validate.js
 
-**Versão:** 2.0.0 (v2 F2 #1 — primeiro componente migrado, 2026-07-03)
+**Versão:** 2.2.0 (v2 F2 #1 — primeiro componente migrado, 2026-07-03; gate de envio em 2026-08-24)
 **Camada:** `modules/`  
 **Dependências:** `ozi-core.js` (OZI.conf, OZI.helpers, OZI.lang) — zero jQuery
 **Expõe:** `OZI.modules.validate`, `window.oziValidateContainer` (compat)
@@ -87,22 +87,27 @@ OZI.modules.validate.registerAdapter({
 Valida todos os campos de um container. Função principal.
 
 ```js
-// por group-id (integração com loadData)
+// por id (v2.2.0 — antes documentado mas ignorado; ver Changelog)
 var result = OZI.modules.validate.container({
     groupId:      'form-contato',
     focusOnError: true
 });
 
-// por seletor CSS
+// por seletor CSS (v2.2.0 — idem)
 var result = OZI.modules.validate.container({
     container:    '#meu-form',
     focusOnError: true
 });
 
-// por jQuery
+// por Element nativo, jQuery ou seletor (toElement normaliza)
 var result = OZI.modules.validate.container({
-    $container:   $('#meu-form'),
+    $container:   document.getElementById('meu-form'),
     silent:       false   // false = aplica classes visual (padrão)
+});
+
+// vários elementos soltos (não precisam de container comum)
+var result = OZI.modules.validate.container({
+    $elements: document.querySelectorAll('.campo-solto')
 });
 
 if (result.isValid) {
@@ -114,11 +119,15 @@ if (result.isValid) {
 
 | Opção | Tipo | Descrição |
 |---|---|---|
-| `groupId` | string | Group-id do loadData |
-| `$container` | jQuery | Escopo jQuery |
-| `container` | string | Seletor CSS do escopo |
+| `groupId` | string | Id do elemento a validar (`document.getElementById`) |
+| `container` | string | Seletor CSS do escopo (`querySelector`) |
+| `$container` | Element \| jQuery \| string | Escopo — aceita os três formatos via `toElement` |
+| `$elements` | NodeList \| array \| jQuery | Lista explícita de campos (ignora escopo) |
 | `focusOnError` | boolean | Foca no primeiro campo inválido |
 | `silent` | boolean | `true` = não aplica classes visual |
+
+Prioridade quando mais de uma opção de escopo é passada: `$elements` > `$container` > `container` >
+`groupId` > `document` (nenhuma passada — valida a página inteira).
 
 **Retorno:**
 
@@ -131,20 +140,21 @@ if (result.isValid) {
         { el, name, adapter }  // el = Element nativo (v2; era $el/jQuery na v1)
     ],
     // compat v0.x:
-    ldValidate:      boolean,
+    ldValidate:      number,   // contagem de invalidFields (nome sugere boolean, mas é number desde a v1.0.0)
     zldValidateName: string[]
 }
 ```
 
 ---
 
-### `OZI.modules.validate.runAdapters(scope?)`
+### `OZI.modules.validate.field(elArg)`
 
-Valida só componentes OZI num escopo.
+Valida um único campo (Element nativo, jQuery ou seletor). Aplica o estado visual quando o
+campo é obrigatório (mesma lógica de `container()`, num só elemento).
 
 ```js
-var result = OZI.modules.validate.runAdapters('#meu-form');
-// { allValid: boolean, results: [{ adapter, $el, valid }] }
+var r = OZI.modules.validate.field('#email');
+// { valid: boolean, value: any }
 ```
 
 ---
@@ -191,6 +201,47 @@ Opt-in por container — só campos dentro de `[data-ozi-validate]`:
     <input name="outro">
 </form>
 ```
+
+---
+
+### Gate de envio (v2.2.0)
+
+`data-ozi-validate` reaproveitado em `<button type="submit">`/`<input type="submit">` — sempre
+ativo (não depende de `initInteractive()`/`interactiveValidation`). No submit do form (clique
+ou Enter — ambos passam pelo evento `submit`, capturado em fase de captura no `document`),
+revalida tudo e **bloqueia** se inválido (`preventDefault` + foca o 1º campo inválido).
+
+```html
+<form>
+    <input name="nome" data-ozi-required="true">
+    <button type="submit" data-ozi-validate>Enviar</button>
+</form>
+```
+
+**Alvo fora do `<form>`** — `data-ozi-validate-group` (CSV de ids); sem ele, cai no `<form>`
+mais próximo do botão; sem nenhum dos dois, ignora e loga um aviso (nunca bloqueia a página
+inteira por engano):
+
+```html
+<button type="submit" data-ozi-validate data-ozi-validate-group="dados,endereco">Enviar</button>
+<div id="dados">...</div>
+<div id="endereco">...</div>
+```
+
+**Eventos** (`OZI.helpers.emit`, `detail: { component:'ozi-validate', name, invalidFields,
+isValid, source:'user' }`, `name` = o `data-ozi-validate-group` ou `null`):
+
+| Evento | Quando |
+|---|---|
+| `ozi:validate-broken` | Submit bloqueado (algum campo inválido) |
+| `ozi:validate-ready`  | Submit passou (tudo válido) — segue normalmente |
+
+**Funciona com Livewire sem nenhum código específico dele** — confirmado lendo o bundle real
+(`vendor/livewire/livewire/dist/livewire.js`): `wire:submit` é um listener de `submit` em fase
+de **bolha**, direto no `<form>` (via `x-on:submit.prevent` do Alpine). Um listener em
+**captura** no `document` roda sempre antes de qualquer listener de bolha no `<form>` — ordem
+de fase, não de registro — então `stopImmediatePropagation()` barra o Livewire quando inválido,
+sem precisar de nenhum adapter/plugin de integração dedicado.
 
 ---
 

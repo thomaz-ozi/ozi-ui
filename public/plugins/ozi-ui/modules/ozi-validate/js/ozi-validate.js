@@ -2,25 +2,53 @@
  * ------------------------------------------
  * ozi-validate
  * ------------------------------------------
- * Ver: 2.1.0
- * 2026-07-03
+ * Ver: 2.2.0
+ * 2026-08-24
  *
  * Responsabilidade:
  *   - Motor generico de validacao de campos por container
  *   - Adapter pattern para componentes OZI registrarem como ler/setar estado
  *   - Aplicar classes valid/invalid via OZI.conf.classMap
  *   - Retornar formData, data, invalidFields, isValid
+ *   - Gate de envio declarativo em botao de submit (v2.2.0)
  *
  * O que NAO faz:
  *   - Nao valida regras de negocio (senhas, etc.)
  *   - Nao conhece componentes especificos — adapters registram o contrato
  *   - Nao conhece zldCatchGroupId / zldCatchItemName — responsabilidade do collector
+ *     (o gate usa seu proprio atributo, `data-ozi-validate-group`, sem acoplar
+ *     ao vocabulario do ozi-loaddata)
  *
  * Dependencias: ozi.js (OZI.conf, OZI.helpers, OZI.lang) — zero jQuery (contrato de camadas v2).
  * Consumido por: ozi-loaddata-collector.js, qualquer plugin OZI
  * Expoe: OZI.modules.validate, window.oziValidateContainer (compat)
  *
  * Changelog:
+ *   - v2.2.0: [FEAT] Gate de envio declarativo — reaproveita `data-ozi-validate`, agora
+ *       também em `<button type="submit">`/`<input type="submit">` (o atributo já era usado
+ *       em container para validação em tempo real; papel definido pelo elemento). No submit
+ *       do form (capturado em fase de CAPTURA no `document`, cobre clique E Enter em campo de
+ *       texto), revalida tudo, bloqueia (`preventDefault` + `stopImmediatePropagation`) se
+ *       inválido e foca o 1º campo inválido; emite `ozi:validate-broken`/`ozi:validate-ready`
+ *       via `OZI.helpers.emit` (contrato v2, R7). Alvo resolvido por `data-ozi-validate-group`
+ *       (CSV de ids, prioridade — cobre campos fora do `<form>`) ou o `<form>` mais próximo;
+ *       sem nenhum dos dois, ignora e loga um aviso (fail-open — nunca bloqueia a página
+ *       inteira por engano). **Compatível com Livewire sem nenhum código específico dele**:
+ *       confirmado lendo o bundle real (`vendor/livewire/livewire/dist/livewire.js`) que
+ *       `wire:submit` é um `addEventListener('submit', ...)` na fase de BOLHA, direto no
+ *       `<form>` (via `x-on:submit.prevent` do Alpine) — um listener em CAPTURA no `document`
+ *       roda antes dele por definição do DOM (a ordem de fases > ordem de registro), então
+ *       `stopImmediatePropagation()` barra o handler do Livewire sem precisar de um plugin de
+ *       integração dedicado (dispensa o `integrations/.../validate-livewire` do roadmap
+ *       original — ver nota no changelog do módulo/roadmap).
+ *   - v2.2.0: [FIX] `container()` honra `config.container` (seletor string) e `config.groupId`
+ *       (id de elemento, `document.getElementById`) além de `$container`/`$elements` — opções
+ *       documentadas no README desde a v1.0.0 mas nunca lidas pelo código (Achado #1 do roadmap
+ *       `ozi-validate-standalone-livewire.md`).
+ *   - v2.2.0: [FEAT] `pluginConf.validate.interactiveValidation` — alias checado ANTES de
+ *       `pluginConf.loaddata.interactiveValidation` (mantido como fallback de compat). Resolve
+ *       o Achado #3 do roadmap (a chave só existir em `loaddata` era estranho para quem usa o
+ *       validate sem o loaddata).
  *   - v2.1.0: [V2-F2] registerAdapter() aceita flag `nativeElement: true` —
  *     adapters que ja migraram (ex: ozi-select) recebem Element puro em vez
  *     de serem envelopados em jQuery por _wrapLegacy(). Adapters sem a flag
@@ -331,7 +359,11 @@
             var rawEls = helpers.toElements(config.$elements);
             fields = rawEls.filter(_isCollectible);
         } else {
-            var scopeEl = config.$container ? helpers.toElement(config.$container) : document;
+            // [FIX v2.2.0] `container` (seletor) e `groupId` (id) documentados no README
+            // desde a v1.0.0, mas nunca lidos — só `$container` funcionava de fato.
+            var containerArg = config.$container || config.container ||
+                (config.groupId ? document.getElementById(config.groupId) : null);
+            var scopeEl = containerArg ? helpers.toElement(containerArg) : document;
             fields = _collectFields(scopeEl);
         }
 
@@ -433,6 +465,92 @@
 
 
     // ---------------------------------------------
+    // [9b] GATE DE ENVIO — data-ozi-validate no botao de submit (v2.2.0)
+    // ---------------------------------------------
+    // `<form> ... <button type="submit" data-ozi-validate>Enviar</button>`
+    // Capturado em fase de CAPTURA no document (cobre clique E Enter em campo de texto,
+    // e roda ANTES de qualquer listener em fase de bolha registrado no proprio <form> —
+    // e' assim, sem nenhum codigo especifico de framework, que o gate tambem bloqueia o
+    // wire:submit do Livewire quando invalido: vide changelog do arquivo.
+
+    var _gateBound   = false;
+    var GATE_SELECTOR = 'button[type="submit"][data-ozi-validate], input[type="submit"][data-ozi-validate]';
+
+    function _resolveGateTargets(trigger) {
+        var groupAttr = trigger.getAttribute('data-ozi-validate-group');
+        if (groupAttr) {
+            var targets = groupAttr.split(',').map(function (raw) {
+                return document.getElementById(raw.trim());
+            }).filter(Boolean);
+            if (targets.length) return targets;
+            console.warn('[OZI:validate] gate: nenhum id de "data-ozi-validate-group" encontrado ("' + groupAttr + '").');
+        }
+        var form = trigger.closest('form');
+        return form ? [form] : [];
+    }
+
+    // valida N containers e agrega o resultado num unico veredito —
+    // silent:false (default de _container) mantem o feedback visual por campo.
+    function _gateValidate(targets) {
+        var data = {}, invalidFields = [];
+        targets.forEach(function (target) {
+            var partial = _container({ $container: target, focusOnError: false });
+            Object.keys(partial.data).forEach(function (key) { data[key] = partial.data[key]; });
+            invalidFields = invalidFields.concat(partial.invalidFields);
+        });
+        return { data: data, invalidFields: invalidFields, isValid: invalidFields.length === 0 };
+    }
+
+    function _emitGateEvent(trigger, name, result) {
+        var detail = {
+            component:     'ozi-validate',
+            name:          trigger.getAttribute('data-ozi-validate-group') || null,
+            invalidFields: result.invalidFields.map(function (f) { return f.name; }),
+            isValid:       result.isValid,
+            source:        'user'
+        };
+        var helpers = window.OZI && window.OZI.helpers;
+        if (helpers && typeof helpers.emit === 'function') {
+            helpers.emit(trigger, name, detail);
+        } else if (typeof CustomEvent === 'function') {
+            trigger.dispatchEvent(new CustomEvent(name, { bubbles: true, detail: detail }));
+        }
+    }
+
+    function _onGateSubmit(e) {
+        var form = e.target;
+        if (!form || form.tagName !== 'FORM') return;
+
+        // e.submitter (SubmitEvent) identifica o botao clicado; ausente em submissao
+        // implicita via Enter — nesse caso cai no primeiro gate declarado no form.
+        var trigger = (e.submitter && e.submitter.matches(GATE_SELECTOR)) ? e.submitter : form.querySelector(GATE_SELECTOR);
+        if (!trigger) return; // form sem gate — nao intercepta
+
+        var targets = _resolveGateTargets(trigger);
+        if (!targets.length) {
+            console.warn('[OZI:validate] gate: nenhum alvo resolvido (sem "data-ozi-validate-group" e sem <form>) — ignorando.');
+            return;
+        }
+
+        var result = _gateValidate(targets);
+        if (!result.isValid) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            if (result.invalidFields[0]) { try { result.invalidFields[0].el.focus(); } catch (err) {} }
+            _emitGateEvent(trigger, 'ozi:validate-broken', result);
+        } else {
+            _emitGateEvent(trigger, 'ozi:validate-ready', result);
+        }
+    }
+
+    function _initGate() {
+        if (_gateBound) return;
+        _gateBound = true;
+        document.addEventListener('submit', _onGateSubmit, true); // true = fase de captura
+    }
+
+
+    // ---------------------------------------------
     // [10] API PUBLICA — OZI.modules.validate
     // ---------------------------------------------
 
@@ -494,14 +612,22 @@
 
     var _interactiveConf = (function () {
         var conf = window.OZI && window.OZI.conf;
-        return conf && conf.pluginConf && conf.pluginConf.loaddata
-            ? conf.pluginConf.loaddata.interactiveValidation !== false
-            : true;
+        var pc   = conf && conf.pluginConf;
+        // [FEAT v2.2.0] pluginConf.validate.* tem prioridade — pluginConf.loaddata.* mantido
+        // como fallback de compat (era a única chave antes, esquisito p/ o standalone).
+        if (pc && pc.validate && pc.validate.interactiveValidation !== undefined) {
+            return pc.validate.interactiveValidation !== false;
+        }
+        return pc && pc.loaddata ? pc.loaddata.interactiveValidation !== false : true;
     })();
 
     if (_interactiveConf) {
         _initInteractive();
     }
+
+    // gate de envio (v2.2.0): sempre ativo, independente de interactiveValidation —
+    // sao dois recursos distintos (feedback em tempo real vs. bloqueio no envio).
+    _initGate();
 
 
     // ---------------------------------------------

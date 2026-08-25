@@ -2,6 +2,61 @@
 
 ---
 
+## [2.2.0] — 2026-08-24 (feat — gate de envio + fixes do standalone)
+
+### Adicionado
+- **Gate de envio declarativo** — `data-ozi-validate` reaproveitado em `<button
+  type="submit">`/`<input type="submit">`. Capturado em fase de **captura** no `document` no
+  evento `submit` (cobre clique e Enter); revalida tudo, bloqueia (`preventDefault` +
+  `stopImmediatePropagation`) se inválido e foca o 1º campo inválido; deixa passar se válido.
+  Sempre ativo, independente de `initInteractive()`/`interactiveValidation`.
+- `data-ozi-validate-group` (CSV de ids) — alvo do gate fora do `<form>`; sem ele, cai no
+  `<form>` mais próximo; sem nenhum dos dois, loga aviso e não intercepta (fail-open).
+- Eventos `ozi:validate-broken`/`ozi:validate-ready` via `OZI.helpers.emit` (contrato v2, R7).
+- `container()` passa a honrar `config.container` (seletor CSS) e `config.groupId` (id via
+  `document.getElementById`) — documentados no README desde a v1.0.0, nunca lidos pelo código
+  (só `$container`/`$elements` funcionavam). **Achado #1** do roadmap
+  `ozi-validate-standalone-livewire.md`.
+- `pluginConf.validate.interactiveValidation` — alias checado antes de
+  `pluginConf.loaddata.interactiveValidation` (mantido como fallback). **Achado #3** do roadmap.
+
+### Decisão de arquitetura — sem plugin de integração Livewire dedicado
+O roadmap original previa um novo plugin exposto em `integrations/.../validate-livewire` para
+"interceptar o `wire:submit` na ordem certa". Investigação nesta versão (lendo
+`vendor/livewire/livewire/dist/livewire.js` real, disponível no bench `ozi-ui-dev-tw`) mostrou
+que `wire:submit` é implementado como um `addEventListener('submit', ...)` em **fase de bolha**
+direto no `<form>` (via `x-on:submit.prevent` do Alpine, que é o motor de diretivas do
+Livewire). Um listener em **fase de captura** no `document` — que é exatamente o que o gate já
+precisava para cobrir Enter além de clique — **sempre** roda antes de qualquer listener de
+bolha no `<form>`, por ordem de fase do DOM (não por ordem de registro). Logo
+`stopImmediatePropagation()` no gate já barra o `wire:submit` quando inválido, **sem** nenhum
+código específico de Livewire. O plugin de integração deixou de ser necessário — validado por
+página de aceite que reproduz fielmente o padrão real (listener de bolha direto no `<form>`).
+
+### Corrigido (achados do roadmap, não implementados)
+- **Achado #2 (CSS do standalone) — não era bug.** O roadmap presumia que `_pluginMap['validate'].css
+  = null` deixava o modo standalone sem visual. Na verdade o tema **`default`**
+  (`themes/default/overrides.css`) já estiliza `.ozi-invalid`/`.ozi-valid`/`.ozi-feedback` —
+  qualquer app que já linka o tema (passo obrigatório, decisão #19) tem o visual básico de
+  graça. `modules/ozi-validate/css/ozi-validate.css` é uma casca **opcional** mais rica (ícones
+  SVG, dark mode, input-group) — o `css: null` é intencional, documentado em
+  `OziCheckCommand.php` ("o css é visual do tema `default`, opt-in via `@oziStyles`"). Nada
+  alterado; a divergência era do roadmap contra uma decisão já tomada em outro arquivo.
+- **Achado #4 (README/CHANGELOG desalinhados)** — `runAdapters()` documentado mas inexistente
+  (removido da doc); `field()` existente mas não documentado (adicionado); `ldValidate`
+  documentado como `boolean` mas é `number` (contagem de `invalidFields`) desde a v1.0.0
+  (corrigido); versão do README presa em `2.0.0` (código já estava em `2.1.0`).
+
+### Validado
+- Página de aceite dedicada: `public/teste-v2/aceite-validate-gate.html` — **15/15** em Edge
+  headless (bloqueio por clique, libera quando válido, `data-ozi-validate-group` fora do
+  `<form>`, submit implícito sem `submitter`, bloqueio do listener "Livewire" em fase de bolha,
+  `container({ container })`/`container({ groupId })`).
+- Regressão: `aceite-validate.html` (20/20), `aceite-select*.html`, `aceite-autocomplete.html`,
+  `aceite-check-shim.html` — todos PASSARAM sem alteração de resultado.
+
+---
+
 ## [2.0.0] — 2026-07-03 (v2 F2 #1 — primeiro componente migrado)
 
 ### Alterado

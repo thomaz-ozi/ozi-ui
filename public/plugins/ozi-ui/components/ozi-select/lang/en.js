@@ -13,7 +13,8 @@
             searchPlaceholder: 'Search...',
             valuePlaceholder:  'Select...',
             empty:             'No options found',
-            requiredMessage:   'Please select an option.'
+            requiredMessage:   'Please select an option.',
+            creatableLabel:    'Add "{query}"'
         }
     });
 })(window);

@@ -2,10 +2,28 @@
  * ------------------------------------------
  * ozi-select
  * ------------------------------------------
- * Ver: 6.2.0
- * 2026-08-20
+ * Ver: 6.3.0
+ * 2026-08-24
  *
  * Changelog:
+ *   - v6.3.0: [FEAT] Modo "creatable" (`data-ozi-select-creatable`). Quando a busca não
+ *       encontra nenhuma opção e o texto digitado não está vazio, o próprio dropdown mostra
+ *       uma opção "Adicionar «texto»" no lugar da mensagem de vazio; selecioná-la (clique ou
+ *       Enter) cria a opção a partir do texto digitado (`{ value: texto, label: texto }`),
+ *       empurra em `this.options` e segue o fluxo normal de seleção (single fecha o dropdown,
+ *       multiple adiciona a tag) — emite `ozi:change` como qualquer seleção, mais um
+ *       `ozi:select-create` dedicado (mesmo padrão do `ozi:select-footer`, sem payload extra).
+ *       Não oferece opção já selecionada de novo. Texto do label/sublabel customizável por
+ *       `data-ozi-select-creatable-label`/`-creatable-sublabel` (placeholder `{query}`; default
+ *       via `select.creatableLabel`, `Adicionar "{query}"`); o texto digitado é escapado antes
+ *       de entrar no template (o template em si aceita HTML, como os demais labels do plugin).
+ *       Resolve a lacuna registrada em `sndesk-docs/04-pendencias/ozi-ui/creatable-opcao-nao-encontrada.md`
+ *       (workaround que acessava `normalizeOptions`/`renderOptions`/`inst.list` por fora).
+ *       **[FIX colateral]** busca remota (`zldUrl`): `setRemoteLoading(false)` passa a rodar
+ *       ANTES de `applyRemoteOptions()`/`renderOptions()` (era só no `.finally()`, depois do
+ *       render) — sem isso, um resultado remoto genuinamente vazio renderizava sempre a
+ *       mensagem de "Carregando..." (a classe `is-loading` ainda estava ativa no momento do
+ *       render) e o modo creatable nunca aparecia nesse caminho. Aditivo → MINOR do pacote.
  *   - v6.2.0: [FEAT] Rodapé de ação no dropdown (`data-ozi-select-footer`). Um botão
  *       persistente no pé do dropdown (ex.: "Gerenciar contas de e-mail"), fora da lista de
  *       opções — sobrevive à busca, é pulado pela navegação por seta, e NÃO é valor p/ o
@@ -123,6 +141,13 @@
         return !!(el.offsetWidth || el.offsetHeight || (el.getClientRects && el.getClientRects().length));
     }
 
+    var _htmlEscapeMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+    // escapa só o TEXTO digitado antes de entrar num template que aceita HTML (creatable) —
+    // o template em si segue livre, como os demais labels/subLabels do componente.
+    function _escapeHtml(value) {
+        return String(value == null ? '' : value).replace(/[&<>"']/g, function (c) { return _htmlEscapeMap[c]; });
+    }
+
     /* ─── construtor ───────────────────────────────────────────────── */
 
     function OziSelect(element) {
@@ -153,6 +178,11 @@
         this.footerIcon  = String(this.root.dataset.oziSelectFooterIcon  || '').trim();
         this.footer      = null;   // região do rodapé no dropdown
         this.footerSlot  = null;   // <template> de origem (modo slot)
+
+        // modo creatable (v6.3.0) — busca sem resultado oferece "Adicionar «texto»"
+        this.creatable         = this.parseBooleanAttr('data-ozi-select-creatable');
+        this.creatableLabel    = String(this.root.dataset.oziSelectCreatableLabel    || '').trim();
+        this.creatableSubLabel = String(this.root.dataset.oziSelectCreatableSublabel || '').trim();
 
         this.hasSubmitFieldsConfig = this.root.hasAttribute('data-ozi-select-submit-fields');
         this.submitFieldsRaw       = String(this.root.getAttribute('data-ozi-select-submit-fields') || '');
@@ -533,6 +563,10 @@
             if (match) {
                 e.preventDefault();
                 if (self.isDisabled()) return;
+                if (match.hasAttribute('data-ozi-select-creatable-option')) {
+                    self.createFromQuery(match.getAttribute('data-value'));
+                    return;
+                }
                 var item = self.findOptionByValue(match.getAttribute('data-value'));
                 if (item) self.toggleItem(item);
                 return;
@@ -604,7 +638,11 @@
             case 'Enter':
                 e.preventDefault();
                 var h = this.getHighlightedOption();
-                if (h) { var item = this.findOptionByValue(h.getAttribute('data-value')); if (item) this.toggleItem(item); }
+                if (h) {
+                    if (h.hasAttribute('data-ozi-select-creatable-option')) { this.createFromQuery(h.getAttribute('data-value')); break; }
+                    var item = this.findOptionByValue(h.getAttribute('data-value'));
+                    if (item) this.toggleItem(item);
+                }
                 break;
             case 'Escape': e.preventDefault(); this.close(true); break;
             case 'Tab':    this.close(); break;
@@ -862,14 +900,19 @@
     };
 
     OziSelect.prototype.renderOptions = function (query) {
-        var self = this; var normalizedQuery = this.normalize(query || '');
+        var self = this; var rawQuery = String(query || '').trim(); var normalizedQuery = this.normalize(query || '');
         this.list.innerHTML = '';
         var filtered = this.options.filter(function (item) {
             if (!normalizedQuery) return true;
             return self.normalize(self.flattenSearchText(item)).indexOf(normalizedQuery) !== -1;
         });
         if (!filtered.length) {
-            var msg = this.ui.classList.contains('is-loading')
+            var isLoading = this.ui.classList.contains('is-loading');
+            if (this.creatable && rawQuery && !isLoading && !this.isSelected(rawQuery)) {
+                this.list.appendChild(this.buildCreatableOption(rawQuery));
+                return;
+            }
+            var msg = isLoading
                 ? _t('common.loading', 'Carregando...')
                 : _t('select.empty', 'Nenhum resultado encontrado');
             var empty = _make('div', { class: 'ozi-select-empty' });
@@ -882,6 +925,52 @@
             if (block.type === 'option') { self.list.appendChild(self.buildOption(block.item)); return; }
             if (block.type === 'group')  { self.list.appendChild(self.renderGroupBlock(block)); }
         });
+    };
+
+    /* ─── creatable (v6.3.0) ────────────────────────────────────────── */
+
+    OziSelect.prototype.buildCreatableOption = function (rawQuery) {
+        var text     = String(rawQuery || '').trim();
+        var labelTpl = this.creatableLabel    || _t('select.creatableLabel', 'Adicionar "{query}"');
+        var subTpl   = this.creatableSubLabel || '';
+        var safe     = _escapeHtml(text);
+
+        var option = _make('div', {
+            class:        'ozi-select-option ozi-select-option-creatable',
+            'data-value': text,
+            'data-ozi-select-creatable-option': 'true',
+            role:         'option',
+            'aria-selected': 'false'
+        });
+        var content = _make('div', { class: 'ozi-select-option-content' });
+        var ph = _make('div', { class: 'ozi-select-option-image is-no-image' });
+        ph.style.width = this.imageWidth; ph.style.height = this.imageHeight;
+        content.appendChild(ph);
+
+        var texts = _make('div', { class: 'ozi-select-option-texts' });
+        var label = _make('div', { class: 'ozi-select-option-label' });
+        label.innerHTML = labelTpl.replace('{query}', safe);
+        texts.appendChild(label);
+        if (subTpl) {
+            var sub = _make('div', { class: 'ozi-select-option-sublabel' });
+            sub.innerHTML = subTpl.replace('{query}', safe);
+            texts.appendChild(sub);
+        }
+        content.appendChild(texts); option.appendChild(content);
+        return option;
+    };
+
+    OziSelect.prototype.createFromQuery = function (rawText) {
+        if (this.isDisabled()) return;
+        var text = String(rawText || '').trim();
+        if (!text || this.isSelected(text)) return;
+
+        var item = { value: text, label: text, __oziCreated: true };
+        this.options.push(item);
+        this.writeOptionsScript(this.options);
+
+        this.toggleItem(item);              // fluxo normal de seleção (emite ozi:change)
+        this.emit('ozi:select-create', 'user');
     };
 
     OziSelect.prototype.buildOption = function (item) {
@@ -1227,6 +1316,10 @@
                     if (!response.ok) return null;
                     var options   = self.extractOptionsFromRemoteResponse(json);
                     var liveQuery = self.search ? (self.search.value || '') : query;
+                    // [FIX v6.3.0] desliga is-loading ANTES do render — senão um resultado
+                    // remoto genuinamente vazio renderiza "Carregando..." em vez de "vazio"/
+                    // creatable (a classe só seria removida DEPOIS, no .finally() abaixo).
+                    self.setRemoteLoading(false);
                     self.applyRemoteOptions(options, liveQuery);
                     return options;
                 });

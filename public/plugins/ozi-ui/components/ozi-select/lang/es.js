@@ -12,7 +12,8 @@
             searchPlaceholder: 'Buscar...',
             valuePlaceholder:  'Seleccione...',
             empty:             'No se encontraron opciones',
-            requiredMessage:   'Seleccione una opción.'
+            requiredMessage:   'Seleccione una opción.',
+            creatableLabel:    'Añadir "{query}"'
         }
     });
 })(window);

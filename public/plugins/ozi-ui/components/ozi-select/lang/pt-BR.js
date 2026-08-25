@@ -10,7 +10,8 @@
             searchPlaceholder: 'Pesquisar...',
             valuePlaceholder:  'Selecione...',
             empty:             'Nenhuma opção encontrada',
-            requiredMessage:   'Selecione uma opção.'
+            requiredMessage:   'Selecione uma opção.',
+            creatableLabel:    'Adicionar "{query}"'
         }
     });
 })(window);
