@@ -1,6 +1,35 @@
 /**
  * components/ozi-editor/css/ozi-editor.css
- * Versão: 2.2.2
+ * Versão: 2.7.0
+ *
+ * [2.7.0] FEAT-9 Alinhamento de imagem (ozi-editor.js 4.7.0):
+ *         `.ozi-editor-content` ganha `position:relative` — é o que dá
+ *         contexto de posicionamento pro modo livre (`<img>` absoluta)
+ *         DENTRO do editor; sem isso a imagem se posicionaria contra um
+ *         ancestral posicionado qualquer do host. Não afeta os popovers
+ *         (ancoram em `.ozi-editor-popover-wrap`, não no content).
+ *         `.ozi-editor-content img` deixa de IMPOR `display:block` +
+ *         `margin:0 0 10px` como lei: vira o modo padrão, e os demais modos
+ *         chegam por inline style na própria tag (o HTML salvo precisa
+ *         renderizar na página do host, que não tem este CSS).
+ *         `user-drag:none`/`user-select:none` reforçam o `preventDefault`
+ *         do mousedown (o drag nativo de `<img>` em contenteditable) e
+ *         `cursor:pointer` sinaliza que a imagem é clicável. Um
+ *         `cursor:move` só para o modo livre ficou de fora de propósito:
+ *         não há como selecionar "imagem absoluta" em CSS sem marcar uma
+ *         classe na tag, e classe viaja no HTML salvo (o sanitizador
+ *         preserva `class`) — poluiria a saída, que é justamente o que a
+ *         decisão de usar inline style evita.
+ *         `.ozi-editor-popover-align*`: linha de 4 botões dentro do popover
+ *         de imagem + estado `is-active`.
+ *
+ * [2.6.0] FEAT-8 Toolbar responsiva — modo Scroll (ozi-editor.js 4.6.0):
+ *         `.ozi-editor-toolbar-scroll`/`-scroll-track` (overflow-x nativo,
+ *         `min-width:0` nos 2 níveis — 1º caso do componente que precisa
+ *         ENCOLHER um item abaixo do conteúdo, o modo wrap só cresce via
+ *         `flex-wrap`); setas reaproveitam `.ozi-editor-btn:disabled` já
+ *         existente (sem CSS novo de estado). Ortogonal às regras de
+ *         show/hide por breakpoint abaixo — não mexidas.
  *
  * [2.0.3] FIX-C  Auto-referência circular em --ozi-editor-toolbar-bg corrigida
  * [2.0.4] FIX    --ozi-editor-btn-bg: #ffffff direto (sem depender de --ozi-color-white)
@@ -11,6 +40,29 @@
  * [2.2.2] UX     toolbar-group: botões unidos (btn-group style) — borda colapsada, sem gap
  *         - .ozi-editor-btn-caret REMOVIDO
  *         - .ozi-editor-btn-icon mantém 18×18 em todos os botões dropdown
+ * [2.3.0] FEAT-5 Fase 2 da nova leva de ferramentas (ozi-editor.js 4.3.0):
+ *         popover genérico (`.ozi-editor-popover*`, reaproveita os tokens
+ *         --ozi-editor-bg/-text/-muted/-border/-uicolor já existentes) para
+ *         link/color/highlight; grade de swatches (`.ozi-editor-swatch*`)
+ *         para color/highlight. Estrutura de posicionamento validada no
+ *         mockup aprovado (ozi-ui-designer/OZI-UI/demo/ozi-editor.html).
+ * [2.4.0] FEAT-6 Fase 3 da nova leva de ferramentas (ozi-editor.js 4.4.0):
+ *         `.ozi-editor-content img` (max-width:100%, mesma moldura de
+ *         border-radius do resto do content); `.ozi-editor-popover-upload`
+ *         (seção de upload do popover de imagem, separador tracejado) +
+ *         `.ozi-editor-popover-file` (nome do arquivo/status "Enviando…",
+ *         truncado com ellipsis — classe já prevista no mockup da Fase 2).
+ * [2.5.0] FEAT-7 Toolbar responsiva — modo Colapso (ozi-editor.js 4.5.0):
+ *         `--ozi-editor-bp-*` (tokens de breakpoint, so como fonte citavel —
+ *         @media NAO aceita var() na condição, os valores nas media queries
+ *         abaixo são literais, mantidos em sincronia manual); 10 regras
+ *         estáticas de show/hide por `data-ozi-editor-toolbar-bp`/`-until`
+ *         (`display:contents` — a variante é só agrupador lógico, as rows
+ *         dela ficam no fluxo flex do `.ozi-editor-toolbar` pai, preserva
+ *         `gap` sem mudança quando só uma variante existe); `.ozi-editor-
+ *         toolbar-collapse`/`.ozi-editor-btn--collapse-toggle` (chevron +
+ *         2ª linha inline do grupo `{}` — display puro, sem animação de
+ *         altura, acabamento fica pra depois).
  */
 
 
@@ -39,6 +91,17 @@
     --ozi-editor-active-bg:       var(--ozi-color-primary-light, #eff6ff);
     --ozi-editor-active-color:    var(--ozi-color-primary,       #3b82f6);
     --ozi-editor-uicolor:         var(--ozi-color-primary,       #3b82f6);
+
+    /* toolbar responsiva — min-width estilo Bootstrap (mesma tabela numerica
+       do ozi-editor.js TOOLBAR_BREAKPOINTS). So como fonte CITAVEL: @media
+       nao aceita var() na condicao, os valores nas media queries de
+       "SHOW/HIDE POR BREAKPOINT" abaixo sao LITERAIS — mudar aqui exige
+       mudar la tambem (e no JS), nao ha como sincronizar automaticamente. */
+    --ozi-editor-bp-sm:  576px;
+    --ozi-editor-bp-md:  768px;
+    --ozi-editor-bp-lg:  992px;
+    --ozi-editor-bp-xl:  1200px;
+    --ozi-editor-bp-xxl: 1400px;
 }
 
 
@@ -172,6 +235,112 @@
 }
 
 
+/* ─── TOOLBAR RESPONSIVA (modo Colapso, 2026-08-31) ────────
+ * Cada `data-ozi-editor-tools-{sm,md,lg,xl,xxl}` declarado no elemento vira
+ * uma SUBARVORE DOM independente (.ozi-editor-toolbar-variant), nao uma
+ * lista plana com marcador por botao — evita quebrar :first-child/:last-
+ * child dos grupos acima quando um botao "some" via display:none. Instancia
+ * SEM nenhum breakpoint nunca ganha esse wrapper (DOM identico a antes desta
+ * feature) — as regras abaixo so entram em jogo quando ele existe.
+ *
+ * 10 regras estaticas (5 breakpoints × liga/desliga), nunca mudam
+ * independente de quantos breakpoints uma instancia especifica declara —
+ * cada variante carrega seu PROPRIO "-until" (o proximo breakpoint
+ * realmente declarado NESSA instancia, calculado em JS), entao a mesma
+ * regra generica cobre qualquer subconjunto. Ordem de fonte importa: as
+ * regras de "desligar" (−until) precisam vir DEPOIS das de "ligar" (mesma
+ * especificidade — nao reordenar num refactor futuro). */
+/* TODAS as variantes (inclusive a base) sao display:contents por padrao —
+   agrupador logico, as rows dela ficam direto no flex do .ozi-editor-toolbar
+   pai (preserva o `gap` existente). Variantes NAO-base (tem
+   data-ozi-editor-toolbar-bp) comecam escondidas ate a media query da
+   secao seguinte religar. IMPORTANTE: toda regra abaixo que toca `display`
+   usa a MESMA especificidade (.classe + 1 atributo, sempre) de proposito —
+   `[attr="valor"]` sozinho tem especificidade MENOR que `.classe[attr]`
+   (achado real: a 1a versao desta regra so tinha `[data-...-bp="sm"]` sem
+   a classe, e a regra "off" acima sempre ganhava, sm nunca aparecia). Com
+   especificidade igual, a ORDEM DE FONTE decide (por isso "ligar" vem antes
+   de "desligar" abaixo) — nao adicionar `!important` nem reordenar sem
+   entender essa cadeia. */
+.ozi-editor-toolbar-variant { display: contents; }
+.ozi-editor-toolbar-variant[data-ozi-editor-toolbar-bp] { display: none; }
+
+@media (min-width: 576px)  { .ozi-editor-toolbar-variant[data-ozi-editor-toolbar-bp="sm"]  { display: contents; } }
+@media (min-width: 768px)  { .ozi-editor-toolbar-variant[data-ozi-editor-toolbar-bp="md"]  { display: contents; } }
+@media (min-width: 992px)  { .ozi-editor-toolbar-variant[data-ozi-editor-toolbar-bp="lg"]  { display: contents; } }
+@media (min-width: 1200px) { .ozi-editor-toolbar-variant[data-ozi-editor-toolbar-bp="xl"]  { display: contents; } }
+@media (min-width: 1400px) { .ozi-editor-toolbar-variant[data-ozi-editor-toolbar-bp="xxl"] { display: contents; } }
+
+@media (min-width: 576px)  { .ozi-editor-toolbar-variant[data-ozi-editor-toolbar-bp-until="sm"]  { display: none; } }
+@media (min-width: 768px)  { .ozi-editor-toolbar-variant[data-ozi-editor-toolbar-bp-until="md"]  { display: none; } }
+@media (min-width: 992px)  { .ozi-editor-toolbar-variant[data-ozi-editor-toolbar-bp-until="lg"]  { display: none; } }
+@media (min-width: 1200px) { .ozi-editor-toolbar-variant[data-ozi-editor-toolbar-bp-until="xl"]  { display: none; } }
+@media (min-width: 1400px) { .ozi-editor-toolbar-variant[data-ozi-editor-toolbar-bp-until="xxl"] { display: none; } }
+
+/* grupo colapsavel { -/+ , ... } — painel e IRMAO da row (2a linha inline,
+   empurra o conteudo, sem position:absolute — diferente dos popovers de
+   link/color/image). So display puro, sem animacao de altura (acabamento
+   fica pra depois, a pedido do usuario). */
+.ozi-editor-toolbar-collapse {
+    display:        flex;
+    flex-direction: column;
+    gap:            8px;
+}
+
+.ozi-editor-btn--collapse-toggle {
+    margin-left: auto;
+}
+
+.ozi-editor-collapse-chevron svg {
+    transition: transform 150ms ease;
+}
+
+.ozi-editor-btn--collapse-toggle.is-open .ozi-editor-collapse-chevron svg {
+    transform: rotate(180deg);
+}
+
+/* modo Scroll (retomado 2026-08-31/2ª sessão) — toolbar vira UMA linha com
+   overflow-x nativo + 2 setas fixas (sempre visíveis, desabilitadas nas
+   pontas via .ozi-editor-btn:disabled já existente, sem CSS próprio de
+   estado). `min-width:0` nos 2 níveis é obrigatório: é o 1º caso do
+   componente que precisa ENCOLHER um item abaixo do tamanho do conteúdo —
+   o modo wrap só cresce via `flex-wrap`, nunca precisou disso. Ortogonal às
+   10 regras de show/hide por breakpoint acima (elas decidem QUAL variante
+   aparece; o `mode` de cada variante decide o que tem DENTRO dela). */
+.ozi-editor-toolbar-scroll {
+    display:     flex;
+    align-items: center;
+    gap:         4px;
+    min-width:   0;
+}
+
+.ozi-editor-toolbar-scroll-track {
+    display:         flex;
+    flex-wrap:       nowrap;
+    align-items:     center;
+    gap:             8px;
+    overflow-x:      auto;
+    scrollbar-width: thin;
+    flex:            1 1 auto;
+    min-width:       0;
+}
+
+/* mantem os botoes/grupos no tamanho natural — sem isso, flex-shrink:1
+   (default) espremeria o conteudo em vez de deixar a track rolar */
+.ozi-editor-toolbar-scroll-track > * {
+    flex-shrink: 0;
+}
+
+.ozi-editor-btn--scroll-prev,
+.ozi-editor-btn--scroll-next {
+    flex-shrink: 0;
+}
+
+.ozi-editor-btn--scroll-next .ozi-editor-scroll-arrow-icon svg {
+    transform: rotate(180deg);
+}
+
+
 /* ─── BOTÕES DA TOOLBAR ─────────────────────────────────── */
 
 .ozi-editor-btn {
@@ -263,6 +432,10 @@
     overflow-y:  auto;
     overflow-x:  hidden;
     min-height:  200px;
+    /* [2.7.0] containing block do modo livre de imagem — a <img> absoluta se
+       posiciona contra o PADDING BOX daqui (mesma origem que offsetLeft/
+       offsetTop usam, por isso entrar no modo livre não move a imagem) */
+    position:    relative;
 }
 
 .ozi-editor-content:focus {
@@ -296,6 +469,21 @@
 
 .ozi-editor-content td,
 .ozi-editor-content th         { border: 1px solid var(--ozi-editor-border); padding: 8px; vertical-align: top; }
+
+.ozi-editor-content blockquote {
+    margin:       0 0 10px;
+    padding:      2px 14px;
+    border-left:  3px solid var(--ozi-editor-uicolor);
+    color:        var(--ozi-editor-muted);
+}
+
+.ozi-editor-content hr {
+    margin:  0 0 10px;
+    border:  none;
+    border-top: 1px solid var(--ozi-editor-border);
+}
+
+.ozi-editor-content s { color: var(--ozi-editor-muted); }
 
 [data-ozi-theme="dark"] .ozi-editor-content pre,
 [data-bs-theme="dark"] .ozi-editor-content pre {
@@ -360,6 +548,29 @@
 
 .ozi-editor-feedback.is-visible { display: block; }
 
+.ozi-editor-clipboard-warning {
+    padding:    6px 14px;
+    background: var(--ozi-color-danger-light, #fbe6e7);
+    color:      var(--ozi-color-danger, #e0454f);
+    font-size:  12px;
+    border-bottom: 1px solid var(--ozi-editor-toolbar-border);
+}
+
+
+/* ─── RODAPÉ — CONTADOR (opt-in data-ozi-editor-counter) ───── */
+
+.ozi-editor-footer {
+    display:         flex;
+    justify-content: flex-end;
+    padding:         6px 14px;
+    border-top:      1px solid var(--ozi-editor-border);
+}
+
+.ozi-editor-counter {
+    color:     var(--ozi-editor-muted);
+    font-size: var(--ozi-font-size-sm, 0.8125rem);
+}
+
 
 /* ─── ÍCONES SVG ────────────────────────────────────────── */
 
@@ -417,6 +628,248 @@
 [data-bs-theme="dark"]  .ozi-editor-classes-dropdown {
     background:   var(--ozi-editor-toolbar-bg);
     border-color: var(--ozi-editor-border);
+}
+
+
+/* ─── POPOVER GENERICO (link/color/highlight) ────────────── */
+/* [FEAT-5] mesma mecanica de posicionamento do dropdown de
+   heading/classes acima, so que com conteudo de formulario em
+   vez de lista de itens */
+
+.ozi-editor-popover-wrap { position: relative; display: inline-flex; }
+
+.ozi-editor-popover {
+    position:       absolute;
+    top:            calc(100% + 4px);
+    left:           0;
+    z-index:        var(--ozi-z-dropdown, 1000);
+    display:        flex;
+    flex-direction: column;
+    gap:            8px;
+    width:          220px;
+    padding:        10px;
+    background:     var(--ozi-editor-bg);
+    border:         1px solid var(--ozi-editor-border);
+    border-radius:  var(--ozi-radius-md, 0.375rem);
+    box-shadow:     var(--ozi-shadow-md, 0 4px 12px rgba(0,0,0,0.12));
+    font-size:      0.8125rem;
+    color:          var(--ozi-editor-text);
+}
+
+[data-ozi-theme="dark"] .ozi-editor-popover,
+[data-bs-theme="dark"]  .ozi-editor-popover {
+    background:   var(--ozi-editor-toolbar-bg);
+    border-color: var(--ozi-editor-border);
+}
+
+.ozi-editor-popover-field {
+    display:        flex;
+    flex-direction: column;
+    gap:            4px;
+}
+
+/* linha com 2 campos lado a lado (largura/altura do popover de imagem) */
+.ozi-editor-popover-row { display: flex; gap: 8px; }
+.ozi-editor-popover-row .ozi-editor-popover-field { flex: 1; min-width: 0; }
+
+/* [2.7.0] linha de alinhamento de imagem — 4 botões de largura igual.
+   Não usam `.ozi-editor-btn` de propósito (a classe é o que o dispatcher
+   genérico da toolbar procura), então o visual é próprio. */
+.ozi-editor-popover-align {
+    display:               grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap:                   4px;
+}
+
+.ozi-editor-popover-align-btn {
+    display:         flex;
+    align-items:     center;
+    justify-content: center;
+    height:          28px;
+    padding:         0;
+    border:          1px solid var(--ozi-editor-border);
+    border-radius:   var(--ozi-radius-sm, 0.25rem);
+    background:      var(--ozi-editor-btn-bg);
+    color:           var(--ozi-editor-text);
+    cursor:          pointer;
+}
+
+.ozi-editor-popover-align-btn:hover { border-color: var(--ozi-editor-uicolor); }
+
+.ozi-editor-popover-align-btn.is-active {
+    border-color: var(--ozi-editor-uicolor);
+    background:   var(--ozi-editor-uicolor);
+    color:        #fff;
+}
+
+.ozi-editor-popover-align-icon {
+    display:     flex;
+    align-items: center;
+    line-height: 0;
+    font-size:   10px;
+}
+
+.ozi-editor-popover-label {
+    font-size:      10px;
+    font-weight:    700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color:          var(--ozi-editor-muted);
+}
+
+.ozi-editor-popover-input {
+    height:        30px;
+    padding:       0 8px;
+    border:        1px solid var(--ozi-editor-border);
+    border-radius: var(--ozi-radius-sm, 0.25rem);
+    background:    var(--ozi-editor-bg);
+    color:         var(--ozi-editor-text);
+    font-family:   inherit;
+    font-size:     12.5px;
+    outline:       none;
+}
+
+.ozi-editor-popover-input:focus {
+    border-color: var(--ozi-editor-uicolor);
+}
+
+.ozi-editor-popover-actions { display: flex; gap: 6px; }
+
+.ozi-editor-popover-apply,
+.ozi-editor-popover-remove {
+    height:        28px;
+    padding:       0 10px;
+    border:        0;
+    border-radius: var(--ozi-radius-sm, 0.25rem);
+    font-family:   inherit;
+    font-size:     11.5px;
+    font-weight:   600;
+    cursor:        pointer;
+}
+
+.ozi-editor-popover-apply {
+    flex:       1;
+    background: var(--ozi-editor-uicolor);
+    color:      #fff;
+}
+
+.ozi-editor-popover-remove {
+    background: transparent;
+    border:     1px solid var(--ozi-editor-border);
+    color:      var(--ozi-color-danger, #e0454f);
+}
+
+.ozi-editor-popover-remove:hover:not(:disabled) { background: var(--ozi-color-danger-light, #fbe6e7); }
+.ozi-editor-popover-remove:disabled             { opacity: 0.5; cursor: not-allowed; }
+
+.ozi-editor-content a {
+    color:                 var(--ozi-editor-uicolor);
+    text-decoration:       underline;
+    text-underline-offset: 2px;
+}
+
+/* [2.7.0] `display:block`/`margin` continuam sendo o PADRÃO (imagem sem
+   alinhamento declarado se comporta como antes desta versão), mas agora são
+   apenas o ponto de partida: os modos left/right/center/free chegam por
+   inline style na própria tag e vencem por especificidade. O style inline é
+   deliberado — o HTML salvo é renderizado na página do host, que não carrega
+   este CSS (ver ozi-editor.js [7c]). */
+.ozi-editor-content img {
+    max-width:     100%;
+    height:        auto;
+    border-radius: var(--ozi-radius-sm, 0.25rem);
+    display:       block;
+    margin:        0 0 10px;
+    /* o mousedown já dá preventDefault (mata o drag nativo de <img> em
+       contenteditable); estas duas evitam o fantasma de arrasto e a seleção
+       de texto acidental durante o gesto */
+    -webkit-user-drag: none;
+    user-select:       none;
+    cursor:            pointer;
+}
+
+/* ─── POPOVER DE IMAGEM — seção de upload ─────────────────── */
+
+.ozi-editor-popover-upload {
+    display:         flex;
+    flex-direction:  column;
+    gap:             4px;
+    padding-top:     8px;
+    border-top:      1px dashed var(--ozi-editor-border);
+}
+
+.ozi-editor-popover-file {
+    font-size:  11.5px;
+    color:      var(--ozi-editor-muted);
+    max-width:  150px;
+    overflow:   hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ─── GRADE DE SWATCHES (color/highlight) ────────────────── */
+/* [FIX] .ozi-editor-popover é position:absolute — "width:auto" nele vira
+   shrink-to-fit pelo conteúdo, e um flex com flex-wrap encolhe pro mínimo
+   (1 item por linha), colapsando a grade numa coluna única. Grid com
+   colunas fixas não depende do shrink-to-fit do container pra formar linhas. */
+
+.ozi-editor-popover--color { width: auto; gap: 6px; }
+
+.ozi-editor-swatch-grid { display: grid; grid-template-columns: repeat(10, 16px); gap: 3px; }
+
+.ozi-editor-swatch {
+    width:         16px;
+    height:        16px;
+    padding:       0;
+    border:        1px solid rgba(128, 128, 128, 0.35);
+    border-radius: 3px;
+    cursor:        pointer;
+    transition:    transform 0.08s ease;
+}
+
+.ozi-editor-swatch:hover {
+    transform:  scale(1.15);
+    box-shadow: 0 0 0 2px var(--ozi-editor-bg), 0 0 0 3px var(--ozi-editor-uicolor);
+}
+
+.ozi-editor-swatch-custom {
+    display:      flex;
+    align-items:  center;
+    gap:          8px;
+    margin-top:   4px;
+    padding-top:  6px;
+    border-top:   1px solid var(--ozi-editor-border);
+    font-size:    11.5px;
+    color:        var(--ozi-editor-text);
+    cursor:       pointer;
+}
+
+.ozi-editor-swatch-custom input[type="color"] {
+    width:         22px;
+    height:        22px;
+    padding:       0;
+    border:        1px solid rgba(128, 128, 128, 0.35);
+    border-radius: 3px;
+    cursor:        pointer;
+    background:    none;
+}
+
+.ozi-editor-swatch-none {
+    margin-top:    2px;
+    height:        26px;
+    border:        1px solid var(--ozi-editor-border);
+    border-radius: var(--ozi-radius-sm, 0.25rem);
+    background:    transparent;
+    color:         var(--ozi-editor-text);
+    font-family:   inherit;
+    font-size:     11.5px;
+    font-weight:   600;
+    cursor:        pointer;
+}
+
+.ozi-editor-swatch-none:hover {
+    background:   var(--ozi-editor-btn-hover-bg);
+    border-color: var(--ozi-editor-uicolor);
 }
 
 

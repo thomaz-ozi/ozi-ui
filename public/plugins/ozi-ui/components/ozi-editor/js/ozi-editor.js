@@ -2,20 +2,237 @@
  * ------------------------------------------
  * ozi-editor
  * ------------------------------------------
- * Ver: 4.1.0
- * 2026-08-20
+ * Ver: 4.7.0
+ * 2026-09-10
  *
  * Editor WYSIWYG (contenteditable) com toolbar declarativa, modos html/md,
  * dropdowns de heading/classes, source view, sanitizacao e validacao.
  * Instance-based (registry por key). Conversores MD via ozi-editor-md.js.
+ * Sanitizador via modules/ozi-editor-sanitize.js (ver Fase 3, deps do ozi-conf).
  *
- * Dependencias: ozi.js (OZI.helpers, OZI.lang, OZI.hooks, OZI.modules.validate) —
- *   zero jQuery (contrato de camadas v2 §2). O motor (Selection/Range/execCommand/
- *   contentEditable) sempre foi nativo; a migracao trocou o encanamento de DOM/eventos.
+ * Dependencias: ozi.js (OZI.helpers, OZI.lang, OZI.hooks, OZI.modules.validate),
+ *   OZI.modules.editorSanitize (window.OziEditorSanitize) — zero jQuery (contrato
+ *   de camadas v2 §2). O motor (Selection/Range/execCommand/contentEditable)
+ *   sempre foi nativo; a migracao trocou o encanamento de DOM/eventos.
  * Expoe: OZI.components.editor, window.OziEditor (compat)
  * Eventos: ozi:init, ozi:change, ozi:destroy (CustomEvent nativos, contrato v2)
  *
  * Changelog:
+ *   - v4.7.0: [FEAT] Alinhamento de imagem — linha "Alinhamento" nova dentro
+ *       do popover de imagem (ao lado de Largura/Altura), com 4 modos:
+ *       `left`/`right` (float, texto corre ao lado), `center` (bloco
+ *       centrado) e `free` (posicao livre por ARRASTO, por cima do texto).
+ *       Antes desta versao o alinhamento era impossivel por CSS, nao por
+ *       falta de botao: `.ozi-editor-content img` fixava `display:block`,
+ *       e os tools `left/center/right` da toolbar so aplicam `text-align`
+ *       no paragrafo — nunca tiveram efeito sobre a imagem.
+ *       **Estado gravado como INLINE STYLE na propria `<img>`** (nao classe):
+ *       o HTML salvo e renderizado na pagina do host, que pode nao ter o CSS
+ *       do plugin. Mesmo precedente do alinhamento de texto (`style.textAlign`
+ *       ja preservado pelo sanitizador). Os modos de alinhamento levam junto
+ *       `max-width:100%` inline (a regra do CSS do editor nao viaja pro
+ *       host), mas imagem SEM alinhamento continua saindo sem `style` nenhum
+ *       — a v4.7.0 nao muda a saida de quem nao pediu alinhamento.
+ *       `_applyImageUrl` ganha 5o parametro `align`; novos `_getImageAlign`/
+ *       `_applyImageAlign` (string canonica por modo, sem residuo do modo
+ *       anterior). Clique num botao de alinhamento com imagem selecionada
+ *       aplica na hora (precedente dos swatches de cor); sem imagem, fica
+ *       pendente no proprio popover ate o Aplicar.
+ *       **Arrasto (modo `free`):** reaproveita o handler de `mousedown` que
+ *       ja abria o popover ao clicar numa `<img>`; imagem NAO-livre mantem o
+ *       comportamento anterior byte a byte (abre no mousedown — o aceite da
+ *       Fase 3 depende disso), imagem livre arma `_imgDrag` e so decide no
+ *       mouseup: sem movimento (< 4px) = clique, abre o popover; com
+ *       movimento = arrasto, nao abre. `mousemove`/`mouseup` sao registrados
+ *       UMA VEZ no `document` via `_on` (rastreado pelo `destroy()`) e
+ *       gateados por `this._imgDrag` — registrar por gesto vazaria listener,
+ *       ja que nao existe `_off` no arquivo. Escrita de `style` SINCRONA,
+ *       sem requestAnimationFrame (rAF nao dispara de forma confiavel sob
+ *       `--virtual-time-budget`, ver lessons-learned — com rAF a feature
+ *       ficaria intestavel). Guardas: limiar de 4px, `e.buttons === 0`
+ *       aborta (drag grudado por Alt+Tab/menu de contexto/soltar fora da
+ *       janela), compensacao de `scrollTop`, `content.contains(img)` no
+ *       mouseup (setValue/source mode podem trocar o DOM no meio) e CLAMP
+ *       obrigatorio nos 4 limites (`overflow-x:hidden` do content corta sem
+ *       dar scroll — imagem arrastada pra fora ficaria inalcancavel).
+ *       `_syncToTextarea()`/`emitChange()` so no mouseup, nunca por move.
+ *       Coordenadas: `left` em % (o host renderiza noutra largura) e `top`
+ *       em px (altura e dirigida pelo conteudo, % vertical derivaria).
+ *       **Modo md:** a linha de alinhamento NAO e construida (mesma regra da
+ *       secao de upload: controle funcionalmente morto nao deveria estar no
+ *       DOM) — `htmlToMd` serializa `![alt](src)` e descarta style, e
+ *       `left/center/right` de texto ja sao BLOCKED_IN_MD.
+ *       Sanitizador: `ozi-editor-sanitize` 1.1.0 ganha a whitelist de estilo
+ *       inline de `<img>` (sem isso o alinhamento se perde no round-trip).
+ *       4 SVGs novos (`icon-img-left/right/center/free`) — os `icon-left/
+ *       center/right` existentes sao de alinhamento de TEXTO e ja estao em
+ *       uso pelos tools da toolbar. Botao dentro de popover nao e alcancado
+ *       pelo laco de `_loadIcons` (que varre `[data-ozi-editor-tool]`), entao
+ *       ganham passada manual (mesmo padrao do chrome estrutural).
+ *       [FIX] As 9 chaves `editor.image*` (Fase 3) nunca entraram na tabela
+ *       `fb` de `_t` — sem dicionario carregado o popover mostrava
+ *       literalmente `editor.imageUrl`/`editor.imageAlt`. Mesma classe de bug
+ *       da v4.1.1. Corrigidas junto com as 5 chaves novas de alinhamento.
+ *   - v4.6.0: [FEAT] Toolbar responsiva — modo Scroll (retomado da secao 3c
+ *       do roadmap, adiado em 2026-08-31): `data-ozi-editor-tools-scroll` /
+ *       `-scroll-{sm,md,lg,xl,xxl}` — a toolbar vira UMA linha com overflow-x
+ *       nativo + 2 setas fixas (sempre visiveis, `disabled` nativo no fim de
+ *       curso). Combinavel com os breakpoints existentes: cada nivel (base +
+ *       sm/md/lg/xl/xxl) escolhe independentemente entre modo wrap (atual) e
+ *       scroll; conflito no mesmo nivel (`-md` + `-scroll-md` juntos) resolve
+ *       com scroll vencendo (opt-in explicito). `;` no valor e FLATTENED —
+ *       vira uma unica linha/track, nao multiplos scrollers empilhados.
+ *       `_appendToolItemsInto` extraido de `_buildToolbarButtonsInto` (puro
+ *       refactor, reusado pelo builder novo `_buildScrollToolbarInto`). Setas
+ *       nao tem guard proprio de `isDisabled` no handler (`_setDisabled()` ja
+ *       marca TODO `.ozi-editor-btn` como `disabled=true`, inclusive setas e
+ *       collapse-toggle — uniforme com o resto da toolbar). 1 SVG novo
+ *       `icon-chevron-left.svg`
+ *       (botao `--scroll-next` reusa o mesmo arquivo via `rotate(180deg)`,
+ *       mesmo padrao do chevron do colapso).
+ *   - v4.5.0: [FEAT] Toolbar responsiva — modo Colapso (ver
+ *       ozi-ui-docs/horizonte/roadmap/ozi-editor-toolbar-responsiva.md):
+ *       atributos `data-ozi-editor-tools-{sm,md,lg,xl,xxl}` (string de layout
+ *       COMPLETA e independente por breakpoint, min-width estilo Bootstrap —
+ *       `-sm` vale da largura sm pra cima). Sintaxe nova `{-,...}`/`{+,...}`
+ *       dentro de qualquer string de tools (base ou breakpoint): grupo
+ *       colapsavel atras de um chevron (▼ fechado / ▲ aberto) que abre uma
+ *       2a linha INLINE (nao popover flutuante), primeiro token = estado
+ *       padrao (`-` fechado/`+` aberto, sem marcador = fechado). Parser:
+ *       `_splitTopLevel` local virou `_splitToolsToken` (soma profundidade
+ *       de `[]` E `{}` num unico contador — nao da pra chamar o
+ *       `h.splitTopLevel` do core duas vezes); `_parseCollapseItem` novo,
+ *       recursivo (aceita `[grupo]`/`,`/`;` dentro do `{}`). Arquitetura de
+ *       DOM: cada breakpoint declarado vira uma SUBARVORE independente
+ *       (`.ozi-editor-toolbar-variant`, `data-ozi-editor-toolbar-bp`/`-until`),
+ *       nao uma lista plana com marcador por botao — evita quebrar
+ *       `:first-child`/`:last-child` dos grupos e permite o mesmo tool estar
+ *       solto num breakpoint e dentro do `{}` em outro sem reparenting;
+ *       CSS (`display:contents`/`none` por media query) decide qual mostrar,
+ *       zero JS no resize. Instancia sem nenhum atributo `-sm/-md/...` gera
+ *       DOM identico a antes desta versao (zero regressao). [FIX] Pre-
+ *       requisito antes da feature: `_registerPopover`/`_popoverEntry`/
+ *       `data-ozi-editor-popover-wrap` trocam a chave de "nome bruto do
+ *       tool" pra um ID UNICO por instancia de popover (`heading-3`,
+ *       `link-7`) — com a toolbar responsiva o mesmo tool (heading/classes/
+ *       link/color/highlight/image) pode aparecer em mais de uma variante
+ *       de breakpoint simultaneamente no DOM, e a chave por nome bruto fazia
+ *       o popover errado abrir silenciosamente (por vezes escondido numa
+ *       variante inativa — nem aparecia na tela); bug latente, nunca
+ *       acontecia antes por nao existir duplicata. Campos singulares por
+ *       instancia (`self._linkInput`, `self._imageUrlInput`, etc.,
+ *       `self.headingDropdown`/`classDropdown`) removidos — cada handler
+ *       agora resolve os campos a partir do popover/elemento efetivamente
+ *       clicado (`_popoverIdFromElement`/`_toolFromPopoverId`/
+ *       `_visibleToolTrigger`). Zero mudanca de comportamento com 1
+ *       instancia de cada tool (cenario de hoje) — validado sem regressao
+ *       nos aceites existentes antes de introduzir a feature nova.
+ *   - v4.4.0: [FEAT] Fase 3 da nova leva de ferramentas (ver
+ *       ozi-ui-docs/horizonte/roadmap/ozi-editor-nova-leva-ferramentas.md):
+ *       sanitizador HTML extraido para modules/ozi-editor-sanitize.js (modulo
+ *       puro, mesmo perfil de ozi-password-rules — ver
+ *       ozi-ui-docs/horizonte/roadmap/ozi-editor-subdivisao.md). `_sanitizeHtml`/
+ *       `_isSafeUrl` viram wrappers finos que delegam a `window.OziEditorSanitize`
+ *       e falham alto (throw) se o modulo nao carregou — nenhum call-site interno
+ *       mudou. `editor` passa a depender de `editor-sanitize` no `_pluginMap`
+ *       (ozi-conf 3.0.1). `_isSafeColorValue` local removida (orfa apos a
+ *       extracao, so tinha uso dentro do `_cleanNode` que migrou). Ferramenta
+ *       `image` nova: popover com URL + upload real de arquivo
+ *       (`data-ozi-editor-upload-url`, contrato `{status:'ok',url}`/
+ *       `{status:'error',message}`, sem base64 inline). Sanitizador ganha `IMG`
+ *       em ALLOWED_TAGS + remocao total do no quando `src` ausente/inseguro
+ *       (elemento vazio, sem filhos pra "unwrap"); `alt` preservado sem
+ *       validacao de conteudo. `_showClipboardWarning` generalizado para
+ *       `_showWarning` (mesmo widget visual, reusado por erro de clipboard e
+ *       de imagem/upload). MD: `image` ganha conversor real
+ *       (`![alt](url)`) em ozi-editor-md.js 2.3.0. Tema `full` (html e md)
+ *       ganha `image` no grupo `[link,unlink]`. Aceites dedicados:
+ *       aceite-editor-sanitize.html (modulo isolado) + aceite-editor-fase3.html.
+ *       [ajuste pos-revisao do usuario, mesma v4.4.0 — validado ao vivo antes
+ *       do fechamento da fase] Popover `image` ganha campos `Largura`/`Altura`
+ *       (px, atributos HTML nativos `width`/`height`, unitless — vazio deixa
+ *       "auto", a regra CSS `height:auto` ja existente cobre). `_applyImageUrl`
+ *       ganha params `width`/`height`; `onOpen` pre-popula os 4 campos
+ *       (URL/Alt/Largura/Altura) ao reabrir sobre imagem existente. Sanitizador
+ *       ganha `isSafeDimension()` (inteiro 1-5 digitos, sem `%`/unidade CSS).
+ *       Clicar diretamente numa `<img>` do content agora abre o popover de
+ *       edicao automaticamente (novo `_openPopover`, versao nao-toggle de
+ *       `_togglePopover` — reclicar numa 2a imagem com o popover ja aberto
+ *       ATUALIZA o conteudo pra ela em vez de fechar); `stopPropagation()`
+ *       no handler evita que o "clique fora" do document feche o popover no
+ *       mesmo evento (a `<img>` clicada nao esta dentro do wrap do trigger
+ *       da toolbar).
+ *   - v4.3.0: [FEAT] Fase 2 da nova leva de ferramentas (ver
+ *       ozi-ui-docs/horizonte/roadmap/ozi-editor-nova-leva-ferramentas.md):
+ *       Passo 0 — mecanica de popover (wrap+trigger+outside-click+aria-expanded,
+ *       mutuamente exclusivo entre popovers abertos) extraida dos dropdowns de
+ *       heading/classes para `_registerPopover`/`_togglePopover`/
+ *       `_buildPopoverButton` (conteudo de heading/classes NAO mudou, so a
+ *       camada de abrir/fechar/registro). 6 ferramentas novas:
+ *       `unlink` (execCmd generico, mesmo caminho de strike/undo/redo);
+ *       `link` (popover com campo de URL — `_isSafeUrl()` bloqueia esquemas
+ *       fora de http/https/mailto/tel/relativo, em particular `javascript:`);
+ *       `color`/`highlight` (popover com grade de swatches fixos —
+ *       `document.execCommand('styleWithCSS', false, true)` antes de
+ *       foreColor/hiliteColor, forcando `<span style>` em vez do `<font color>`
+ *       legado que o Chromium produz sem isso — verificado empiricamente no
+ *       Edge headless antes de implementar); `paste`/`pasteFmt` (acao imediata
+ *       via Clipboard API — `navigator.clipboard.readText()`/`.read()` no
+ *       proprio gesto de clique, plain-text ou HTML sanitizado; falha de
+ *       permissao/API ausente e fail-open silencioso, so loga via `_dbg`).
+ *       Sanitizador: `ALLOWED_TAGS` ganha `A`; `<a>` com `href` fora da
+ *       whitelist de esquemas vira texto simples (unwrap, mesmo caminho de tag
+ *       nao permitida); `style.color`/`backgroundColor` so sao preservados se
+ *       baterem com a paleta fixa (`SWATCH_PALETTE`, comparados em hex E em
+ *       rgb() normalizado, ja que e assim que o browser serializa o inline
+ *       style) — defesa em profundidade, o sanitizador nao confia na UI (vale
+ *       tambem para `setValue()`/paste nativo). Tema `full` (html) ganha
+ *       `[link,unlink]`, `[color,highlight]`, `[paste,pasteFmt]`; tema `full`
+ *       (md) ganha `link`/`unlink` (color/highlight seguem BLOCKED_IN_MD, sem
+ *       sintaxe nativa). MD: `link` ganha conversor real em ozi-editor-md.js
+ *       2.2.0 (`[texto](url)`). Aceite dedicado: aceite-editor-fase2.html.
+ *       Fora de escopo desta fase (roadmap): skin `clarity` do editor, `image`
+ *       e subdivisao do sanitizador (Fase 3).
+ *   - v4.2.0: [FEAT] Fase 1 da nova leva de ferramentas (ver
+ *       ozi-ui-docs/horizonte/roadmap — plano de 3 fases simples/media/pesada):
+ *       6 ferramentas simples + contador. `strike` (execCmd generico
+ *       strikeThrough), `justify` (via _applyTextAlign, mesmo padrao de
+ *       left/center/right — sanitizador ja tinha 'justify' na lista de aligns
+ *       permitidos, so nunca tinha tool pra usar), `quote` (_toggleQuote,
+ *       mesmo padrao do _toggleHeading: troca p<->blockquote), `hr`
+ *       (_insertHr, mesmo padrao do _insertTable), `undo`/`redo` (execCmd
+ *       generico, tipo acao sem estado). Sanitizador: ALLOWED_TAGS ganha
+ *       BLOCKQUOTE/HR/S; STRIKE (legado do execCommand em alguns navegadores)
+ *       normalizado pra S via TAG_REPLACE, mesmo tratamento que B/I ja tinham.
+ *       Contador de palavras/caracteres opt-in via `data-ozi-editor-counter`
+ *       (greenfield, sem tocar execCommand/sanitizer). MD: strike/quote/hr
+ *       ganham conversor real em ozi-editor-md.js 2.1.0 (~~/> /---, sintaxe
+ *       nativa do Markdown); color/highlight (fase 2) ficam BLOCKED_IN_MD de
+ *       proposito. Tema `full` (html e md) atualizado com as 6 ferramentas
+ *       novas; demais temas (minimal/standard/blog/code) inalterados.
+ *       6 icones SVG novos (strike/justify/quote/hr/undo/redo), extraidos
+ *       do mockup Claude Design aprovado (ozi-ui-designer/OZI-UI/demo/
+ *       ozi-editor.html) — mesmo padrao MDI ja usado nos icones existentes.
+ *       Aceite dedicado: aceite-editor-fase1.html (zero falhas, regressao
+ *       dos aceites pre-existentes tambem zero falhas).
+ *       [ACHADO, nao corrigido — pre-existente, nao e regressao desta fase]
+ *       getValue() logo apos um execCommand reflete o HTML BRUTO do
+ *       contenteditable (ex.: <b>/<strike> em vez de <strong>/<s>) ate o
+ *       proximo _sanitizeHtml (paste/setValue) — mesmo comportamento que
+ *       bold/italic ja tinham antes desta fase; strike so herdou o padrao
+ *       existente, nao introduziu uma inconsistencia nova.
+ *   - v4.1.1: [FIX-I18N] 8 chaves de lang faltando nos dicionarios externos
+ *       (editor.heading, editor.h1..h6, editor.classes, editor.clear, editor.unknown,
+ *       editor.incompatible) — caiam no fallback interno em ingles hardcoded; pt-BR/es
+ *       mostravam texto errado nesses botoes. Adicionadas em pt-BR/en/es. Removida a
+ *       chave morta `editor.clearFormat` (nunca lida pelo codigo — o codigo le
+ *       `editor.clear`). Achado original registrado no changelog da v4.1.0 (2026-08-20),
+ *       corrigido agora. NAO corrigido: `editor.source.md` — o resolvedor de chaves do
+ *       ozi-lang.js (`_resolve`, caminho pontilhado) exige que `editor.source` seja
+ *       objeto para ter filho `.md`, mas `editor.source` e string (usada sozinha em
+ *       modo html) — colisao estrutural, so resolve com mudanca de chave no codigo
+ *       (ex.: `editor.sourceMd`), fora do escopo desta correcao de dicionario.
+ *       Sem mudanca de logica/API.
  *   - v4.1.0: [DEBUG] Flag local `data-ozi-editor-log` (convenção `data-ozi-{plugin}-log`,
  *       espelha o zldLog do ozi-loaddata): método _dbg loga init()/destroy() deste widget
  *       com prefixo [OZI:editor#<uid>]; destroy() com console.trace p/ apontar quem chamou.
@@ -82,6 +299,7 @@
             'editor.bold':           'Bold',
             'editor.italic':         'Italic',
             'editor.underline':      'Underline',
+            'editor.strike':         'Strikethrough',
             'editor.ul':             'List',
             'editor.ol':             'Numbered list',
             'editor.codeblock':      'Code',
@@ -92,6 +310,42 @@
             'editor.alignLeft':      'Align left',
             'editor.alignCenter':    'Center',
             'editor.alignRight':     'Align right',
+            'editor.justify':        'Justify',
+            'editor.quote':          'Quote',
+            'editor.hr':             'Horizontal line',
+            'editor.undo':           'Undo',
+            'editor.redo':           'Redo',
+            'editor.link':           'Link',
+            'editor.unlink':         'Remove link',
+            'editor.linkUrl':        'URL',
+            'editor.color':          'Text color',
+            'editor.highlight':      'Highlight color',
+            'editor.paste':          'Paste',
+            'editor.pasteFmt':       'Paste with formatting',
+            /* as 9 chaves de imagem abaixo existem desde a Fase 3 (v4.4.0) mas
+               nunca tinham entrado aqui — sem dicionario carregado o popover
+               mostrava a propria chave. Corrigido na v4.7.0. */
+            'editor.image':          'Image',
+            'editor.imageUrl':       'URL',
+            'editor.imageAlt':       'Alt text',
+            'editor.imageWidth':     'Width',
+            'editor.imageHeight':    'Height',
+            'editor.imageUpload':    'Upload',
+            'editor.imageUploading': 'Uploading…',
+            'editor.imageUploadFailed': 'Could not upload the image.',
+            'editor.imageInvalidUrl':   'Invalid image URL.',
+            'editor.imageAlign':       'Alignment',
+            'editor.imageAlignLeft':   'Left (text wraps)',
+            'editor.imageAlignRight':  'Right (text wraps)',
+            'editor.imageAlignCenter': 'Centered',
+            'editor.imageAlignFree':   'Free position (drag)',
+            'editor.apply':          'Apply',
+            'editor.remove':         'Remove',
+            'editor.none':           'None',
+            'editor.customize':      'Customize',
+            'editor.clipboardBlocked': 'Could not read the clipboard. Check the browser permission (address bar / site settings).',
+            'editor.words':          'words',
+            'editor.chars':          'characters',
             'editor.h1':             'Heading 1',
             'editor.h2':             'Heading 2',
             'editor.h3':             'Heading 3',
@@ -103,6 +357,10 @@
             'editor.placeholder':    'Type here...',
             'editor.incompatible':   'Not available in this mode',
             'editor.unknown':        'Unknown tool',
+            'editor.moreTools':      'More tools',
+            'editor.fewerTools':     'Fewer tools',
+            'editor.scrollPrev':     'Scroll back',
+            'editor.scrollNext':     'Scroll forward',
             'common.required':       'Required field'
         };
         return fb[key] || key;
@@ -149,14 +407,17 @@
         return !!fallback;
     }
 
-    function _splitTopLevel(raw, sep) {
-        var h = _h();
-        if (h.splitTopLevel) return h.splitTopLevel(raw, sep, '[', ']');
+    /* soma profundidade de [ ] E { } num unico contador — nao da pra
+       reaproveitar h.splitTopLevel do core aqui (so rastreia um par de
+       delimitadores por chamada; uma virgula dentro de {...} precisa ficar
+       protegida mesmo sem nenhum [ aberto). Local ao parser de toolbar,
+       nao delega ao helper generico do core. */
+    function _splitToolsToken(raw, sep) {
         var results = [], depth = 0, current = '';
         for (var i = 0; i < raw.length; i++) {
             var ch = raw[i];
-            if (ch === '[') depth++;
-            if (ch === ']') depth--;
+            if (ch === '[' || ch === '{') depth++;
+            if (ch === ']' || ch === '}') depth--;
             if (ch === sep && depth === 0) {
                 if (current.trim()) results.push(current.trim());
                 current = '';
@@ -173,12 +434,26 @@
     var DEFAULT_TOOLS_HTML = '[bold,italic,underline], [ul,ol], [left,center,right]; [heading,classes], table, clear, codeblock, source';
     var DEFAULT_TOOLS_MD   = '[bold,italic], [ul,ol]; heading; codeblock, table; source';
 
-    var BLOCKED_IN_MD = { left: true, center: true, right: true, clear: true };
+    var BLOCKED_IN_MD = { left: true, center: true, right: true, clear: true, color: true, highlight: true };
+
+    /* toolbar responsiva — min-width estilo Bootstrap (mesma tabela numerica,
+       consistente com a direcao de breakpoint ja fechada com o usuario).
+       Valores tambem documentados em --ozi-editor-bp-* no CSS (so como fonte
+       citavel — @media nao aceita var() na condicao, os literais no CSS sao
+       a fonte real, mantidos em sincronia manualmente). Ordem ascendente:
+       usada tal qual pra computar "proximo breakpoint declarado". */
+    var TOOLBAR_BREAKPOINTS = [
+        { name: 'sm',  px: 576 },
+        { name: 'md',  px: 768 },
+        { name: 'lg',  px: 992 },
+        { name: 'xl',  px: 1200 },
+        { name: 'xxl', px: 1400 }
+    ];
 
     var BUILT_IN_THEMES_HTML = {
         minimal:  '[bold,italic,underline]; source',
         standard: '[bold,italic,underline]; heading; [ul,ol]; codeblock,clear; source',
-        full:     '[bold,italic,underline], [ul,ol], [left,center,right]; [heading,classes], table, clear, codeblock, source',
+        full:     '[bold,italic,underline,strike], [ul,ol], [left,center,right,justify]; [heading,classes], [quote,hr], table, clear, [undo,redo], codeblock, source; [link,unlink,image], [color,highlight], [paste,pasteFmt]',
         blog:     '[bold,italic,underline]; heading; [ul,ol]; table,clear; classes,source',
         code:     '[bold,italic,underline]; codeblock,source'
     };
@@ -186,7 +461,7 @@
     var BUILT_IN_THEMES_MD = {
         minimal:  '[bold,italic]; source',
         standard: '[bold,italic], [ul,ol]; heading; codeblock; source',
-        full:     '[bold,italic], [ul,ol]; heading; codeblock, table; source'
+        full:     '[bold,italic,strike], [ul,ol]; heading; [quote,hr]; codeblock, table; source; [link,unlink,image]'
     };
 
     function _resolveTheme(name, devThemes, builtIn) {
@@ -210,6 +485,7 @@
         bold:      { labelKey: 'editor.bold',        icon: 'bold',      execCmd: 'bold' },
         italic:    { labelKey: 'editor.italic',       icon: 'italic',    execCmd: 'italic' },
         underline: { labelKey: 'editor.underline',    icon: 'underline', execCmd: 'underline' },
+        strike:    { labelKey: 'editor.strike',       icon: 'strike',    execCmd: 'strikeThrough' },
         ul:        { labelKey: 'editor.ul',           icon: 'ul',        execCmd: 'insertUnorderedList' },
         ol:        { labelKey: 'editor.ol',           icon: 'ol',        execCmd: 'insertOrderedList' },
         codeblock: { labelKey: 'editor.codeblock',    icon: 'codeblock', execCmd: null },
@@ -219,6 +495,18 @@
         left:      { labelKey: 'editor.alignLeft',    icon: 'left',      execCmd: null },
         center:    { labelKey: 'editor.alignCenter',  icon: 'center',    execCmd: null },
         right:     { labelKey: 'editor.alignRight',   icon: 'right',     execCmd: null },
+        justify:   { labelKey: 'editor.justify',      icon: 'justify',   execCmd: null },
+        quote:     { labelKey: 'editor.quote',        icon: 'quote',     execCmd: null },
+        hr:        { labelKey: 'editor.hr',           icon: 'hr',        execCmd: null },
+        undo:      { labelKey: 'editor.undo',         icon: 'undo',      execCmd: 'undo' },
+        redo:      { labelKey: 'editor.redo',         icon: 'redo',      execCmd: 'redo' },
+        link:      { labelKey: 'editor.link',         icon: 'link',      execCmd: null },
+        unlink:    { labelKey: 'editor.unlink',       icon: 'unlink',    execCmd: 'unlink' },
+        color:     { labelKey: 'editor.color',        icon: 'color',     execCmd: null },
+        highlight: { labelKey: 'editor.highlight',    icon: 'highlight', execCmd: null },
+        image:     { labelKey: 'editor.image',        icon: 'image',     execCmd: null },
+        paste:     { labelKey: 'editor.paste',        icon: 'paste',     execCmd: null },
+        pasteFmt:  { labelKey: 'editor.pasteFmt',     icon: 'pastefmt',  execCmd: null },
         h1:        { labelKey: 'editor.h1',           icon: 'h1',        execCmd: null },
         h2:        { labelKey: 'editor.h2',           icon: 'h2',        execCmd: null },
         h3:        { labelKey: 'editor.h3',           icon: 'h3',        execCmd: null },
@@ -235,20 +523,39 @@
 
     function _parseToolsLayout(raw) {
         if (!raw) return [];
-        return _splitTopLevel(raw, ';').map(function (row) {
+        return _splitToolsToken(raw, ';').map(function (row) {
             return { type: 'row', items: _parseToolsRow(row.trim()) };
         });
     }
 
     function _parseToolsRow(raw) {
-        return _splitTopLevel(raw, ',').map(function (item) {
+        return _splitToolsToken(raw, ',').map(function (item) {
             item = item.trim();
             if (item.charAt(0) === '[' && item.charAt(item.length - 1) === ']') {
                 var tools = item.slice(1, -1).split(',').map(function (t) { return t.trim(); }).filter(Boolean);
                 return { type: 'group', tools: tools };
             }
+            if (item.charAt(0) === '{' && item.charAt(item.length - 1) === '}') {
+                return _parseCollapseItem(item.slice(1, -1));
+            }
             return { type: 'tool', tool: item };
         });
+    }
+
+    /* grupo colapsavel { -,tool1,[grupo],tool2 } / { +,... } — primeiro
+       token e o estado padrao (- fechado, + aberto; sem marcador = fechado,
+       default mais seguro), o resto e uma sub-estrutura de layout completa e
+       RECURSIVA (aceita [grupo]/,/; como qualquer string de toolbar normal).
+       {} dentro de [grupo] nao e suportado (grupo continua parser plano) —
+       cai no fallback de "tool desconhecido" (botao "?" desabilitado),
+       comportamento seguro e consistente com qualquer token nao reconhecido
+       hoje. {} aninhado dentro de outro {} nao quebra tecnicamente (a
+       recursao permite), mas nao e um caso testado/suportado nesta rodada. */
+    function _parseCollapseItem(inner) {
+        var m = /^\s*([+-])\s*[,;]?\s*([\s\S]*)$/.exec(inner);
+        var defaultOpen = m ? (m[1] === '+') : false;
+        var rest        = m ? m[2] : inner;
+        return { type: 'collapse', defaultOpen: defaultOpen, layout: _parseToolsLayout(rest) };
     }
 
     /* ─────────────────────────────────────────────
@@ -267,70 +574,123 @@
     }
 
     /* ─────────────────────────────────────────────
-     * [7] SANITIZACAO DE HTML
+     * [7] SANITIZACAO DE HTML — delegado a ozi-editor-sanitize.js (Fase 3,
+     * extracao do sanitizador como modulo isolado testavel; ver
+     * ozi-ui-docs/horizonte/roadmap/ozi-editor-subdivisao.md). Wrappers finos
+     * mantem os mesmos nomes/chamadas internas de antes da extracao — nenhum
+     * call-site precisou mudar. Falha ALTO (throw) se o modulo nao carregou:
+     * sanitizacao e codigo de seguranca, preferivel quebrar visivel a rodar
+     * sem sanitizar.
      * ───────────────────────────────────────────── */
 
-    var ALLOWED_TAGS = {
-        'P': true, 'BR': true, 'STRONG': true, 'EM': true, 'U': true,
-        'UL': true, 'OL': true, 'LI': true,
-        'PRE': true, 'CODE': true, 'SPAN': true,
-        'TABLE': true, 'TBODY': true, 'THEAD': true, 'TR': true, 'TD': true, 'TH': true,
-        'H1': true, 'H2': true, 'H3': true, 'H4': true, 'H5': true, 'H6': true
+    function _sanitizerModule() {
+        var mod = window.OziEditorSanitize;
+        if (!mod) {
+            throw new Error('[OZI:editor] ozi-editor-sanitize.js nao carregado. ' +
+                'Declare deps:["editor-sanitize"] no ozi-conf ou carregue o script antes do ozi-editor.js.');
+        }
+        return mod;
+    }
+
+    function _sanitizeHtml(html) { return _sanitizerModule().sanitizeHtml(html); }
+    function _isSafeUrl(url)     { return _sanitizerModule().isSafeUrl(url); }
+
+    /* ─────────────────────────────────────────────
+     * [7b] SEGURANCA — paleta de cor (grade de swatches, UI)
+     * (validacao de FORMA de cor tambem foi pro modulo do sanitizador —
+     * _isSafeColorValue nao tem mais uso aqui, so dentro dele)
+     * ───────────────────────────────────────────── */
+
+    /* paleta fixa — grade 10x6 (60 cores): 10 matizes x 6 tons (claro->escuro),
+       a pedido do usuario (revisao pos-Fase 2, referencia visual trazida por
+       ele). Escala nos mesmos moldes dos tokens --ozi-color-gray-* ja usados
+       no projeto (Tailwind-like: 100/200/400/600/800/900). Ordem do array e
+       "linha a linha" (10 matizes por linha, 6 linhas) de proposito — o CSS
+       grid de 10 colunas preenche nessa ordem, formando 1 coluna por matiz
+       (mais clara em cima, mais escura embaixo), igual a referencia. */
+    var SWATCH_PALETTE = [
+        // tom 100 (mais claro)
+        { hex: '#f3f4f6', labelKey: 'gray-100' },   { hex: '#fee2e2', labelKey: 'red-100' },
+        { hex: '#ffedd5', labelKey: 'orange-100' }, { hex: '#fef3c7', labelKey: 'amber-100' },
+        { hex: '#dcfce7', labelKey: 'green-100' },  { hex: '#ccfbf1', labelKey: 'teal-100' },
+        { hex: '#dbeafe', labelKey: 'blue-100' },   { hex: '#e0e7ff', labelKey: 'indigo-100' },
+        { hex: '#f3e8ff', labelKey: 'purple-100' }, { hex: '#fce7f3', labelKey: 'pink-100' },
+        // tom 200
+        { hex: '#e5e7eb', labelKey: 'gray-200' },   { hex: '#fecaca', labelKey: 'red-200' },
+        { hex: '#fed7aa', labelKey: 'orange-200' }, { hex: '#fde68a', labelKey: 'amber-200' },
+        { hex: '#bbf7d0', labelKey: 'green-200' },  { hex: '#99f6e4', labelKey: 'teal-200' },
+        { hex: '#bfdbfe', labelKey: 'blue-200' },   { hex: '#c7d2fe', labelKey: 'indigo-200' },
+        { hex: '#e9d5ff', labelKey: 'purple-200' }, { hex: '#fbcfe8', labelKey: 'pink-200' },
+        // tom 400
+        { hex: '#9ca3af', labelKey: 'gray-400' },   { hex: '#f87171', labelKey: 'red-400' },
+        { hex: '#fb923c', labelKey: 'orange-400' }, { hex: '#fbbf24', labelKey: 'amber-400' },
+        { hex: '#4ade80', labelKey: 'green-400' },  { hex: '#2dd4bf', labelKey: 'teal-400' },
+        { hex: '#60a5fa', labelKey: 'blue-400' },   { hex: '#818cf8', labelKey: 'indigo-400' },
+        { hex: '#c084fc', labelKey: 'purple-400' }, { hex: '#f472b6', labelKey: 'pink-400' },
+        // tom 600
+        { hex: '#4b5563', labelKey: 'gray-600' },   { hex: '#dc2626', labelKey: 'red-600' },
+        { hex: '#ea580c', labelKey: 'orange-600' }, { hex: '#d97706', labelKey: 'amber-600' },
+        { hex: '#16a34a', labelKey: 'green-600' },  { hex: '#0d9488', labelKey: 'teal-600' },
+        { hex: '#2563eb', labelKey: 'blue-600' },   { hex: '#4f46e5', labelKey: 'indigo-600' },
+        { hex: '#9333ea', labelKey: 'purple-600' }, { hex: '#db2777', labelKey: 'pink-600' },
+        // tom 800
+        { hex: '#1f2937', labelKey: 'gray-800' },   { hex: '#991b1b', labelKey: 'red-800' },
+        { hex: '#9a3412', labelKey: 'orange-800' }, { hex: '#92400e', labelKey: 'amber-800' },
+        { hex: '#166534', labelKey: 'green-800' },  { hex: '#115e59', labelKey: 'teal-800' },
+        { hex: '#1e40af', labelKey: 'blue-800' },   { hex: '#3730a3', labelKey: 'indigo-800' },
+        { hex: '#6b21a8', labelKey: 'purple-800' }, { hex: '#9d174d', labelKey: 'pink-800' },
+        // tom 900 (mais escuro)
+        { hex: '#111827', labelKey: 'gray-900' },   { hex: '#7f1d1d', labelKey: 'red-900' },
+        { hex: '#7c2d12', labelKey: 'orange-900' }, { hex: '#78350f', labelKey: 'amber-900' },
+        { hex: '#14532d', labelKey: 'green-900' },  { hex: '#134e4a', labelKey: 'teal-900' },
+        { hex: '#1e3a8a', labelKey: 'blue-900' },   { hex: '#312e81', labelKey: 'indigo-900' },
+        { hex: '#581c87', labelKey: 'purple-900' }, { hex: '#831843', labelKey: 'pink-900' }
+    ];
+
+    /* ─────────────────────────────────────────────
+     * [7c] ALINHAMENTO DE IMAGEM — modos e estilo
+     * canonico (v4.7.0)
+     * ───────────────────────────────────────────── */
+
+    /* O estado do alinhamento mora no INLINE STYLE da propria <img>, nao numa
+       classe: o HTML salvo e renderizado na pagina do host, que pode nao ter o
+       CSS do plugin (mesmo motivo pelo qual o alinhamento de TEXTO ja vive em
+       style.textAlign). Cada modo emite a string COMPLETA e canonica — trocar
+       de modo reescreve tudo, nunca deixa residuo do modo anterior.
+
+       `max-width:100%` acompanha os modos de alinhamento (a regra
+       `.ozi-editor-content img` do CSS do editor nao viaja pro host, entao
+       imagem com `width` fixo estoura container estreito la fora) — mas
+       `none` e VAZIO de proposito: imagem sem alinhamento declarado tem que
+       sair do editor byte a byte como saia antes da v4.7.0. Injetar style em
+       imagem que ninguem pediu pra alinhar mudaria a saida de todo mundo, e
+       o estouro no host e um problema pre-existente, de escopo proprio.
+
+       `free` nao tem left/top aqui — a posicao inicial e calculada na hora
+       (a partir de onde a imagem ja esta no fluxo) e depois pelo arrasto. */
+    var IMAGE_ALIGN_STYLES = {
+        none:   {},
+        left:   { 'float': 'left',  'margin-top': '0', 'margin-right': '10px', 'margin-bottom': '10px', 'margin-left': '0',    'max-width': '100%' },
+        right:  { 'float': 'right', 'margin-top': '0', 'margin-right': '0',    'margin-bottom': '10px', 'margin-left': '10px', 'max-width': '100%' },
+        center: { 'display': 'block', 'margin-top': '0', 'margin-right': 'auto', 'margin-bottom': '10px', 'margin-left': 'auto', 'max-width': '100%' },
+        free:   { 'position': 'absolute', 'max-width': '100%' }
     };
 
-    var TAG_REPLACE = { 'DIV': 'P', 'B': 'STRONG', 'I': 'EM' };
+    /* ordem dos botoes na linha "Alinhamento" do popover */
+    var IMAGE_ALIGN_MODES = [
+        { mode: 'left',   icon: 'img-left',   labelKey: 'editor.imageAlignLeft'   },
+        { mode: 'center', icon: 'img-center', labelKey: 'editor.imageAlignCenter' },
+        { mode: 'right',  icon: 'img-right',  labelKey: 'editor.imageAlignRight'  },
+        { mode: 'free',   icon: 'img-free',   labelKey: 'editor.imageAlignFree'   }
+    ];
 
-    function _sanitizeHtml(html) {
-        if (!html) return '';
-        var tmp = document.createElement('div');
-        tmp.innerHTML = html;
-        _cleanNode(tmp);
-        return tmp.innerHTML;
-    }
-
-    function _cleanNode(node) {
-        var children = Array.prototype.slice.call(node.childNodes);
-
-        children.forEach(function (child) {
-            if (child.nodeType === 3) return;
-            if (child.nodeType !== 1) { node.removeChild(child); return; }
-
-            var tag = child.tagName.toUpperCase();
-
-            if (['SCRIPT','STYLE','IFRAME','OBJECT','EMBED','FORM','INPUT','BUTTON'].indexOf(tag) > -1) {
-                node.removeChild(child); return;
-            }
-
-            if (TAG_REPLACE[tag]) {
-                var rep = document.createElement(TAG_REPLACE[tag]);
-                while (child.firstChild) rep.appendChild(child.firstChild);
-                var align = child.style && child.style.textAlign;
-                if (align && ['left','center','right','justify'].indexOf(align) > -1) rep.style.textAlign = align;
-                node.replaceChild(rep, child);
-                _cleanNode(rep); return;
-            }
-
-            if (!ALLOWED_TAGS[tag]) {
-                var frag = document.createDocumentFragment();
-                while (child.firstChild) frag.appendChild(child.firstChild);
-                node.replaceChild(frag, child); return;
-            }
-
-            var savedAlign = child.style && child.style.textAlign;
-            var savedClass = child.getAttribute('class') || '';
-
-            Array.prototype.slice.call(child.attributes).forEach(function (attr) {
-                child.removeAttribute(attr.name);
-            });
-
-            if (savedAlign && ['left','center','right','justify'].indexOf(savedAlign) > -1) {
-                child.style.textAlign = savedAlign;
-            }
-            if (savedClass) child.setAttribute('class', savedClass);
-
-            _cleanNode(child);
-        });
-    }
+    /* propriedades que QUALQUER modo pode ter escrito — a lista de limpeza
+       antes de aplicar o modo novo. Mantida junto dos modos de proposito:
+       adicionar propriedade num modo sem adicionar aqui deixaria residuo. */
+    var IMAGE_ALIGN_PROPS = [
+        'float', 'display', 'position', 'left', 'top', 'max-width',
+        'margin-top', 'margin-right', 'margin-bottom', 'margin-left'
+    ];
 
     /* ─────────────────────────────────────────────
      * [8] CONSTRUCTOR
@@ -384,6 +744,10 @@
 
         this.height      = this.textarea.getAttribute('data-ozi-editor-height') || '200px';
         this.placeholder = this.textarea.getAttribute('data-ozi-editor-placeholder') || _t('editor.placeholder');
+        /* image: upload real so existe se o host declarar o endpoint — sem
+           isso a secao de upload do popover nem e construida (ver
+           _buildImageButton) */
+        this.uploadUrl   = this.textarea.getAttribute('data-ozi-editor-upload-url') || null;
         this.uicolor     = this.textarea.getAttribute('data-ozi-editor-uicolor')
             || (pluginConf && pluginConf.uicolor)
             || 'var(--ozi-color-primary)';
@@ -394,20 +758,54 @@
         this.debug           = _parseBool(this.textarea, 'data-ozi-editor-log', false);
         this.requiredMessage = this.textarea.getAttribute('data-ozi-editor-required-message') || _t('common.required');
 
-        this.classDefs = _parseClassDefs(this.textarea.getAttribute('data-ozi-editor-class') || '');
+        this.classDefs   = _parseClassDefs(this.textarea.getAttribute('data-ozi-editor-class') || '');
+        this.showCounter = _parseBool(this.textarea, 'data-ozi-editor-counter', false);
 
-        this.toolsLayout  = _parseToolsLayout(this.toolsRaw);
+        /* toolbar responsiva — data-ozi-editor-tools-{sm,md,lg,xl,xxl}, cada
+           uma uma string de layout COMPLETA e independente (nao um delta da
+           base), min-width estilo Bootstrap: -sm vale da largura sm pra
+           cima. So le atributo direto (nao passa pela prioridade de
+           tema/conf do toolsRaw acima — breakpoint e sempre por atributo). */
+        var _elRef = this.textarea;
+        /* modo Scroll (retomado 2026-08-31) — data-ozi-editor-tools-scroll[-{bp}]
+           e combinavel com os breakpoints normais: cada nivel escolhe wrap ou
+           scroll independentemente. Filtro e OR (um nivel pode existir SO via
+           -scroll-{bp}, sem o -{bp} wrap correspondente); conflito no mesmo
+           nivel (os dois declarados) resolve com scroll vencendo (opt-in
+           explicito > fallback implicito) — nao precisa validar/travar. */
+        this.toolsScrollBase = _elRef.getAttribute('data-ozi-editor-tools-scroll') || null;
+        this.toolsBreakpoints = TOOLBAR_BREAKPOINTS
+            .map(function (bp) {
+                var wrapRaw   = _elRef.getAttribute('data-ozi-editor-tools-' + bp.name);
+                var scrollRaw = _elRef.getAttribute('data-ozi-editor-tools-scroll-' + bp.name);
+                if (!wrapRaw && !scrollRaw) return null;
+                return scrollRaw
+                    ? { bp: bp.name, raw: scrollRaw, mode: 'scroll' }
+                    : { bp: bp.name, raw: wrapRaw,   mode: 'wrap' };
+            })
+            .filter(Boolean);
+
         this.isSourceMode = false;
         this._savedRange  = null;
         this._listeners   = [];
+        this._popovers    = [];
+        /* seq. incremental de id de popover — cada tool com popover
+           (heading/classes/link/color/highlight/image) pode aparecer em mais
+           de uma variante de breakpoint simultaneamente no DOM (toolbar
+           responsiva); id unico evita que _registerPopover/_popoverEntry
+           colidam por nome bruto do tool (armadilha corrigida antes de
+           introduzir a feature que a tornaria realista, ver
+           _buildPopoverButton/_buildHeadingButton/_buildClassesButton) */
+        this._popoverSeq  = 0;
+        this._collapseSeq = 0;
+        this._scrollTracks = [];   /* { track, prevBtn, nextBtn } por track em modo Scroll */
 
-        this.wrap            = null;
-        this.toolbar         = null;
-        this.content         = null;
-        this.source          = null;
-        this.feedback        = null;
-        this.headingDropdown = null;
-        this.classDropdown   = null;
+        this.wrap             = null;
+        this.toolbar          = null;
+        this.content          = null;
+        this.source           = null;
+        this.feedback         = null;
+        this.counter          = null;
     }
 
     /* rastreia listeners para remocao no destroy */
@@ -440,6 +838,14 @@
         this._syncFromTextarea();
         this._bindEvents();
         this._updateToolbarState();
+        this._updateCounter();
+
+        /* modo Scroll: so registra listener de scroll/resize se a instancia
+           realmente usa o modo (zero overhead nas demais) */
+        if (this._scrollTracks && this._scrollTracks.length) {
+            this._bindScrollTrackEvents();
+            this._updateScrollArrows();
+        }
 
         if (this.isDisabled) this._setDisabled(true);
 
@@ -504,6 +910,14 @@
         self.wrap.appendChild(self.toolbar);
         self.wrap.appendChild(self.content);
         self.wrap.appendChild(self.source);
+
+        if (self.showCounter) {
+            var footer = _el('div', 'ozi-editor-footer');
+            self.counter = _el('span', 'ozi-editor-counter');
+            footer.appendChild(self.counter);
+            self.wrap.appendChild(footer);
+        }
+
         self.wrap.appendChild(self.feedback);
 
         self.textarea.style.display = 'none';
@@ -514,27 +928,167 @@
      * [11] TOOLBAR BUTTONS
      * ───────────────────────────────────────────── */
 
+    /* sem breakpoints declarados no elemento (e sem modo Scroll na base):
+       caminho identico a antes da feature de toolbar responsiva —
+       self.toolbar recebe as linhas direto, nenhum wrapper novo, DOM
+       byte-a-byte igual ao de hoje (criterio de aceite explicito de zero
+       regressao nas instancias existentes). Com breakpoints OU modo Scroll:
+       cada variante (base + cada -sm/-md/... declarado) vira uma subarvore
+       DOM independente e completa (nao uma lista plana com marcador por
+       botao — ver ozi-editor-toolbar-responsiva.md, decisao tomada em
+       2026-08-31): evita quebrar :first-child/:last-child dos grupos
+       (usados pro arredondamento de borda) e permite o mesmo tool estar
+       solto num breakpoint e dentro de {} em outro sem reparenting. CSS
+       decide qual variante mostrar por largura — zero JS no resize (o modo
+       Scroll reage so ao PROPRIO scroll da track / resize da janela pra
+       habilitar/desabilitar seta, nunca reconstroi DOM). */
     OziEditor.prototype._buildToolbarButtons = function () {
         var self = this;
+        var variants = self._resolveToolsVariants();
+        self.toolsVariants = variants;
 
-        self.toolsLayout.forEach(function (row) {
-            var rowEl = _el('div', 'ozi-editor-toolbar-row');
+        if (variants.length === 1 && variants[0].mode !== 'scroll') {
+            self._buildToolbarButtonsInto(self.toolbar, variants[0].layout);
+            return;
+        }
 
-            row.items.forEach(function (item) {
-                if (item.type === 'group') {
-                    var groupEl = _el('div', 'ozi-editor-toolbar-group');
-                    item.tools.forEach(function (tool) {
-                        var btn = self._buildToolButton(tool);
-                        if (btn) groupEl.appendChild(btn);
-                    });
-                    if (groupEl.children.length) rowEl.appendChild(groupEl);
-                } else if (item.type === 'tool') {
-                    var btn = self._buildToolButton(item.tool);
-                    if (btn) rowEl.appendChild(btn);
+        variants.forEach(function (v, i) {
+            var attrs = {};
+            if (v.bp) attrs['data-ozi-editor-toolbar-bp'] = v.bp;
+            var next = variants[i + 1];
+            if (next) attrs['data-ozi-editor-toolbar-bp-until'] = next.bp;
+            var container = _el('div', 'ozi-editor-toolbar-variant', attrs);
+            if (v.mode === 'scroll') self._buildScrollToolbarInto(container, v.layout);
+            else                     self._buildToolbarButtonsInto(container, v.layout);
+            self.toolbar.appendChild(container);
+        });
+    };
+
+    /* base (bp:null) + cada -sm/-md/-lg/-xl/-xxl realmente declarado no
+       elemento, ja em ordem ascendente (TOOLBAR_BREAKPOINTS e ascendente e a
+       base sempre entra primeiro). Cada string e parseada isoladamente —
+       nenhuma "reducao"/delta entre variantes. Base usa toolsScrollBase
+       quando presente (modo Scroll vence sobre o toolsRaw/wrap de sempre). */
+    OziEditor.prototype._resolveToolsVariants = function () {
+        var self = this;
+        var baseMode = self.toolsScrollBase ? 'scroll' : 'wrap';
+        var variants = [{ bp: null, raw: self.toolsScrollBase || self.toolsRaw, mode: baseMode }];
+        (self.toolsBreakpoints || []).forEach(function (v) { variants.push(v); });
+        variants.forEach(function (v) { v.layout = _parseToolsLayout(v.raw); });
+        return variants;
+    };
+
+    /* corpo comum de group/tool/collapse — extraido pra ser reusado tanto
+       pelo modo wrap (uma linha .ozi-editor-toolbar-row por vez) quanto pelo
+       modo Scroll (todos os items numa unica track, ver
+       _buildScrollToolbarInto). `panels` e a lista de paineis de {} que o
+       CHAMADOR decide onde anexar (irmao da row no modo wrap; irmao de toda
+       a .ozi-editor-toolbar-scroll no modo scroll — nunca dentro da area
+       com overflow-x, senao ficaria cortado). */
+    OziEditor.prototype._appendToolItemsInto = function (rowTarget, items, panels) {
+        var self = this;
+        items.forEach(function (item) {
+            if (item.type === 'group') {
+                var groupEl = _el('div', 'ozi-editor-toolbar-group');
+                item.tools.forEach(function (tool) {
+                    var btn = self._buildToolButton(tool);
+                    if (btn) groupEl.appendChild(btn);
+                });
+                if (groupEl.children.length) rowTarget.appendChild(groupEl);
+            } else if (item.type === 'tool') {
+                var btn = self._buildToolButton(item.tool);
+                if (btn) rowTarget.appendChild(btn);
+            } else if (item.type === 'collapse') {
+                var id = 'c' + (++self._collapseSeq);
+                var trigger = self._buildCollapseTrigger(id, item.defaultOpen);
+                if (trigger) {
+                    rowTarget.appendChild(trigger);
+                    panels.push(self._buildCollapsePanel(id, item));
                 }
-            });
+            }
+        });
+    };
 
-            if (rowEl.children.length) self.toolbar.appendChild(rowEl);
+    OziEditor.prototype._buildToolbarButtonsInto = function (target, layout) {
+        var self = this;
+
+        layout.forEach(function (row) {
+            var rowEl = _el('div', 'ozi-editor-toolbar-row');
+            var panels = [];   /* paineis de {} desta linha — inseridos DEPOIS da rowEl, como irmaos */
+
+            self._appendToolItemsInto(rowEl, row.items, panels);
+
+            if (rowEl.children.length) {
+                target.appendChild(rowEl);
+                panels.forEach(function (p) { target.appendChild(p); });
+            }
+        });
+    };
+
+    /* ─────────────────────────────────────────────
+     * [11a] TOOLBAR — MODO SCROLL (retomado 2026-08-31, secao 3c do roadmap)
+     * Toolbar vira UMA linha com overflow-x nativo + 2 setas fixas que fazem
+     * scrollBy() na track. `;` no valor do atributo -scroll[-{bp}] e
+     * FLATTENED aqui (todas as rows viram uma lista unica de items, ordem
+     * preservada) — decisao confirmada com o usuario: "unica linha", nao
+     * multiplos scrollers empilhados. Paineis de {} (caso de borda aceito,
+     * nao bloqueado) vao pro `target` EXTERNO — fora da track, senao
+     * ficariam cortados dentro do scroller horizontal.
+     * ───────────────────────────────────────────── */
+
+    OziEditor.prototype._buildScrollToolbarInto = function (target, layout) {
+        var self = this;
+        var flatItems = [];
+        layout.forEach(function (row) { flatItems = flatItems.concat(row.items); });
+
+        var track  = _el('div', 'ozi-editor-toolbar-scroll-track');
+        var panels = [];
+        self._appendToolItemsInto(track, flatItems, panels);
+        if (!track.children.length) return;   /* nada pra rolar, nao gera UI vazia */
+
+        var prevBtn = self._buildScrollArrow('prev');
+        var nextBtn = self._buildScrollArrow('next');
+        var wrap = _el('div', 'ozi-editor-toolbar-scroll');
+        wrap.appendChild(prevBtn);
+        wrap.appendChild(track);
+        wrap.appendChild(nextBtn);
+
+        target.appendChild(wrap);
+        panels.forEach(function (p) { target.appendChild(p); });
+
+        self._scrollTracks.push({ track: track, prevBtn: prevBtn, nextBtn: nextBtn });
+    };
+
+    OziEditor.prototype._buildScrollArrow = function (dir) {
+        var label = _t(dir === 'prev' ? 'editor.scrollPrev' : 'editor.scrollNext');
+        var btn = _el('button', 'ozi-editor-btn ozi-editor-btn--scroll-' + dir, {
+            type: 'button', 'data-ozi-editor-scroll-dir': dir, title: label, 'aria-label': label
+        });
+        btn.appendChild(_el('span', 'ozi-editor-btn-icon ozi-editor-scroll-arrow-icon', { 'aria-hidden': 'true' }));
+        return btn;
+    };
+
+    /* habilita/desabilita as setas conforme a posicao real de scroll de cada
+       track — chamada 1x no init (apos o wrap ja estar no DOM real) e depois
+       reage a 'scroll' da propria track e 'resize' da janela (debounced),
+       nunca reconstroi DOM. */
+    OziEditor.prototype._updateScrollArrows = function () {
+        (this._scrollTracks || []).forEach(function (entry) {
+            var track = entry.track;
+            var max = track.scrollWidth - track.clientWidth;
+            entry.prevBtn.disabled = track.scrollLeft <= 0;
+            entry.nextBtn.disabled = max <= 0 || track.scrollLeft >= max - 1;
+        });
+    };
+
+    OziEditor.prototype._bindScrollTrackEvents = function () {
+        var self = this;
+        self._scrollTracks.forEach(function (entry) {
+            self._on(entry.track, 'scroll', function () { self._updateScrollArrows(); });
+        });
+        self._on(window, 'resize', function () {
+            clearTimeout(self._scrollResizeTimer);
+            self._scrollResizeTimer = setTimeout(function () { self._updateScrollArrows(); }, 150);
         });
     };
 
@@ -552,8 +1106,12 @@
         var label = _t(meta.labelKey);
         if (tool === 'source' && self.editorType === 'md') label = _t('editor.source.md');
 
-        if (tool === 'heading') return self._buildHeadingButton(label);
-        if (tool === 'classes') return self._buildClassesButton(label);
+        if (tool === 'heading')   return self._buildHeadingButton(label);
+        if (tool === 'classes')   return self._buildClassesButton(label);
+        if (tool === 'link')      return self._buildLinkButton(label);
+        if (tool === 'color')     return self._buildColorButton('color', label);
+        if (tool === 'highlight') return self._buildColorButton('highlight', label);
+        if (tool === 'image')     return self._buildImageButton(label);
 
         var btn = _el('button', 'ozi-editor-btn', {
             type: 'button', 'data-ozi-editor-tool': tool, title: label, 'aria-label': label
@@ -575,15 +1133,197 @@
     };
 
     /* ─────────────────────────────────────────────
+     * [11b] GRUPO COLAPSAVEL { -/+ , ... } — toolbar responsiva (2026-08-31).
+     * Chrome estrutural, NAO uma ferramenta do TOOL_META: deliberadamente
+     * sem data-ozi-editor-tool (nao deve cair no dispatcher generico
+     * _runTool, ver seletor em _bindEvents). Trigger+painel ligados por
+     * data-ozi-editor-collapse-id (nao por adjacencia de DOM — cobre o caso
+     * de duas {} na mesma linha sem ambiguidade). Painel e IRMAO da row (nao
+     * filho) — 2a linha inline empurrando o conteudo, NAO popover flutuante
+     * (sem position:absolute, ao contrario de link/color/image).
+     * ───────────────────────────────────────────── */
+
+    OziEditor.prototype._buildCollapseTrigger = function (id, defaultOpen) {
+        var label = _t(defaultOpen ? 'editor.fewerTools' : 'editor.moreTools');
+        var btn = _el('button', 'ozi-editor-btn ozi-editor-btn--collapse-toggle' + (defaultOpen ? ' is-open' : ''), {
+            type: 'button', 'data-ozi-editor-collapse-id': id,
+            title: label, 'aria-label': label, 'aria-expanded': defaultOpen ? 'true' : 'false'
+        });
+        btn.appendChild(_el('span', 'ozi-editor-btn-icon ozi-editor-collapse-chevron', { 'aria-hidden': 'true' }));
+        return btn;
+    };
+
+    OziEditor.prototype._buildCollapsePanel = function (id, collapseNode) {
+        var panel = _el('div', 'ozi-editor-toolbar-collapse', {
+            'data-ozi-editor-collapse-panel': '', 'data-ozi-editor-collapse-id': id
+        });
+        panel.style.display = collapseNode.defaultOpen ? '' : 'none';
+        this._buildToolbarButtonsInto(panel, collapseNode.layout);
+        return panel;
+    };
+
+    /* ─────────────────────────────────────────────
+     * [11b] POPOVER GENERICO — mecanica compartilhada
+     * (abrir/fechar, fechar ao clicar fora, fechar os
+     * outros ao abrir um, aria-expanded). Extraida do
+     * padrao que heading/classes ja usavam (Fase 2,
+     * passo 0 do roadmap) — o CONTEUDO de cada popover
+     * continua especifico (lista de itens vs. formulario).
+     *
+     * `name` e um ID UNICO por instancia de popover (ex. 'heading-3',
+     * 'link-7'), nao o nome bruto do tool — desde a toolbar responsiva
+     * (2026-08-31) o mesmo tool pode aparecer em mais de uma variante de
+     * breakpoint simultaneamente no DOM (heading no base E dentro do {} do
+     * -sm, por exemplo); chave por nome bruto faria _popoverEntry sempre
+     * devolver a ULTIMA instancia registrada, abrindo o popover errado (as
+     * vezes escondido dentro de uma variante de breakpoint inativa — nem
+     * aparece na tela). Ver _buildPopoverButton/_buildHeadingButton/
+     * _buildClassesButton (geram o id) e _popoverIdFromElement/
+     * _toolFromPopoverId (resolvem id/tool a partir do elemento clicado).
+     * ───────────────────────────────────────────── */
+
+    OziEditor.prototype._registerPopover = function (name, popoverEl, triggerSelector, onOpen) {
+        this._popovers.push({ name: name, el: popoverEl, triggerSelector: triggerSelector, onOpen: onOpen || null });
+    };
+
+    OziEditor.prototype._popoverEntry = function (name) {
+        var found = null;
+        (this._popovers || []).forEach(function (p) { if (p.name === name) found = p; });
+        return found;
+    };
+
+    /* resolve o id unico do popover a partir de QUALQUER elemento dentro do
+       seu wrap (o proprio trigger, um item de dentro do popover, etc.) —
+       usado por todo handler delegado que precisa saber "de qual instancia
+       de popover veio este clique" sem depender de campo singular na
+       instancia do editor. */
+    OziEditor.prototype._popoverIdFromElement = function (el) {
+        var wrap = this._closestIn(el, '[data-ozi-editor-popover-wrap]');
+        return wrap ? wrap.getAttribute('data-ozi-editor-popover-wrap') : null;
+    };
+
+    /* nome semantico do tool ('color'/'highlight'/'heading'/...) a partir de
+       um id unico ('color-5') — convencao id = tool + '-' + sequencial;
+       nenhum tool do TOOL_META tem hifen no nome, entao o 1o segmento e
+       sempre o tool. Usado onde o comportamento depende do TOOL (ex.:
+       foreColor vs hiliteColor), nao da instancia especifica. */
+    OziEditor.prototype._toolFromPopoverId = function (id) {
+        return id ? id.split('-')[0] : null;
+    };
+
+    /* acha o trigger VISIVEL de um tool (offsetParent null = dentro de
+       ancestral display:none, caso das variantes de breakpoint inativas) —
+       usado só onde nao ha elemento clicado pra derivar o id (ex.: clique
+       numa <img> do content, que nao e um clique no trigger da toolbar). */
+    OziEditor.prototype._visibleToolTrigger = function (tool) {
+        var candidates = this.wrap.querySelectorAll('.ozi-editor-btn[data-ozi-editor-tool="' + tool + '"]');
+        for (var i = 0; i < candidates.length; i++) {
+            if (candidates[i].offsetParent !== null) return candidates[i];
+        }
+        return candidates[0] || null;
+    };
+
+    OziEditor.prototype._setPopoverOpen = function (entry, open) {
+        if (!entry) return;
+        entry.el.style.display = open ? '' : 'none';
+        var trig = this.wrap.querySelector(entry.triggerSelector);
+        if (trig) trig.setAttribute('aria-expanded', open ? 'true' : 'false');
+    };
+
+    OziEditor.prototype._togglePopover = function (name, forceClose) {
+        var self  = this;
+        if (!name) return;
+        var entry = self._popoverEntry(name);
+        if (!entry) return;
+
+        var wasOpen = _isShown(entry.el);
+
+        (self._popovers || []).forEach(function (p) {
+            if (p.name !== name && _isShown(p.el)) self._setPopoverOpen(p, false);
+        });
+
+        if (forceClose || wasOpen) { self._setPopoverOpen(entry, false); return; }
+
+        if (entry.onOpen) entry.onOpen(entry.el);
+        self._setPopoverOpen(entry, true);
+    };
+
+    /* abre o popover incondicionalmente (nao alterna) — usado pelo clique
+       direto numa imagem do content (Fase 3, ajuste pos-revisao): clicar
+       numa 2a imagem enquanto o popover ja esta aberto precisa ATUALIZAR o
+       conteudo pra ela, nao fechar. _togglePopover fecharia nesse caso
+       (wasOpen=true); esta variante nao olha o estado atual. */
+    OziEditor.prototype._openPopover = function (name) {
+        var self  = this;
+        if (!name) return;
+        var entry = self._popoverEntry(name);
+        if (!entry) return;
+
+        (self._popovers || []).forEach(function (p) {
+            if (p.name !== name && _isShown(p.el)) self._setPopoverOpen(p, false);
+        });
+
+        if (entry.onOpen) entry.onOpen(entry.el);
+        self._setPopoverOpen(entry, true);
+    };
+
+    /* fecha qualquer popover aberto cujo wrap nao contenha o alvo do clique —
+       cada wrap (heading/classes/link/color/highlight/image) carrega
+       data-ozi-editor-popover-wrap="<id>" pra permitir este loop generico */
+    OziEditor.prototype._closeOutsidePopovers = function (target) {
+        var self = this;
+        (self._popovers || []).forEach(function (p) {
+            if (!_isShown(p.el)) return;
+            var wrapSel = '[data-ozi-editor-popover-wrap="' + p.name + '"]';
+            if (!(target.closest && target.closest(wrapSel))) self._setPopoverOpen(p, false);
+        });
+    };
+
+    /* fecha todos, sem alvo de referencia (v4.7.0 — usado ao iniciar o
+       arrasto de uma imagem livre: o popover flutua logo abaixo da toolbar,
+       em cima da area onde o arrasto acontece) */
+    OziEditor.prototype._closeAllPopovers = function () {
+        var self = this;
+        (self._popovers || []).forEach(function (p) {
+            if (_isShown(p.el)) self._setPopoverOpen(p, false);
+        });
+    };
+
+    /* esqueleto wrap+botao+popover reutilizado por link/color/highlight/
+       image — heading/classes mantem construcao propria (lista de itens,
+       nao form), mas seguem a MESMA convencao de id unico. */
+    OziEditor.prototype._buildPopoverButton = function (tool, label, buildContentFn, onOpen) {
+        var self = this;
+        var id = tool + '-' + (++self._popoverSeq);
+
+        var wrap = _el('div', 'ozi-editor-popover-wrap', { 'data-ozi-editor-popover-wrap': id });
+        var btn  = _el('button', 'ozi-editor-btn', {
+            type: 'button', 'data-ozi-editor-tool': tool, 'data-ozi-editor-popover-id': id,
+            title: label, 'aria-label': label, 'aria-haspopup': 'true', 'aria-expanded': 'false'
+        });
+        btn.appendChild(_el('span', 'ozi-editor-btn-icon', { 'aria-hidden': 'true' }));
+
+        var popover = _el('div', 'ozi-editor-popover', { role: 'dialog' });
+        popover.style.display = 'none';
+        buildContentFn(popover);
+
+        self._registerPopover(id, popover, '[data-ozi-editor-popover-id="' + id + '"]', onOpen);
+
+        wrap.appendChild(btn); wrap.appendChild(popover);
+        return wrap;
+    };
+
+    /* ─────────────────────────────────────────────
      * [12] DROPDOWN DE HEADINGS
      * ───────────────────────────────────────────── */
 
     OziEditor.prototype._buildHeadingButton = function (label) {
         var self = this;
+        var id = 'heading-' + (++self._popoverSeq);
 
-        var wrap = _el('div', 'ozi-editor-heading-wrap');
+        var wrap = _el('div', 'ozi-editor-heading-wrap', { 'data-ozi-editor-popover-wrap': id });
         var btn  = _el('button', 'ozi-editor-btn ozi-editor-btn--heading', {
-            type: 'button', 'data-ozi-editor-tool': 'heading',
+            type: 'button', 'data-ozi-editor-tool': 'heading', 'data-ozi-editor-popover-id': id,
             title: label, 'aria-label': label, 'aria-haspopup': 'true', 'aria-expanded': 'false'
         });
         btn.appendChild(_el('span', 'ozi-editor-btn-icon', { 'aria-hidden': 'true' }));
@@ -601,37 +1341,21 @@
             dropdown.appendChild(item);
         });
 
-        self.headingDropdown = dropdown;
+        self._registerPopover(id, dropdown, '[data-ozi-editor-popover-id="' + id + '"]', function (dropdownEl) {
+            self._updateHeadingDropdownChecks(dropdownEl);
+        });
         wrap.appendChild(btn); wrap.appendChild(dropdown);
         return wrap;
     };
 
-    OziEditor.prototype._toggleHeadingDropdown = function (forceClose) {
+    OziEditor.prototype._updateHeadingDropdownChecks = function (dropdown) {
         var self = this;
-        if (!self.headingDropdown) return;
-
-        var isOpen = _isShown(self.headingDropdown);
-        var hb     = self.wrap.querySelector('.ozi-editor-btn--heading');
-
-        if (forceClose || isOpen) {
-            self.headingDropdown.style.display = 'none';
-            if (hb) hb.setAttribute('aria-expanded', 'false');
-            return;
-        }
-
-        self._updateHeadingDropdownChecks();
-        self.headingDropdown.style.display = '';
-        if (hb) hb.setAttribute('aria-expanded', 'true');
-    };
-
-    OziEditor.prototype._updateHeadingDropdownChecks = function () {
-        var self = this;
-        if (!self.headingDropdown) return;
+        if (!dropdown) return;
 
         var block      = self._getClosestBlockElement();
         var currentTag = block ? String(block.tagName || '').toLowerCase() : '';
 
-        Array.prototype.forEach.call(self.headingDropdown.querySelectorAll('[data-ozi-heading]'), function (it) {
+        Array.prototype.forEach.call(dropdown.querySelectorAll('[data-ozi-heading]'), function (it) {
             it.classList.toggle('ozi-editor-heading-item--active', it.getAttribute('data-ozi-heading') === currentTag);
         });
     };
@@ -643,10 +1367,11 @@
     OziEditor.prototype._buildClassesButton = function (label) {
         var self = this;
         if (!self.classDefs || !self.classDefs.length) return null;
+        var id = 'classes-' + (++self._popoverSeq);
 
-        var wrap = _el('div', 'ozi-editor-classes-wrap');
+        var wrap = _el('div', 'ozi-editor-classes-wrap', { 'data-ozi-editor-popover-wrap': id });
         var btn  = _el('button', 'ozi-editor-btn ozi-editor-btn--classes', {
-            type: 'button', 'data-ozi-editor-tool': 'classes',
+            type: 'button', 'data-ozi-editor-tool': 'classes', 'data-ozi-editor-popover-id': id,
             title: label, 'aria-label': label, 'aria-haspopup': 'true', 'aria-expanded': 'false'
         });
         btn.appendChild(_el('span', 'ozi-editor-btn-icon', { 'aria-hidden': 'true' }));
@@ -662,36 +1387,20 @@
             dropdown.appendChild(item);
         });
 
-        self.classDropdown = dropdown;
+        self._registerPopover(id, dropdown, '[data-ozi-editor-popover-id="' + id + '"]', function (dropdownEl) {
+            self._updateClassDropdownChecks(dropdownEl);
+        });
         wrap.appendChild(btn); wrap.appendChild(dropdown);
         return wrap;
     };
 
-    OziEditor.prototype._toggleClassDropdown = function (forceClose) {
+    OziEditor.prototype._updateClassDropdownChecks = function (dropdown) {
         var self = this;
-        if (!self.classDropdown) return;
-
-        var isOpen = _isShown(self.classDropdown);
-        var cb     = self.wrap.querySelector('.ozi-editor-btn--classes');
-
-        if (forceClose || isOpen) {
-            self.classDropdown.style.display = 'none';
-            if (cb) cb.setAttribute('aria-expanded', 'false');
-            return;
-        }
-
-        self._updateClassDropdownChecks();
-        self.classDropdown.style.display = '';
-        if (cb) cb.setAttribute('aria-expanded', 'true');
-    };
-
-    OziEditor.prototype._updateClassDropdownChecks = function () {
-        var self = this;
-        if (!self.classDropdown) return;
+        if (!dropdown) return;
 
         var activeClasses = self._getActiveClasses();
 
-        Array.prototype.forEach.call(self.classDropdown.querySelectorAll('[data-ozi-class]'), function (it) {
+        Array.prototype.forEach.call(dropdown.querySelectorAll('[data-ozi-class]'), function (it) {
             it.classList.toggle('ozi-editor-classes-item--active', activeClasses.indexOf(it.getAttribute('data-ozi-class')) > -1);
         });
     };
@@ -797,6 +1506,705 @@
     };
 
     /* ─────────────────────────────────────────────
+     * [13b] POPOVER DE LINK
+     * ───────────────────────────────────────────── */
+
+    OziEditor.prototype._buildLinkButton = function (label) {
+        var self = this;
+
+        return self._buildPopoverButton('link', label, function (popover) {
+            var field = _el('div', 'ozi-editor-popover-field');
+            var lbl   = _el('span', 'ozi-editor-popover-label'); lbl.textContent = _t('editor.linkUrl');
+            var input = _el('input', 'ozi-editor-popover-input', {
+                type: 'text', placeholder: 'https://…', 'data-ozi-editor-link-input': 'true'
+            });
+            field.appendChild(lbl); field.appendChild(input);
+
+            var actions = _el('div', 'ozi-editor-popover-actions');
+            var apply   = _el('button', 'ozi-editor-popover-apply', { type: 'button', 'data-ozi-editor-link-apply': 'true' });
+            apply.textContent = _t('editor.apply');
+            var remove  = _el('button', 'ozi-editor-popover-remove', { type: 'button', 'data-ozi-editor-link-remove': 'true' });
+            remove.textContent = _t('editor.remove');
+            actions.appendChild(apply); actions.appendChild(remove);
+
+            popover.appendChild(field);
+            popover.appendChild(actions);
+        }, function (popoverEl) {
+            /* le os campos do PROPRIO popover que esta abrindo (nao um
+               campo singular na instancia) — necessario desde que a
+               toolbar responsiva permite mais de um popover "link" no DOM */
+            var input     = popoverEl.querySelector('[data-ozi-editor-link-input]');
+            var removeBtn = popoverEl.querySelector('[data-ozi-editor-link-remove]');
+            var existing  = self._getClosestSelectionNode(['A']);
+            input.value = existing ? (existing.getAttribute('href') || '') : '';
+            removeBtn.disabled = !existing;
+            setTimeout(function () { input.focus(); }, 0);
+        });
+    };
+
+    OziEditor.prototype._applyLink = function (url) {
+        url = _trim(url);
+        if (!_isSafeUrl(url)) return;
+        this.content.focus();
+        if (!url) document.execCommand('unlink', false, null);
+        else      document.execCommand('createLink', false, url);
+        this._saveSelection();
+        this._syncToTextarea();
+        this._updateToolbarState();
+        this.emitChange();
+    };
+
+    OziEditor.prototype._removeLink = function () {
+        this.content.focus();
+        /* execCommand('unlink') com selecao colapsada (cursor dentro do link,
+           sem texto selecionado) nao remove o link em boa parte dos browsers —
+           seleciona o <a> inteiro antes de chamar, mesmo se o usuario so tinha
+           o cursor nele (verificado empiricamente: sem isso o comando e um no-op) */
+        var existing = this._getClosestSelectionNode(['A']);
+        if (existing) {
+            var range = document.createRange();
+            range.selectNodeContents(existing);
+            var sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+        }
+        document.execCommand('unlink', false, null);
+        this._saveSelection();
+        this._syncToTextarea();
+        this._updateToolbarState();
+        this.emitChange();
+    };
+
+    /* ─────────────────────────────────────────────
+     * [13c] POPOVER DE IMAGEM — Fase 3. Reaproveita a mesma mecanica generica
+     * de popover do link (_buildPopoverButton/_registerPopover/_togglePopover,
+     * zero mudanca nelas). Duas formas de inserir: URL (mesmo padrao do link)
+     * ou upload real de arquivo (so aparece se o host declarar
+     * data-ozi-editor-upload-url). Diferente do link: <img> e elemento vazio,
+     * o caret nunca fica "dentro" dele — _getClosestSelectionNode(['A']) nao
+     * serve, precisa de deteccao propria via Range (_getSelectedImage). E
+     * diferente do _applyLink tambem: mostra erro visivel em URL invalida em
+     * vez de rejeitar em silencio.
+     * ───────────────────────────────────────────── */
+
+    /* <img> nao tem filhos, entao o caret nunca "entra" nele — quando o
+       usuario clica numa imagem dentro do contenteditable, o browser produz
+       uma selecao de ELEMENTO (startContainer = pai, offsets cercando o no,
+       ex.: startOffset=2, endOffset=3), nao uma selecao de texto dentro dele.
+       Detecta esse padrao especifico em vez de tentar reusar
+       _getClosestSelectionNode. */
+    OziEditor.prototype._getSelectedImage = function () {
+        var sel = window.getSelection();
+        if (!sel || !sel.rangeCount) return null;
+        var range = sel.getRangeAt(0);
+        if (range.startContainer !== range.endContainer) return null;
+        if (range.endOffset - range.startOffset !== 1) return null;
+        var node = range.startContainer.childNodes[range.startOffset];
+        if (node && node.nodeType === 1 && node.tagName === 'IMG' && this.content.contains(node)) {
+            return node;
+        }
+        return null;
+    };
+
+    OziEditor.prototype._buildImageButton = function (label) {
+        var self = this;
+
+        return self._buildPopoverButton('image', label, function (popover) {
+            var urlField = _el('div', 'ozi-editor-popover-field');
+            var urlLbl   = _el('span', 'ozi-editor-popover-label'); urlLbl.textContent = _t('editor.imageUrl');
+            var urlInput = _el('input', 'ozi-editor-popover-input', {
+                type: 'text', placeholder: 'https://…', 'data-ozi-editor-image-url-input': 'true'
+            });
+            urlField.appendChild(urlLbl); urlField.appendChild(urlInput);
+
+            var altField = _el('div', 'ozi-editor-popover-field');
+            var altLbl   = _el('span', 'ozi-editor-popover-label'); altLbl.textContent = _t('editor.imageAlt');
+            var altInput = _el('input', 'ozi-editor-popover-input', {
+                type: 'text', 'data-ozi-editor-image-alt-input': 'true'
+            });
+            altField.appendChild(altLbl); altField.appendChild(altInput);
+
+            /* largura/altura em px — atributos HTML nativos width/height
+               (unitless), nao style. So altura preenchida = largura fica
+               automatica (a regra CSS .ozi-editor-content img{height:auto}
+               ja cobre isso), e vice-versa. */
+            var dimRow      = _el('div', 'ozi-editor-popover-row');
+            var widthField  = _el('div', 'ozi-editor-popover-field');
+            var widthLbl    = _el('span', 'ozi-editor-popover-label'); widthLbl.textContent = _t('editor.imageWidth');
+            var widthInput  = _el('input', 'ozi-editor-popover-input', {
+                type: 'number', min: '1', placeholder: 'auto', 'data-ozi-editor-image-width-input': 'true'
+            });
+            widthField.appendChild(widthLbl); widthField.appendChild(widthInput);
+
+            var heightField = _el('div', 'ozi-editor-popover-field');
+            var heightLbl   = _el('span', 'ozi-editor-popover-label'); heightLbl.textContent = _t('editor.imageHeight');
+            var heightInput = _el('input', 'ozi-editor-popover-input', {
+                type: 'number', min: '1', placeholder: 'auto', 'data-ozi-editor-image-height-input': 'true'
+            });
+            heightField.appendChild(heightLbl); heightField.appendChild(heightInput);
+
+            dimRow.appendChild(widthField); dimRow.appendChild(heightField);
+
+            /* linha "Alinhamento" (v4.7.0) — SO no modo html. No md a linha
+               nem e construida (mesma regra da secao de upload logo abaixo:
+               controle funcionalmente morto nao deveria estar no DOM): o
+               htmlToMd serializa `![alt](src)` e descarta qualquer style, e
+               left/center/right de TEXTO ja sao BLOCKED_IN_MD.
+               Os botoes nao levam a classe `.ozi-editor-btn` nem o atributo
+               `data-ozi-editor-tool` de proposito — os dois fariam o
+               dispatcher generico de mousedown chama-los como ferramenta. */
+            var alignField = null;
+            if (self.editorType !== 'md') {
+                alignField = _el('div', 'ozi-editor-popover-field');
+                var alignLbl = _el('span', 'ozi-editor-popover-label');
+                alignLbl.textContent = _t('editor.imageAlign');
+                var alignRow = _el('div', 'ozi-editor-popover-align');
+
+                IMAGE_ALIGN_MODES.forEach(function (item) {
+                    var lbl = _t(item.labelKey);
+                    var btn = _el('button', 'ozi-editor-popover-align-btn', {
+                        type: 'button',
+                        'data-ozi-editor-image-align': item.mode,
+                        'data-ozi-editor-image-align-icon': item.icon,
+                        title: lbl, 'aria-label': lbl, 'aria-pressed': 'false'
+                    });
+                    btn.appendChild(_el('span', 'ozi-editor-popover-align-icon', { 'aria-hidden': 'true' }));
+                    alignRow.appendChild(btn);
+                });
+
+                alignField.appendChild(alignLbl);
+                alignField.appendChild(alignRow);
+            }
+
+            var actions = _el('div', 'ozi-editor-popover-actions');
+            var apply   = _el('button', 'ozi-editor-popover-apply', { type: 'button', 'data-ozi-editor-image-apply': 'true' });
+            apply.textContent = _t('editor.apply');
+            var remove  = _el('button', 'ozi-editor-popover-remove', { type: 'button', 'data-ozi-editor-image-remove': 'true' });
+            remove.textContent = _t('editor.remove');
+            actions.appendChild(apply); actions.appendChild(remove);
+
+            popover.appendChild(urlField);
+            popover.appendChild(altField);
+            popover.appendChild(dimRow);
+            if (alignField) popover.appendChild(alignField);
+            popover.appendChild(actions);
+
+            /* secao de upload SO existe no DOM se o host declarou o endpoint —
+               nao e so escondida via CSS, um <input type=file> funcionalmente
+               morto nao deveria nem estar la */
+            if (self.uploadUrl) {
+                var uploadWrap = _el('div', 'ozi-editor-popover-upload');
+                var uploadLbl  = _el('span', 'ozi-editor-popover-label'); uploadLbl.textContent = _t('editor.imageUpload');
+                var fileInput  = _el('input', null, {
+                    type: 'file', accept: 'image/*', 'data-ozi-editor-image-file-input': 'true'
+                });
+                var fileName   = _el('span', 'ozi-editor-popover-file', { 'data-ozi-editor-image-filename': 'true' });
+
+                uploadWrap.appendChild(uploadLbl);
+                uploadWrap.appendChild(fileInput);
+                uploadWrap.appendChild(fileName);
+                popover.appendChild(uploadWrap);
+            }
+        }, function (popoverEl) {
+            /* le/preenche os campos do PROPRIO popover que esta abrindo (nao
+               campos singulares na instancia) — necessario desde que a
+               toolbar responsiva permite mais de um popover "image" no DOM */
+            var urlInput    = popoverEl.querySelector('[data-ozi-editor-image-url-input]');
+            var altInput    = popoverEl.querySelector('[data-ozi-editor-image-alt-input]');
+            var widthInput  = popoverEl.querySelector('[data-ozi-editor-image-width-input]');
+            var heightInput = popoverEl.querySelector('[data-ozi-editor-image-height-input]');
+            var removeBtn   = popoverEl.querySelector('[data-ozi-editor-image-remove]');
+            var fileInput   = popoverEl.querySelector('[data-ozi-editor-image-file-input]');
+            var fileNameEl  = popoverEl.querySelector('[data-ozi-editor-image-filename]');
+
+            var existing = self._getSelectedImage();
+            urlInput.value    = existing ? (existing.getAttribute('src') || '') : '';
+            altInput.value    = existing ? (existing.getAttribute('alt') || '') : '';
+            widthInput.value  = existing ? (existing.getAttribute('width')  || '') : '';
+            heightInput.value = existing ? (existing.getAttribute('height') || '') : '';
+            removeBtn.disabled = !existing;
+            if (fileInput)  fileInput.value = '';
+            if (fileNameEl) fileNameEl.textContent = '';
+
+            /* alinhamento (v4.7.0): com imagem selecionada, reflete o modo
+               dela; sem imagem, zera o pendente — o popover e reaproveitado
+               entre aberturas, entao herdar o modo da imagem anterior faria
+               a proxima insercao nascer alinhada sem o usuario pedir */
+            self._syncAlignButtons(popoverEl, existing ? self._getImageAlign(existing) : 'none');
+
+            setTimeout(function () { urlInput.focus(); }, 0);
+        });
+    };
+
+    /* width/height: string vinda dos inputs number — vazio = "auto" (remove
+       o atributo, deixa o browser/CSS calcular). Validacao de forma (inteiro
+       positivo) e responsabilidade do <input type=number min=1>; o
+       sanitizador valida de novo por formato na proxima sanitizacao (defesa
+       em profundidade, mesmo padrao de cor/URL). */
+    OziEditor.prototype._applyImageUrl = function (url, alt, width, height, align) {
+        url = _trim(url);
+        alt = alt || '';
+        width  = _trim(width || '');
+        height = _trim(height || '');
+        if (!url || !_isSafeUrl(url)) {
+            this._showWarning(_t('editor.imageInvalidUrl'));
+            return;
+        }
+        this.content.focus();
+
+        var existing = this._getSelectedImage();
+        var img = existing || document.createElement('img');
+        img.setAttribute('src', url);
+        if (alt)    img.setAttribute('alt', alt);       else img.removeAttribute('alt');
+        if (width)  img.setAttribute('width', width);   else img.removeAttribute('width');
+        if (height) img.setAttribute('height', height); else img.removeAttribute('height');
+
+        if (existing) {
+            if (align) this._applyImageAlign(existing, align);
+        } else {
+            /* imagem nova: o modo `free` precisa MEDIR a posicao no fluxo, e
+               isso so existe depois de inserida. Marca com um atributo
+               temporario (a insercao nao passa pelo sanitizador, entao ele
+               sobrevive), insere, mede, aplica e apaga a marca. Os outros
+               modos sao puro style e cabem antes da serializacao. */
+            if (align && align !== 'free') this._applyImageAlign(img, align);
+            if (align === 'free') img.setAttribute('data-ozi-img-tmp', '1');
+            this._insertHtmlAtCursor(img.outerHTML);
+            if (align === 'free') {
+                var inserted = this.content.querySelector('[data-ozi-img-tmp]');
+                if (inserted) {
+                    inserted.removeAttribute('data-ozi-img-tmp');
+                    this._applyImageAlign(inserted, 'free');
+                }
+            }
+        }
+
+        this._saveSelection();
+        this._syncToTextarea();
+        this._updateToolbarState();
+        this.emitChange();
+    };
+
+    OziEditor.prototype._removeImage = function () {
+        this.content.focus();
+        var existing = this._getSelectedImage();
+        if (!existing || !existing.parentNode) return;
+        existing.parentNode.removeChild(existing);
+        this._saveSelection();
+        this._syncToTextarea();
+        this._updateToolbarState();
+        this.emitChange();
+    };
+
+    /* ─────────────────────────────────────────────
+     * [13c-2] ALINHAMENTO DE IMAGEM — v4.7.0
+     * Estado no inline style da propria <img> (ver [7c] pro porque).
+     * NAO usar atributo `data-*` como fonte da verdade: o sanitizador
+     * apaga todos os atributos e restaura so a whitelist, entao o modo
+     * tem que ser DERIVAVEL do style que sobrevive ao round-trip.
+     * ───────────────────────────────────────────── */
+
+    function _styleProp(el, prop) {
+        return (el && el.style) ? _trim(el.style.getPropertyValue(prop)).toLowerCase() : '';
+    }
+
+    /* deriva o modo a partir do style — a ordem importa: `free` (absolute)
+       vence, porque uma imagem posicionada pode ter margens sobrando de um
+       modo anterior num HTML vindo de fora */
+    OziEditor.prototype._getImageAlign = function (img) {
+        if (!img) return 'none';
+        if (_styleProp(img, 'position') === 'absolute') return 'free';
+
+        var float_ = _styleProp(img, 'float');
+        if (float_ === 'left')  return 'left';
+        if (float_ === 'right') return 'right';
+
+        if (_styleProp(img, 'display') === 'block' &&
+            _styleProp(img, 'margin-left')  === 'auto' &&
+            _styleProp(img, 'margin-right') === 'auto') return 'center';
+
+        return 'none';
+    };
+
+    /* posicao atual da imagem no fluxo, na mesma origem que `left`/`top` de um
+       elemento absoluto usam (padding box do containing block). offsetLeft/
+       offsetTop sao medidos a partir do padding edge do offsetParent, que e o
+       `.ozi-editor-content` (position:relative desde o CSS 2.7.0) — as duas
+       medidas batem, entao entrar no modo livre nao move a imagem um pixel. */
+    OziEditor.prototype._imageFlowOffset = function (img) {
+        var content = this.content;
+        if (!content || !content.contains(img)) return { left: 0, top: 0 };
+        var boxW = content.clientWidth || 1;
+        return {
+            left: _round2((img.offsetLeft / boxW) * 100),
+            top:  _round2(img.offsetTop)
+        };
+    };
+
+    function _round2(n) { return Math.round(n * 100) / 100; }
+
+    /* escreve a string canonica do modo. Limpa TODAS as propriedades que
+       qualquer modo possa ter escrito antes de aplicar a nova — trocar de
+       modo nao pode deixar residuo (ex.: float sobrando ao virar centro). */
+    OziEditor.prototype._applyImageAlign = function (img, mode) {
+        if (!img) return;
+        mode = IMAGE_ALIGN_STYLES[mode] ? mode : 'none';
+
+        /* mede ANTES de mexer no style: depois de virar absolute a imagem sai
+           do fluxo e offsetLeft/offsetTop ja refletem a posicao nova */
+        var geo = (mode === 'free') ? this._imageFlowOffset(img) : null;
+
+        IMAGE_ALIGN_PROPS.forEach(function (prop) { img.style.removeProperty(prop); });
+
+        var decl = IMAGE_ALIGN_STYLES[mode];
+        Object.keys(decl).forEach(function (prop) { img.style.setProperty(prop, decl[prop]); });
+
+        if (mode === 'free' && geo) {
+            img.style.setProperty('left', geo.left + '%');
+            img.style.setProperty('top',  geo.top  + 'px');
+            this._clampFreeImage(img);
+        }
+
+        /* sem nenhuma declaracao sobrando, o atributo inteiro sai — senao a
+           imagem carregaria um `style=""` vazio pra sempre (e o HTML salvo
+           de quem nunca alinhou nada deixaria de ser identico ao de antes
+           desta versao) */
+        if (img.getAttribute('style') === '') img.removeAttribute('style');
+    };
+
+    /* clamp e obrigatorio, nao acabamento: `.ozi-editor-content` tem
+       overflow-x:hidden (corta sem oferecer scroll) e o wrap tem
+       overflow:hidden — imagem empurrada pra fora ficaria inalcancavel, so
+       recuperavel pelo modo source. Efeito colateral util: como o editor
+       nunca emite negativo, qualquer negativo que o sanitizador veja veio de
+       fora e pode ser rejeitado sem custo funcional. */
+    OziEditor.prototype._clampFreeImage = function (img) {
+        var content = this.content;
+        if (!content || !img) return;
+
+        var boxW = content.clientWidth || 1;
+        var boxH = Math.max(content.clientHeight, content.scrollHeight) || 1;
+        var imgW = img.offsetWidth  || 0;
+        var imgH = img.offsetHeight || 0;
+
+        var maxLeftPct = Math.max(0, ((boxW - imgW) / boxW) * 100);
+        var maxTopPx   = Math.max(0, boxH - imgH);
+
+        var left = parseFloat(img.style.getPropertyValue('left')) || 0;
+        var top  = parseFloat(img.style.getPropertyValue('top'))  || 0;
+
+        img.style.setProperty('left', _round2(Math.min(Math.max(0, left), maxLeftPct)) + '%');
+        img.style.setProperty('top',  _round2(Math.min(Math.max(0, top),  maxTopPx))  + 'px');
+    };
+
+    /* espelha o modo nos botoes do popover E guarda o pendente no proprio
+       elemento do popover (nao num campo da instancia — a toolbar responsiva
+       permite mais de um popover "image" vivo no DOM ao mesmo tempo) */
+    OziEditor.prototype._syncAlignButtons = function (popoverEl, mode) {
+        if (!popoverEl) return;
+        var btns = popoverEl.querySelectorAll('[data-ozi-editor-image-align]');
+        if (!btns.length) return;   /* modo md: a linha nem foi construida */
+
+        mode = IMAGE_ALIGN_STYLES[mode] ? mode : 'none';
+        popoverEl.setAttribute('data-ozi-editor-image-align-pending', mode);
+
+        Array.prototype.forEach.call(btns, function (btn) {
+            var on = btn.getAttribute('data-ozi-editor-image-align') === mode;
+            btn.classList.toggle('is-active', on);
+            btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+    };
+
+    OziEditor.prototype._pendingAlign = function (popoverEl) {
+        return (popoverEl && popoverEl.getAttribute('data-ozi-editor-image-align-pending')) || 'none';
+    };
+
+    /* ─────────────────────────────────────────────
+     * [13c-3] ARRASTO DA IMAGEM LIVRE — v4.7.0
+     * mousemove/mouseup vivem no document e sao registrados UMA VEZ no
+     * _bindEvents (via _on, rastreado pelo destroy) — gateados por
+     * this._imgDrag. Nao existe _off no arquivo: ligar por gesto
+     * acumularia entradas no _listeners pra sempre.
+     * Sem requestAnimationFrame de proposito — rAF nao dispara de forma
+     * confiavel sob --virtual-time-budget (lessons-learned 2026-08-31), e
+     * isso deixaria o arrasto sem cobertura de aceite nenhuma.
+     * ───────────────────────────────────────────── */
+
+    var IMG_DRAG_THRESHOLD = 4;   /* px — separa clique de arrasto */
+
+    OziEditor.prototype._startImageDrag = function (img, e) {
+        this._imgDrag = {
+            img:            img,
+            startX:         e.clientX,
+            startY:         e.clientY,
+            startScrollTop: this.content.scrollTop,
+            baseLeftPct:    parseFloat(img.style.getPropertyValue('left')) || 0,
+            baseTopPx:      parseFloat(img.style.getPropertyValue('top'))  || 0,
+            moved:          false
+        };
+    };
+
+    OziEditor.prototype._moveImageDrag = function (e) {
+        var d = this._imgDrag;
+        if (!d) return;
+
+        /* botao ja solto (Alt+Tab, menu de contexto, mouseup fora da janela):
+           o mouseup nunca chegou e a imagem passaria a seguir o cursor */
+        if (e.buttons === 0) { this._imgDrag = null; return; }
+
+        var dx = e.clientX - d.startX;
+        /* rolar o content durante o arrasto descolaria a imagem do cursor */
+        var dy = (e.clientY - d.startY) + (this.content.scrollTop - d.startScrollTop);
+
+        if (!d.moved && Math.max(Math.abs(dx), Math.abs(dy)) < IMG_DRAG_THRESHOLD) return;
+        d.moved = true;
+
+        var boxW = this.content.clientWidth || 1;
+        d.img.style.setProperty('left', _round2(d.baseLeftPct + (dx / boxW) * 100) + '%');
+        d.img.style.setProperty('top',  _round2(d.baseTopPx + dy) + 'px');
+        this._clampFreeImage(d.img);
+    };
+
+    OziEditor.prototype._endImageDrag = function () {
+        var d = this._imgDrag;
+        if (!d) return;
+        this._imgDrag = null;
+
+        /* setValue()/_exitSourceMode() podem ter trocado o innerHTML no meio
+           do gesto — o no que estavamos movendo virou orfao */
+        if (!this.content.contains(d.img)) return false;
+
+        if (!d.moved) return true;   /* foi clique: quem chamou abre o popover */
+
+        this._syncToTextarea();
+        this.emitChange();
+        return false;
+    };
+
+    OziEditor.prototype._setUploadBusy = function (busy, fileName, popover) {
+        if (!popover) return;
+        var fileInput  = popover.querySelector('[data-ozi-editor-image-file-input]');
+        var fileNameEl = popover.querySelector('[data-ozi-editor-image-filename]');
+        if (fileInput) fileInput.disabled = busy;
+        if (fileNameEl) fileNameEl.textContent = busy ? _t('editor.imageUploading') : (fileName || '');
+    };
+
+    /* estilo .then/.catch/.finally (nao async/await) — consistente com o
+       resto do arquivo, ES5. Mesmo padrao de fetch com FormData ja usado por
+       ozi-loaddata/ozi-select: sem Content-Type manual (o browser monta o
+       boundary multipart sozinho), X-CSRF-TOKEN so se o meta tag existir.
+       Sucesso exige response.ok E json.status==='ok' E json.url presente —
+       um servidor mal configurado que devolve status:'ok' junto de um HTTP
+       500 nao deve ser tratado como sucesso. Erro sempre visivel via
+       _showWarning, nunca fail-open silencioso (mesma licao da Fase 2).
+       `popover` (o elemento .ozi-editor-popover de onde veio o upload) e
+       passado pelo handler de 'change' do input de arquivo — necessario pra
+       ler alt/width/height e mostrar o estado "enviando" no popover CERTO,
+       ja que a toolbar responsiva permite mais de um popover "image". */
+    OziEditor.prototype._uploadImage = function (file, popover) {
+        var self = this;
+        if (!self.uploadUrl || !file || !popover) return;
+
+        self._setUploadBusy(true, file.name, popover);
+
+        var formData = new FormData();
+        formData.append('file', file);
+
+        var headers = { 'X-Requested-With': 'XMLHttpRequest' };
+        var csrfMeta = document.querySelector('meta[name="csrf-token"]');
+        if (csrfMeta) headers['X-CSRF-TOKEN'] = csrfMeta.getAttribute('content');
+
+        fetch(self.uploadUrl, { method: 'POST', headers: headers, body: formData })
+            .then(function (response) {
+                var ct = String(response.headers.get('content-type') || '').toLowerCase();
+                if (ct.indexOf('application/json') === -1) {
+                    throw new Error(_t('editor.imageUploadFailed'));
+                }
+                return response.json().then(function (json) {
+                    if (response.ok && json && json.status === 'ok' && json.url) return json.url;
+                    throw new Error((json && json.status === 'error' && json.message) || _t('editor.imageUploadFailed'));
+                });
+            })
+            .then(function (url) {
+                var altInput    = popover.querySelector('[data-ozi-editor-image-alt-input]');
+                var widthInput  = popover.querySelector('[data-ozi-editor-image-width-input]');
+                var heightInput = popover.querySelector('[data-ozi-editor-image-height-input]');
+                self._applyImageUrl(url,
+                    altInput    ? altInput.value    : '',
+                    widthInput  ? widthInput.value  : '',
+                    heightInput ? heightInput.value : '',
+                    self._pendingAlign(popover));
+                self._togglePopover(self._popoverIdFromElement(popover), true);
+            })
+            .catch(function (err) {
+                self._showWarning((err && err.message) || _t('editor.imageUploadFailed'));
+            })
+            .finally(function () {
+                self._setUploadBusy(false, null, popover);
+            });
+    };
+
+    /* ─────────────────────────────────────────────
+     * [13c] POPOVER DE COR (color/highlight — grade
+     * de swatches fixos, compartilhado pelos dois)
+     * ───────────────────────────────────────────── */
+
+    OziEditor.prototype._buildColorButton = function (tool, label) {
+        var self = this;
+
+        return self._buildPopoverButton(tool, label, function (popover) {
+            popover.classList.add('ozi-editor-popover--color');
+
+            var grid = _el('div', 'ozi-editor-swatch-grid');
+            SWATCH_PALETTE.forEach(function (sw) {
+                var swatch = _el('button', 'ozi-editor-swatch', {
+                    type: 'button', 'data-ozi-editor-swatch': sw.hex,
+                    title: sw.labelKey, 'aria-label': sw.labelKey
+                });
+                swatch.style.background = sw.hex;
+                grid.appendChild(swatch);
+            });
+            popover.appendChild(grid);
+
+            /* customizar — input nativo type=color, sempre #rrggbb (sem
+               digitacao livre, sem superficie de injecao nova); aplica no
+               'change' (usuario fechou o seletor nativo do SO/navegador) */
+            var customRow = _el('label', 'ozi-editor-swatch-custom');
+            var customInput = _el('input', null, {
+                type: 'color', 'data-ozi-editor-swatch-custom': tool, value: '#000000'
+            });
+            var customLabel = _el('span', 'ozi-editor-swatch-custom-label');
+            customLabel.textContent = _t('editor.customize');
+            customRow.appendChild(customInput);
+            customRow.appendChild(customLabel);
+            popover.appendChild(customRow);
+
+            var none = _el('button', 'ozi-editor-swatch-none', {
+                type: 'button', 'data-ozi-editor-swatch-none': tool
+            });
+            none.textContent = _t('editor.none');
+            popover.appendChild(none);
+        });
+    };
+
+    OziEditor.prototype._applySwatchColor = function (tool, value) {
+        this.content.focus();
+        /* sem isso o Chromium produz <font color> (fora do ALLOWED_TAGS) em
+           vez de <span style>, verificado empiricamente antes de implementar */
+        document.execCommand('styleWithCSS', false, true);
+
+        if (tool === 'color') {
+            document.execCommand('foreColor', false, value);
+        } else if (tool === 'highlight') {
+            var supported = false;
+            try { supported = document.queryCommandSupported('hiliteColor'); } catch (e) {}
+            document.execCommand(supported ? 'hiliteColor' : 'backColor', false, value);
+        }
+
+        this._saveSelection();
+        this._syncToTextarea();
+        this._updateToolbarState();
+        this.emitChange();
+    };
+
+    /* ─────────────────────────────────────────────
+     * [13d] PASTE / PASTEFMT — acao imediata via
+     * Clipboard API (nao e flag pro proximo Ctrl+V)
+     * ───────────────────────────────────────────── */
+
+    /* aviso visivel de erro (substitui o fail-open silencioso — achado do
+       usuario na Fase 2: falha de permissao de clipboard passava
+       despercebida, editor so continuava mostrando o que ja tinha, parecendo
+       que "so cola o texto interno"). Elemento lazy, inserido entre toolbar
+       e content. Generalizado na Fase 3 pra tambem cobrir erro de URL de
+       imagem invalida e falha de upload — mesmo widget, mais de uma causa. */
+    OziEditor.prototype._showWarning = function (msg) {
+        var self = this;
+        if (!self._warningEl) {
+            self._warningEl = _el('div', 'ozi-editor-clipboard-warning');
+            self._warningEl.style.display = 'none';
+            self.wrap.insertBefore(self._warningEl, self.content);
+        }
+        self._warningEl.textContent = msg;
+        self._warningEl.style.display = '';
+        clearTimeout(self._warningTimer);
+        self._warningTimer = setTimeout(function () {
+            self._warningEl.style.display = 'none';
+        }, 5000);
+    };
+
+    OziEditor.prototype._pasteFromClipboard = function (allowHtml) {
+        var self = this;
+        self.content.focus();
+
+        if (!(window.navigator && navigator.clipboard &&
+              (navigator.clipboard.readText || navigator.clipboard.read))) {
+            self._dbg('Clipboard API indisponivel — paste/pasteFmt ignorado');
+            self._showWarning(_t('editor.clipboardBlocked'));
+            return;
+        }
+
+        var afterInsert = function () {
+            self._saveSelection();
+            self._syncToTextarea();
+            self._updateToolbarState();
+            self.emitChange();
+        };
+
+        var insertPlain = function (text) {
+            if (!text) return;
+            document.execCommand('insertText', false, text);
+            afterInsert();
+        };
+
+        var onClipboardError = function (err) {
+            self._dbg('clipboard falhou', err);
+            self._showWarning(_t('editor.clipboardBlocked'));
+        };
+
+        var doRead = function () {
+            if (!allowHtml || !navigator.clipboard.read) {
+                navigator.clipboard.readText().then(insertPlain, onClipboardError);
+                return;
+            }
+
+            navigator.clipboard.read().then(function (items) {
+                var htmlItem = null;
+                items.forEach(function (item) {
+                    if (!htmlItem && item.types.indexOf('text/html') > -1) htmlItem = item;
+                });
+                if (!htmlItem) return navigator.clipboard.readText().then(insertPlain, onClipboardError);
+
+                return htmlItem.getType('text/html').then(function (blob) { return blob.text(); }).then(function (html) {
+                    document.execCommand('insertHTML', false, _sanitizeHtml(html));
+                    afterInsert();
+                });
+            }).catch(onClipboardError);
+        };
+
+        /* checagem de permissao ANTES de tentar ler — 'clipboard-read' nao e
+           reconhecido pelo Permissions API em todo browser (ex.: Firefox),
+           entao query() pode lancar sincrono OU nao existir; nesses casos
+           cai direto pro doRead(), que e quem realmente dispara o prompt
+           nativo do navegador na 1a vez (ou falha, capturado acima) */
+        var permQuery = null;
+        try {
+            permQuery = (navigator.permissions && navigator.permissions.query)
+                ? navigator.permissions.query({ name: 'clipboard-read' })
+                : null;
+        } catch (e) { permQuery = null; }
+
+        if (permQuery && typeof permQuery.then === 'function') {
+            permQuery.then(function (status) {
+                if (status.state === 'denied') { self._showWarning(_t('editor.clipboardBlocked')); return; }
+                doRead();
+            }, doRead);
+        } else {
+            doRead();
+        }
+    };
+
+    /* ─────────────────────────────────────────────
      * [14] CARREGAMENTO DE ICONES SVG
      * ───────────────────────────────────────────── */
 
@@ -822,6 +2230,38 @@
             if (!h.icon) { _textFallback(iconEl, tool); return; }
 
             h.icon(iconEl, meta.icon, { plugin: 'editor', fallback: meta.labelKey.split('.').pop() });
+        });
+
+        /* chevron do grupo colapsavel (toolbar responsiva) — chrome
+           estrutural sem data-ozi-editor-tool (nao e um TOOL_META), o laco
+           acima nao alcanca; um unico icon-chevron-down.svg serve ▼/▲ via
+           rotate(180deg) em CSS (.is-open), nao precisa de 2o arquivo */
+        Array.prototype.forEach.call(self.toolbar.querySelectorAll('.ozi-editor-collapse-chevron'), function (iconEl) {
+            if (!h.icon) { iconEl.innerHTML = '&#9660;'; return; }
+            h.icon(iconEl, 'chevron-down', { plugin: 'editor', fallback: 'moreTools' });
+        });
+
+        /* setas do modo Scroll — mesmo chrome estrutural, tambem nao alcancado
+           pelo laco de [data-ozi-editor-tool] acima. 1 unico icon-chevron-
+           left.svg serve prev/next via rotate(180deg) em CSS, mesmo padrao
+           do chevron do colapso. */
+        Array.prototype.forEach.call(self.toolbar.querySelectorAll('.ozi-editor-scroll-arrow-icon'), function (iconEl) {
+            var isPrev = !!iconEl.closest('.ozi-editor-btn--scroll-prev');
+            if (!h.icon) { iconEl.innerHTML = isPrev ? '&#9664;' : '&#9654;'; return; }
+            h.icon(iconEl, 'chevron-left', { plugin: 'editor', fallback: isPrev ? 'scrollPrev' : 'scrollNext' });
+        });
+
+        /* botoes de alinhamento de imagem (v4.7.0) — vivem DENTRO do popover
+           e nao carregam data-ozi-editor-tool de proposito (o dispatcher
+           generico os executaria como ferramenta), entao o laco principal
+           tambem nao alcanca. Icone proprio por modo: os icon-left/center/
+           right existentes sao de alinhamento de TEXTO e ja estao em uso. */
+        Array.prototype.forEach.call(self.toolbar.querySelectorAll('[data-ozi-editor-image-align-icon]'), function (btn) {
+            var iconEl = btn.querySelector('.ozi-editor-popover-align-icon');
+            var name   = btn.getAttribute('data-ozi-editor-image-align-icon');
+            if (!iconEl) return;
+            if (!h.icon) { iconEl.textContent = btn.getAttribute('data-ozi-editor-image-align'); return; }
+            h.icon(iconEl, name, { plugin: 'editor', fallback: btn.getAttribute('data-ozi-editor-image-align') });
         });
     };
 
@@ -968,6 +2408,9 @@
         if (!meta) return;
         if (tool === 'classes') return;
         if (tool === 'heading') return;
+        /* abertura de popover ja tratada por handler dedicado em _bindEvents —
+           aqui e so o no-op do dispatch generico (mesmo padrao de heading/classes) */
+        if (tool === 'link' || tool === 'color' || tool === 'highlight' || tool === 'image') return;
 
         this.content.focus();
 
@@ -985,9 +2428,16 @@
             case 'source':    this._toggleSourceMode();       break;
             case 'table':     this._insertTable();            break;
             case 'clear':     this._clearFormat();            break;
-            case 'left':      this._applyTextAlign('left');   break;
-            case 'center':    this._applyTextAlign('center'); break;
-            case 'right':     this._applyTextAlign('right');  break;
+            case 'left':      this._applyTextAlign('left');    break;
+            case 'center':    this._applyTextAlign('center');  break;
+            case 'right':     this._applyTextAlign('right');   break;
+            case 'justify':   this._applyTextAlign('justify'); break;
+            case 'quote':     this._toggleQuote();             break;
+            case 'hr':        this._insertHr();                break;
+            /* assincronas — cuidam do proprio sync/emit ao resolver, por
+               isso `return` em vez de `break` (pulam a cauda sincrona abaixo) */
+            case 'paste':     this._pasteFromClipboard(false); return;
+            case 'pasteFmt':  this._pasteFromClipboard(true);  return;
             case 'h1': case 'h2': case 'h3':
             case 'h4': case 'h5': case 'h6':
                 this._toggleHeading(tool); break;
@@ -1029,6 +2479,41 @@
             sel.addRange(range);
         }
         this._saveSelection();
+    };
+
+    /* mesmo padrao do _toggleHeading (troca a tag do bloco), so que entre
+       p<->blockquote em vez de p<->hX */
+    OziEditor.prototype._toggleQuote = function () {
+        var block = this._getClosestBlockElement();
+        if (!block) {
+            block = this._wrapRootInlineContentInParagraph();
+            if (!block) { this._insertHtmlAtCursor('<p><br></p>'); block = this._getClosestBlockElement(); }
+        }
+        if (!block) return;
+
+        var currentTag = String(block.tagName || '').toLowerCase();
+        var targetTag  = currentTag === 'blockquote' ? 'p' : 'blockquote';
+        var newBlock   = document.createElement(targetTag);
+
+        if (block.className)                      newBlock.className = block.className;
+        if (block.style && block.style.textAlign) newBlock.style.textAlign = block.style.textAlign;
+
+        while (block.firstChild) newBlock.appendChild(block.firstChild);
+        block.parentNode.replaceChild(newBlock, block);
+
+        var sel = window.getSelection();
+        if (sel) {
+            var range = document.createRange();
+            range.selectNodeContents(newBlock);
+            range.collapse(false);
+            sel.removeAllRanges();
+            sel.addRange(range);
+        }
+        this._saveSelection();
+    };
+
+    OziEditor.prototype._insertHr = function () {
+        document.execCommand('insertHTML', false, '<hr><p><br></p>');
     };
 
     OziEditor.prototype._toggleCodeBlock = function () {
@@ -1128,6 +2613,11 @@
             self._setToolActive(cmd, active);
         });
 
+        /* strike: nome do tool difere do nome do comando nativo (strikeThrough) */
+        var strikeActive = false;
+        try { strikeActive = document.queryCommandState('strikeThrough'); } catch (e) {}
+        self._setToolActive('strike', strikeActive);
+
         var inCode = false;
         var sel = window.getSelection();
         if (sel && sel.rangeCount) {
@@ -1144,14 +2634,29 @@
             self._setToolActive(align, active);
         });
 
+        /* justifyFull e o nome nativo do "justificado completo" (diferente do
+           padrao 'justify'+Cap dos 3 acima) */
+        var justifyActive = false;
+        try { justifyActive = document.queryCommandState('justifyFull'); } catch (e) {}
+        self._setToolActive('justify', justifyActive);
+
         var block      = self._getClosestBlockElement();
         var currentTag = block ? String(block.tagName || '').toLowerCase() : '';
         Array.prototype.forEach.call(self.toolbar.querySelectorAll('.ozi-editor-btn--heading'), function (b) {
             b.classList.toggle('ozi-editor-btn--active', /^h[1-6]$/.test(currentTag));
         });
+        self._setToolActive('quote', currentTag === 'blockquote');
 
-        if (self.headingDropdown && _isShown(self.headingDropdown)) self._updateHeadingDropdownChecks();
-        if (self.classDropdown && _isShown(self.classDropdown))     self._updateClassDropdownChecks();
+        /* varre TODOS os popovers de heading/classes abertos (nao so "o
+           ultimo" — a toolbar responsiva pode ter mais de uma instancia
+           simultanea no DOM, uma por variante de breakpoint); id sempre
+           comeca com "heading-"/"classes-" (ver _buildHeadingButton/
+           _buildClassesButton) */
+        (self._popovers || []).forEach(function (p) {
+            if (!_isShown(p.el)) return;
+            if (/^heading-/.test(p.name)) self._updateHeadingDropdownChecks(p.el);
+            else if (/^classes-/.test(p.name)) self._updateClassDropdownChecks(p.el);
+        });
     };
 
     /* ─────────────────────────────────────────────
@@ -1166,9 +2671,11 @@
     OziEditor.prototype._bindEvents = function () {
         var self = this;
 
-        /* botao de ferramenta (exclui classes e incompativel) */
+        /* botao de ferramenta (exclui classes, incompativel, o chevron de
+           colapso e as setas de scroll — chrome estrutural da toolbar
+           responsiva, nao ferramenta do TOOL_META) */
         self._on(self.wrap, 'mousedown', function (e) {
-            var btn = self._closestIn(e.target, '.ozi-editor-btn:not(.ozi-editor-btn--classes):not(.ozi-editor-btn--incompatible)');
+            var btn = self._closestIn(e.target, '.ozi-editor-btn:not(.ozi-editor-btn--classes):not(.ozi-editor-btn--incompatible):not(.ozi-editor-btn--collapse-toggle):not(.ozi-editor-btn--scroll-prev):not(.ozi-editor-btn--scroll-next)');
             if (!btn) return;
             e.preventDefault();
             if (!self.isDisabled) {
@@ -1177,12 +2684,40 @@
             }
         });
 
-        /* botao heading — abre/fecha dropdown */
+        /* setas de scroll horizontal (modo Scroll) — chrome estrutural, sem
+           data-ozi-editor-tool (excluido acima). Track e sempre irma direta
+           da seta dentro do mesmo .ozi-editor-toolbar-scroll, nao precisa de
+           id de correlacao como o colapso. Sem checagem propria de
+           self.isDisabled aqui (diferente do dispatcher generico de tool,
+           que executa execCommand no conteudo) — _setDisabled() ja marca
+           TODO .ozi-editor-btn (inclusive estas setas e o collapse-toggle)
+           como disabled=true quando o editor esta desabilitado, entao o
+           guard de btn.disabled abaixo ja cobre o caso, uniforme com o
+           resto da toolbar. */
+        self._on(self.wrap, 'mousedown', function (e) {
+            var btn = self._closestIn(e.target, '.ozi-editor-btn--scroll-prev, .ozi-editor-btn--scroll-next');
+            if (!btn || btn.disabled) return;
+            e.preventDefault();
+            var track = btn.parentNode.querySelector('.ozi-editor-toolbar-scroll-track');
+            if (!track) return;
+            var dir = btn.getAttribute('data-ozi-editor-scroll-dir') === 'prev' ? -1 : 1;
+            /* sem behavior:'smooth' de proposito — mesmo precedente do modo
+               Colapso ("display puro, sem animacao, acabamento fica pra
+               depois"); smooth-scroll tambem nao avanca em Chromium headless
+               sob virtual-time-budget (achado empirico rodando o aceite),
+               instantaneo e testavel deterministicamente. */
+            track.scrollBy({ left: dir * Math.max(track.clientWidth * 0.8, 40) });
+        });
+
+        /* botao heading — abre/fecha dropdown. _togglePopover ja fecha
+           qualquer outro popover aberto sozinho (inclusive um classes de
+           outra variante de breakpoint) — nao precisa mais de force-close
+           manual do dropdown irmao. */
         self._on(self.wrap, 'mousedown', function (e) {
             var btn = self._closestIn(e.target, '.ozi-editor-btn--heading');
             if (!btn) return;
             e.preventDefault();
-            if (!self.isDisabled) { self._toggleClassDropdown(true); self._toggleHeadingDropdown(); }
+            if (!self.isDisabled) self._togglePopover(btn.getAttribute('data-ozi-editor-popover-id'));
         });
 
         /* item de heading */
@@ -1192,7 +2727,7 @@
             e.preventDefault();
             if (self.isDisabled) return;
             var level = it.getAttribute('data-ozi-heading');
-            self._toggleHeadingDropdown(true);
+            self._togglePopover(self._popoverIdFromElement(it), true);
             self._restoreSelection();
             self._toggleHeading(level);
             self._syncToTextarea();
@@ -1205,7 +2740,7 @@
             var btn = self._closestIn(e.target, '.ozi-editor-btn--classes');
             if (!btn) return;
             e.preventDefault();
-            if (!self.isDisabled) { self._toggleHeadingDropdown(true); self._toggleClassDropdown(); }
+            if (!self.isDisabled) self._togglePopover(btn.getAttribute('data-ozi-editor-popover-id'));
         });
 
         /* item de classe */
@@ -1215,20 +2750,282 @@
             e.preventDefault();
             if (self.isDisabled) return;
             var cls = it.getAttribute('data-ozi-class');
-            self._toggleClassDropdown(true);
+            self._togglePopover(self._popoverIdFromElement(it), true);
             self._restoreSelection();
             self._applyClass(cls);
             self._updateToolbarState();
         });
 
-        /* clique fora — fecha dropdowns abertos */
+        /* botoes de popover (link/color/highlight/image) — abrem seu proprio popover */
+        self._on(self.wrap, 'mousedown', function (e) {
+            var btn = self._closestIn(e.target,
+                '.ozi-editor-btn[data-ozi-editor-tool="link"], ' +
+                '.ozi-editor-btn[data-ozi-editor-tool="color"], ' +
+                '.ozi-editor-btn[data-ozi-editor-tool="highlight"], ' +
+                '.ozi-editor-btn[data-ozi-editor-tool="image"]');
+            if (!btn) return;
+            e.preventDefault();
+            if (!self.isDisabled) self._togglePopover(btn.getAttribute('data-ozi-editor-popover-id'));
+        });
+
+        /* chevron de colapso (toolbar responsiva) — abre/fecha a 2a linha
+           inline irma da row (data-ozi-editor-collapse-id liga trigger e
+           painel, nao adjacencia de DOM — cobre 2 {} na mesma linha).
+           display puro, sem animacao de altura (acabamento fica pra depois,
+           a pedido do usuario). */
+        self._on(self.wrap, 'mousedown', function (e) {
+            var btn = self._closestIn(e.target, '.ozi-editor-btn--collapse-toggle');
+            if (!btn) return;
+            e.preventDefault();
+            var id = btn.getAttribute('data-ozi-editor-collapse-id');
+            var panel = self.wrap.querySelector('[data-ozi-editor-collapse-panel][data-ozi-editor-collapse-id="' + id + '"]');
+            if (!panel) return;
+            var open = panel.style.display === 'none';
+            panel.style.display = open ? '' : 'none';
+            btn.classList.toggle('is-open', open);
+            btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+            var label = _t(open ? 'editor.fewerTools' : 'editor.moreTools');
+            btn.title = label; btn.setAttribute('aria-label', label);
+        });
+
+        /* clicar numa <img> do content abre o popover de edicao dela direto
+           (Fase 3, ajuste pos-revisao do usuario) — sem isso seria preciso
+           clicar na imagem E DEPOIS no botao "image" da toolbar. Seleciona
+           o no da imagem manualmente (Range.selectNode) antes de abrir, pra
+           _getSelectedImage() no onOpen encontrar a mesma imagem clicada.
+           stopPropagation() evita que o listener de "clique fora" (ligado no
+           document, mais abaixo) feche este popover no mesmo evento —
+           clicar dentro do content nao esta dentro do wrap do popover
+           "image" (que so contem botao+popover, nao o content inteiro).
+           Nao ha um botao "clicado" pra derivar o id (o clique foi no
+           content, nao na toolbar) — com a toolbar responsiva pode haver
+           mais de um trigger "image" no DOM (uma por variante de
+           breakpoint); usa o trigger VISIVEL no momento (_visibleToolTrigger,
+           ver secao [11b]/popover generico). */
+        function openImagePopoverFor(img) {
+            var range = document.createRange();
+            range.selectNode(img);
+            var sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+            self._saveSelection();
+            var trigger = self._visibleToolTrigger('image');
+            if (trigger) self._openPopover(trigger.getAttribute('data-ozi-editor-popover-id'));
+        }
+
+        self._on(self.wrap, 'mousedown', function (e) {
+            if (self.isDisabled) return;
+            var img = self._closestIn(e.target, '.ozi-editor-content img');
+            if (!img) return;
+            e.preventDefault();
+            e.stopPropagation();
+
+            /* [v4.7.0] imagem em modo livre e ARRASTAVEL: o popover so abre no
+               mouseup, e so se o gesto tiver sido um clique (< 4px). Imagem
+               normal mantem o comportamento anterior byte a byte — abrir no
+               mousedown — porque o aceite da Fase 3 dispara so `mousedown` e
+               exige o popover aberto; adiar pra todo mundo regrediria ele. */
+            if (e.button === 0 && !self.isSourceMode && self._getImageAlign(img) === 'free') {
+                self._startImageDrag(img, e);
+                /* o popover fica `position:absolute` logo abaixo da toolbar e
+                   cobriria justamente a area onde o arrasto acontece */
+                self._closeAllPopovers();
+                return;
+            }
+
+            openImagePopoverFor(img);
+        });
+
+        /* arrasto da imagem livre — registrados UMA VEZ (ver [13c-3]) */
+        self._on(document, 'mousemove', function (e) {
+            if (!self._imgDrag) return;
+            self._moveImageDrag(e);
+        });
+
+        self._on(document, 'mouseup', function () {
+            if (!self._imgDrag) return;
+            var img = self._imgDrag.img;
+            if (self._endImageDrag() && self.content.contains(img)) {
+                openImagePopoverFor(img);   /* foi clique, nao arrasto */
+            }
+        });
+
+        /* linha "Alinhamento" do popover de imagem — com imagem selecionada
+           aplica na hora (precedente dos swatches de cor); sem imagem, guarda
+           o pendente e o Aplicar usa na insercao */
+        self._on(self.wrap, 'mousedown', function (e) {
+            var btn = self._closestIn(e.target, '[data-ozi-editor-image-align]');
+            if (!btn) return;
+            e.preventDefault();
+            e.stopPropagation();
+            if (self.isDisabled) return;
+
+            var popover = btn.closest('.ozi-editor-popover');
+            var mode    = btn.getAttribute('data-ozi-editor-image-align');
+            self._syncAlignButtons(popover, mode);
+
+            /* o onOpen do popover foca o campo de URL, e focar um <input>
+               move a selecao do documento pra dentro dele — sem restaurar,
+               _getSelectedImage() nunca acharia a imagem. Mesmo motivo pelo
+               qual os handlers de aplicar/remover ja fazem isso. */
+            self._restoreSelection();
+
+            var img = self._getSelectedImage();
+            if (!img) return;
+
+            self._applyImageAlign(img, mode);
+            self._syncToTextarea();
+            self.emitChange();
+        });
+
+        /* popover de link — aplicar (le o input a partir do popover do
+           proprio botao clicado, nao de um campo singular na instancia —
+           necessario desde que a toolbar responsiva permite mais de um
+           popover "link" simultaneo no DOM) */
+        self._on(self.wrap, 'mousedown', function (e) {
+            var btn = self._closestIn(e.target, '[data-ozi-editor-link-apply]');
+            if (!btn) return;
+            e.preventDefault();
+            if (self.isDisabled) return;
+            var input = btn.closest('.ozi-editor-popover').querySelector('[data-ozi-editor-link-input]');
+            self._restoreSelection();
+            self._applyLink(input.value);
+            self._togglePopover(self._popoverIdFromElement(btn), true);
+        });
+
+        /* popover de link — remover */
+        self._on(self.wrap, 'mousedown', function (e) {
+            var btn = self._closestIn(e.target, '[data-ozi-editor-link-remove]');
+            if (!btn || btn.disabled) return;
+            e.preventDefault();
+            if (self.isDisabled) return;
+            self._restoreSelection();
+            self._removeLink();
+            self._togglePopover(self._popoverIdFromElement(btn), true);
+        });
+
+        /* popover de link — Enter no campo de URL aplica */
+        self._on(self.wrap, 'keydown', function (e) {
+            var input = self._closestIn(e.target, '[data-ozi-editor-link-input]');
+            if (!input) return;
+            if (e.key !== 'Enter') return;
+            e.preventDefault();
+            self._restoreSelection();
+            self._applyLink(input.value);
+            self._togglePopover(self._popoverIdFromElement(input), true);
+        });
+
+        /* popover de imagem — aplicar por URL (campos lidos a partir do
+           popover do botao clicado, mesmo motivo do link acima) */
+        self._on(self.wrap, 'mousedown', function (e) {
+            var btn = self._closestIn(e.target, '[data-ozi-editor-image-apply]');
+            if (!btn) return;
+            e.preventDefault();
+            if (self.isDisabled) return;
+            var popover = btn.closest('.ozi-editor-popover');
+            self._restoreSelection();
+            self._applyImageUrl(
+                popover.querySelector('[data-ozi-editor-image-url-input]').value,
+                popover.querySelector('[data-ozi-editor-image-alt-input]').value,
+                popover.querySelector('[data-ozi-editor-image-width-input]').value,
+                popover.querySelector('[data-ozi-editor-image-height-input]').value,
+                self._pendingAlign(popover));
+            self._togglePopover(self._popoverIdFromElement(btn), true);
+        });
+
+        /* popover de imagem — remover */
+        self._on(self.wrap, 'mousedown', function (e) {
+            var btn = self._closestIn(e.target, '[data-ozi-editor-image-remove]');
+            if (!btn || btn.disabled) return;
+            e.preventDefault();
+            if (self.isDisabled) return;
+            self._restoreSelection();
+            self._removeImage();
+            self._togglePopover(self._popoverIdFromElement(btn), true);
+        });
+
+        /* popover de imagem — Enter no campo de URL aplica */
+        self._on(self.wrap, 'keydown', function (e) {
+            var input = self._closestIn(e.target, '[data-ozi-editor-image-url-input]');
+            if (!input) return;
+            if (e.key !== 'Enter') return;
+            e.preventDefault();
+            var popover = input.closest('.ozi-editor-popover');
+            self._restoreSelection();
+            self._applyImageUrl(
+                input.value,
+                popover.querySelector('[data-ozi-editor-image-alt-input]').value,
+                popover.querySelector('[data-ozi-editor-image-width-input]').value,
+                popover.querySelector('[data-ozi-editor-image-height-input]').value,
+                self._pendingAlign(popover));
+            self._togglePopover(self._popoverIdFromElement(input), true);
+        });
+
+        /* popover de imagem — selecionar arquivo dispara upload automatico
+           (mesmo espirito de acao imediata ja usado em paste/pasteFmt na
+           Fase 2 — selecionar o arquivo ja e o gesto de intencao). Passa o
+           popover do proprio input (nao um campo singular na instancia) —
+           _uploadImage le alt/width/height e mostra o estado "enviando"
+           dentro DESSE popover especifico. */
+        self._on(self.wrap, 'change', function (e) {
+            var input = self._closestIn(e.target, '[data-ozi-editor-image-file-input]');
+            if (!input || !input.files || !input.files[0]) return;
+            if (self.isDisabled) return;
+            var file = input.files[0];
+            input.value = '';
+            self._restoreSelection();
+            self._uploadImage(file, input.closest('.ozi-editor-popover'));
+        });
+
+        /* popover de cor/realce — clique num swatch aplica. `data-ozi-editor-
+           popover-wrap` agora carrega o ID UNICO do popover (nao mais o
+           nome bruto do tool, ver secao [11b]) — o nome semantico
+           ('color'/'highlight', que _applySwatchColor precisa pra saber
+           foreColor vs hiliteColor) e derivado do id via
+           _toolFromPopoverId; fechar o popover certo usa o id direto. */
+        self._on(self.wrap, 'mousedown', function (e) {
+            var sw = self._closestIn(e.target, '[data-ozi-editor-swatch]');
+            if (!sw) return;
+            e.preventDefault();
+            if (self.isDisabled) return;
+            var id = self._popoverIdFromElement(sw);
+            if (!id) return;
+            self._restoreSelection();
+            self._applySwatchColor(self._toolFromPopoverId(id), sw.getAttribute('data-ozi-editor-swatch'));
+            self._togglePopover(id, true);
+        });
+
+        /* popover de cor/realce — "nenhuma" remove a cor. `data-ozi-editor-
+           swatch-none` continua guardando o nome SEMANTICO do tool (setado
+           direto em _buildColorButton, nao afetado pelo refactor de id) —
+           so o fechamento do popover precisa do id, resolvido pelo elemento
+           clicado. */
+        self._on(self.wrap, 'mousedown', function (e) {
+            var none = self._closestIn(e.target, '[data-ozi-editor-swatch-none]');
+            if (!none) return;
+            e.preventDefault();
+            if (self.isDisabled) return;
+            var tool = none.getAttribute('data-ozi-editor-swatch-none');
+            self._restoreSelection();
+            self._applySwatchColor(tool, 'inherit');
+            self._togglePopover(self._popoverIdFromElement(none), true);
+        });
+
+        /* popover de cor/realce — "customizar" (input nativo type=color),
+           aplica no 'change' (usuario fechou o seletor do SO/navegador) */
+        self._on(self.wrap, 'change', function (e) {
+            var input = self._closestIn(e.target, '[data-ozi-editor-swatch-custom]');
+            if (!input) return;
+            if (self.isDisabled) return;
+            var tool = input.getAttribute('data-ozi-editor-swatch-custom');
+            self._restoreSelection();
+            self._applySwatchColor(tool, input.value);
+            self._togglePopover(self._popoverIdFromElement(input), true);
+        });
+
+        /* clique fora — fecha qualquer popover aberto (heading/classes/link/color/highlight) */
         self._on(document, 'mousedown', function (e) {
-            if (self.headingDropdown && _isShown(self.headingDropdown)) {
-                if (!(e.target.closest && e.target.closest('.ozi-editor-heading-wrap'))) self._toggleHeadingDropdown(true);
-            }
-            if (self.classDropdown && _isShown(self.classDropdown)) {
-                if (!(e.target.closest && e.target.closest('.ozi-editor-classes-wrap'))) self._toggleClassDropdown(true);
-            }
+            self._closeOutsidePopovers(e.target);
         });
 
         /* selecao no content */
@@ -1368,7 +3165,18 @@
         this.emitChange('api');
     };
 
+    /* opt-in via data-ozi-editor-counter="true" — conta a partir do texto
+       renderado (content.textContent), nao do HTML/markdown bruto */
+    OziEditor.prototype._updateCounter = function () {
+        if (!this.showCounter || !this.counter) return;
+        var text  = this.content.textContent || '';
+        var chars = text.length;
+        var words = _trim(text) ? _trim(text).split(/\s+/).length : 0;
+        this.counter.textContent = words + ' ' + _t('editor.words') + ' · ' + chars + ' ' + _t('editor.chars');
+    };
+
     OziEditor.prototype.emitChange = function (source) {
+        this._updateCounter();
         _emitEvent(this.textarea, 'ozi:change', {
             component: 'ozi-editor',
             name:      this.key,

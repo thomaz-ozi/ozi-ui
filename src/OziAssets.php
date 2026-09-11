@@ -39,6 +39,10 @@ class OziAssets
         'actions'             => 'modules/ozi-actions/js/ozi-actions.js',
         'suggest'             => 'modules/ozi-suggest/js/ozi-suggest.js',
         'password'            => 'modules/ozi-password-rules/js/ozi-password-rules.js',
+        // motor puro de sanitização do ozi-editor (extraído em 2026-08-28);
+        // o editor declara deps:['validate','editor-sanitize'] no _pluginMap,
+        // então precisa vir ANTES dele — mesma ordem do _allPlugins
+        'editor-sanitize'     => 'modules/ozi-editor-sanitize/js/ozi-editor-sanitize.js',
         'loaddata'            => 'modules/ozi-loaddata/js/ozi-loaddata.js',
         'select'              => 'components/ozi-select/js/ozi-select.js',
         'autocomplete'        => 'components/ozi-autocomplete/js/ozi-autocomplete.js',

@@ -2,10 +2,39 @@
  * ------------------------------------------
  * ozi-select
  * ------------------------------------------
- * Ver: 6.3.0
- * 2026-08-24
+ * Ver: 6.4.0
+ * 2026-09-01
  *
  * Changelog:
+ *   - v6.4.0: [FEAT] Action buttons nativos por opção — novo campo `actions: [{ name, icon,
+ *       ariaLabel }]` no objeto de opção. Renderiza um botão por ação (ícone via `<i class="...">`,
+ *       fallback pro próprio `name` como texto se não houver ícone) dentro de
+ *       `.ozi-select-option-actions`, tanto no caminho padrão (image+label+subLabel) quanto dentro
+ *       de opções `optionHtml` (100% custom) — helper único `_buildOptionActions()` reaproveitado
+ *       nos dois branches de `buildOption()`. O clique é reconhecido pelo listener delegado ANTES
+ *       do branch de seleção (`.ozi-select-option-action` checado antes de `.ozi-select-option`,
+ *       mesmo padrão que `.ozi-select-tag-remove` já usava) — não seleciona/desseleciona a opção,
+ *       emite **`ozi:option-action`** com `{ action, item }` no `detail` (além dos campos-base do
+ *       contrato). `emit()` ganha 3º parâmetro opcional `extra` (mesclado no `detail` via
+ *       `Object.assign`) pra viabilizar esse payload — as 5 chamadas existentes
+ *       (`ozi:change`/`open`/`close`/`select-footer`/`select-create`) continuam idênticas, nenhuma
+ *       passa 3º argumento. `ariaLabel`/`name` nunca passam por `innerHTML` (setAttribute/
+ *       textContent). Aditivo → MINOR do pacote.
+ *   - v6.4.0: [FEAT] Campo `labelHtml: true` por opção — opt-in que restaura o `innerHTML` que a
+ *       v6.3.1 tornou padrão-escapado em `label`/`subLabel` (3 pontos: `buildOption()`,
+ *       `updateUI()`, `buildSelectedPreview()`). Flag único cobrindo label+subLabel juntos, mesmo
+ *       padrão de `optionClass`/`optionHtml` (flags de opção inteira, não por sub-campo). Entra em
+ *       `shouldSkipAutoSubmitKey()` — não vaza pro submit automático como hidden input.
+ *   - v6.3.1: [FIX/SECURITY] `label`/`subLabel` de cada opção passam a ser renderizados via
+ *       `textContent` (antes: `innerHTML` sem nenhum escape) em buildOption() (lista), updateUI()
+ *       (tags do modo multiple) e buildSelectedPreview() (preview do modo single) — um `label`
+ *       vindo de dado não confiável (ex.: cadastro de usuário) podia injetar HTML/script
+ *       arbitrário no dropdown. Sem opt-in nesta versão: nenhum consumidor atual depende de HTML
+ *       em label/subLabel (verificado — não há highlight de busca nem uso de `<mark>` no
+ *       codebase); um flag de exceção explícita (`labelHtml`) fica para a v6.4.0, que já é
+ *       aditiva. `buildCreatableOption()` (template confiável, não dado de opção) e a
+ *       renderização de `optionHtml` (100% custom, já documentado como tal) ficam de fora — não
+ *       são a mesma classe de problema. Correção compatível → PATCH do pacote.
  *   - v6.3.0: [FEAT] Modo "creatable" (`data-ozi-select-creatable`). Quando a busca não
  *       encontra nenhuma opção e o texto digitado não está vazio, o próprio dropdown mostra
  *       uma opção "Adicionar «texto»" no lugar da mensagem de vazio; selecioná-la (clique ou
@@ -559,6 +588,19 @@
                 return;
             }
 
+            // action button por opção (v6.4.0): tem que vir ANTES de '.ozi-select-option'
+            // (o botão é filho da opção — se checássemos a opção primeiro, o clique cairia
+            // sempre em toggleItem/createFromQuery em vez da ação).
+            match = target.closest('.ozi-select-option-action');
+            if (match) {
+                e.preventDefault(); e.stopPropagation();
+                if (self.isDisabled()) return;
+                var actionOptionEl = match.closest('.ozi-select-option');
+                var actionItem = actionOptionEl ? self.findOptionByValue(actionOptionEl.getAttribute('data-value')) : null;
+                if (actionItem) self.emit('ozi:option-action', 'user', { action: match.getAttribute('data-ozi-select-action'), item: actionItem });
+                return;
+            }
+
             match = target.closest('.ozi-select-option');
             if (match) {
                 e.preventDefault();
@@ -765,7 +807,7 @@
     OziSelect.prototype.shouldSkipAutoSubmitKey = function (key) {
         key = String(key || '');
         if (!key || key.charAt(0) === '_') return true;
-        return ['selected', 'optionHtml', 'optionClass'].indexOf(key) !== -1;
+        return ['selected', 'optionHtml', 'optionClass', 'labelHtml'].indexOf(key) !== -1;
     };
 
     OziSelect.prototype.normalizeSubmitMode = function (raw) {
@@ -973,6 +1015,27 @@
         this.emit('ozi:select-create', 'user');
     };
 
+    // action buttons por opção (v6.4.0) — renderiza em qualquer branch (padrão ou optionHtml),
+    // um único helper reaproveitado pelos dois pra não duplicar o loop.
+    OziSelect.prototype._buildOptionActions = function (item) {
+        var list = Array.isArray(item.actions) ? item.actions : [];
+        if (!list.length) return null;
+        var wrap = _make('div', { class: 'ozi-select-option-actions' });
+        list.forEach(function (a) {
+            if (!a || !a.name) return;
+            var btn = _make('button', {
+                type:  'button',
+                class: 'ozi-select-option-action',
+                'data-ozi-select-action': a.name
+            });
+            btn.setAttribute('aria-label', String(a.ariaLabel || a.name));
+            if (a.icon) { btn.appendChild(_make('i', { class: a.icon, 'aria-hidden': 'true' })); }
+            else        { btn.textContent = String(a.name); }
+            wrap.appendChild(btn);
+        });
+        return wrap;
+    };
+
     OziSelect.prototype.buildOption = function (item) {
         var selected = this.isSelected(item.value);
         var option = _make('div', {
@@ -987,7 +1050,10 @@
         if (item.optionHtml && String(item.optionHtml).trim()) {
             var custom = _make('div', { class: 'ozi-select-option-custom' });
             this.renderOptionalHtml(custom, item.optionHtml);
-            option.appendChild(custom); return option;
+            option.appendChild(custom);
+            var actionsA = this._buildOptionActions(item);
+            if (actionsA) { option.classList.add('is-with-actions'); option.appendChild(actionsA); }
+            return option;
         }
         var content = _make('div', { class: 'ozi-select-option-content' });
         if (item.image) {
@@ -1001,14 +1067,20 @@
         }
         var texts = _make('div', { class: 'ozi-select-option-texts' });
         var label = _make('div', { class: 'ozi-select-option-label' });
-        if (item.label && String(item.label).trim()) { label.innerHTML = String(item.label); } else { label.textContent = String(item.value || ''); }
+        if (item.label && String(item.label).trim()) {
+            if (item.labelHtml) { label.innerHTML = String(item.label); } else { label.textContent = String(item.label); }
+        } else {
+            label.textContent = String(item.value || '');
+        }
         texts.appendChild(label);
         if (item.subLabel && String(item.subLabel).trim()) {
             var sub = _make('div', { class: 'ozi-select-option-sublabel' });
-            sub.innerHTML = String(item.subLabel);
+            if (item.labelHtml) { sub.innerHTML = String(item.subLabel); } else { sub.textContent = String(item.subLabel); }
             texts.appendChild(sub);
         }
         content.appendChild(texts); option.appendChild(content);
+        var actionsB = this._buildOptionActions(item);
+        if (actionsB) { option.classList.add('is-with-actions'); option.appendChild(actionsB); }
         return option;
     };
 
@@ -1040,7 +1112,11 @@
                     tag.appendChild(img);
                 }
                 var tagLabel = _make('span', { class: 'ozi-select-tag-label' });
-                if (item.label && String(item.label).trim()) { tagLabel.innerHTML = String(item.label); } else { tagLabel.textContent = String(item.value || ''); }
+                if (item.label && String(item.label).trim()) {
+                    if (item.labelHtml) { tagLabel.innerHTML = String(item.label); } else { tagLabel.textContent = String(item.label); }
+                } else {
+                    tagLabel.textContent = String(item.value || '');
+                }
                 tag.appendChild(tagLabel);
                 var removeBtn = _make('button', { type: 'button', class: 'ozi-select-tag-remove', 'data-value': item.value, 'aria-label': 'Remover ' + (item.label || item.value || '') });
                 removeBtn.innerHTML = '&times;';
@@ -1065,11 +1141,15 @@
         }
         var texts = _make('div', { class: 'ozi-select-value-texts' });
         var label = _make('div', { class: 'ozi-select-value-label' });
-        if (item.label && String(item.label).trim()) { label.innerHTML = String(item.label); } else { label.textContent = String(item.value || ''); }
+        if (item.label && String(item.label).trim()) {
+            if (item.labelHtml) { label.innerHTML = String(item.label); } else { label.textContent = String(item.label); }
+        } else {
+            label.textContent = String(item.value || '');
+        }
         texts.appendChild(label);
         if (item.subLabel && String(item.subLabel).trim()) {
             var sub = _make('div', { class: 'ozi-select-value-sublabel' });
-            sub.innerHTML = String(item.subLabel);
+            if (item.labelHtml) { sub.innerHTML = String(item.subLabel); } else { sub.textContent = String(item.subLabel); }
             texts.appendChild(sub);
         }
         content.appendChild(texts); return content;
@@ -1171,7 +1251,7 @@
     // 2 arquivos do Central RH ainda consomem e responsabilidade do shim em
     // integrations/adapters/ozi-change-v1-compat.shim.js (nunca do componente).
 
-    OziSelect.prototype.emit = function (eventName, source) {
+    OziSelect.prototype.emit = function (eventName, source, extra) {
         var detail = {
             component: 'ozi-select',
             name:      this.key,
@@ -1179,6 +1259,7 @@
             items:     this.getSelectedItems(),
             source:    source || 'user'
         };
+        if (extra && typeof extra === 'object') Object.assign(detail, extra);
         var helpers = window.OZI && window.OZI.helpers;
         if (helpers && typeof helpers.emit === 'function') {
             helpers.emit(this.root, eventName, detail);

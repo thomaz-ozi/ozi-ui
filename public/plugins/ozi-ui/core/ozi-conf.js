@@ -3,9 +3,15 @@
  *  ------------------------------------------
  *  ozi-conf
  *  ------------------------------------------
- *  Ver: 3.0.0
- *  2026-07-05
+ *  Ver: 3.0.1
+ *  2026-08-28
  *
+ *  v3.0.1 — [FIX] entrada `editor-sanitize` no _pluginMap/_allPlugins (módulo
+ *    puro extraído do ozi-editor, Fase 3 da nova leva de ferramentas — ver
+ *    ozi-ui-docs/horizonte/roadmap/ozi-editor-subdivisao.md); `editor` passa a
+ *    declarar `deps: ['validate', 'editor-sanitize']`. Sem mudança de
+ *    comportamento do próprio ozi-conf — bump patch por ser só adição de
+ *    entrada no mapa, não mudança de contrato.
  *  v3.0.0 — versionamento da geração v2 (major +1). Mantém-se a fonte única de
  *    _pluginMap/_allPlugins, classMap por tema e resolução de deps.
  *
@@ -152,6 +158,13 @@
             lang: null
         },
 
+        'editor-sanitize': {
+            deps: [],
+            js:   'modules/ozi-editor-sanitize/js/ozi-editor-sanitize.js',
+            css:  null,
+            lang: null
+        },
+
         'loaddata': {
             deps: ['validate', 'actions'],
             js:   'modules/ozi-loaddata/js/ozi-loaddata.js',
@@ -176,7 +189,7 @@
         },
 
         'editor': {
-            deps: ['validate'],
+            deps: ['validate', 'editor-sanitize'],
             js:   'components/ozi-editor/js/ozi-editor.js',
             css:  'components/ozi-editor/css/ozi-editor.css',
             lang: 'components/ozi-editor/lang/{lang}.js'
@@ -302,6 +315,7 @@
         'actions',
         'suggest',
         'password-rules',
+        'editor-sanitize',
         'loaddata',
         'select',
         'autocomplete',

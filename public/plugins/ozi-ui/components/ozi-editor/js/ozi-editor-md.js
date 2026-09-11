@@ -2,9 +2,32 @@
  * ------------------------------------------
  * ozi-editor-md
  * ------------------------------------------
- * Ver: 2.0.0
- * 2026-07-04
+ * Ver: 2.3.0
+ * 2026-08-28
  *
+ * [2.3.0] Fase 3 da nova leva de ferramentas do ozi-editor: conversor real
+ *         pra `image` — `![alt](url)` ↔ `<img src="url" alt="alt">`, mesmo
+ *         padrao do conversor de `link` (checado ANTES dele — a regex de
+ *         link casaria a parte `[alt](url)` e sobraria um `!` solto na
+ *         frente se a ordem fosse invertida). `alt` passa por `_escapeHtml`
+ *         (robustez de parsing); `url` cru, valida esquema fica pro
+ *         `_sanitizeHtml` do ozi-editor.js.
+ * [2.2.0] Fase 2 da nova leva de ferramentas do ozi-editor: conversor real
+ *         pra `link` — `[texto](url)` ↔ `<a href="url">texto</a>` (unica
+ *         ferramenta da fase com sintaxe MD nativa; `unlink`/`paste`/
+ *         `pasteFmt` nao produzem marcacao persistente, `color`/`highlight`
+ *         seguem BLOCKED_IN_MD — sem sintaxe nativa, decisao da Fase 1
+ *         mantida). O HTML gerado por `_inlineToHtml` ainda passa por
+ *         `_sanitizeHtml` no ozi-editor.js (`_convertIn`), que valida o
+ *         esquema do `href` — a conversao aqui nao duplica essa checagem.
+ * [2.1.0] Fase 1 da nova leva de ferramentas do ozi-editor (~13 ferramentas
+ *         planejadas, ver ozi-ui-docs/horizonte/roadmap): conversores pra
+ *         `strike` (~~texto~~ ↔ <s>), `quote` (> linha ↔ <blockquote>) e
+ *         `hr` (--- ↔ <hr>) — os 3 subconjuntos que ja tem sintaxe MD nativa
+ *         entre as ferramentas simples desta fase. `color`/`highlight` (fase
+ *         2) ficam de fora de proposito (sem sintaxe MD nativa, BLOCKED_IN_MD
+ *         no ozi-editor.js). `link`/`image` (fase 2/3) continuam previstos
+ *         mas nao entraram aqui.
  * [2.0.0] [V2-F2] Zero jQuery (contrato de camadas v2 §2). Removido o branch
  *                 de boot `window.jQuery($fn)`; os conversores (mdToHtml/htmlToMd)
  *                 ja eram vanilla puro. Boot: OZI.ready (primario) → readyState/
@@ -29,9 +52,14 @@
  *   # … ######              → <h1> … <h6>
  *   **texto**               → <strong>
  *   *texto* ou _texto_      → <em>
+ *   ~~texto~~               → <s>
  *   <u>texto</u>            → <u>  (passthrough — sem equiv. MD nativo)
  *   - item / * item         → <ul><li>
  *   1. item                 → <ol><li>
+ *   > linha                 → <blockquote>
+ *   ---  (ou ***, ___)      → <hr>
+ *   [texto](url)            → <a href="url">
+ *   ![alt](url)             → <img src="url" alt="alt">
  *   ```código```            → <pre><code>
  *   `código`                → <code>
  *   | col | col |           → <table> GFM
@@ -42,9 +70,14 @@
  *   <h1>…<h6>   → # … ######
  *   <strong>    → **texto**
  *   <em>        → *texto*
+ *   <s>/<strike> → ~~texto~~
  *   <u>         → <u>texto</u>  (mantém como HTML — sem equiv. MD)
  *   <ul><li>    → - item
  *   <ol><li>    → 1. item (numeração sequencial)
+ *   <blockquote> → > linha
+ *   <hr>        → ---
+ *   <a href>    → [texto](url)
+ *   <img>       → ![alt](url)
  *   <pre><code> → ```\ncódigo\n```
  *   <code>      → `código`
  *   <table>     → tabela GFM
@@ -52,8 +85,8 @@
  *   <br>        → dois espaços + \n
  *   <span>      → texto puro (classe perdida — sem equiv. MD)
  *
- * ── EXTENSÃO FUTURA ───────────────────────────────────────────────────
- *   Links, imagens, strikethrough, task lists → v1.1.0
+ * ── FORA DE ESCOPO ────────────────────────────────────────────────────
+ *   Cor/realce seguem BLOCKED_IN_MD de propósito — sem sintaxe nativa.
  */
 
 (function (window) {
@@ -112,6 +145,26 @@
                 continue;
             }
 
+            /* ── linha horizontal (thematic break) — checada antes da lista
+               não ordenada pra nao colidir com "- item" (exige 3+ marcadores
+               sem texto na linha) ── */
+            if (/^ {0,3}([-*_])( *\1){2,}\s*$/.test(line)) {
+                output.push('<hr>');
+                i++;
+                continue;
+            }
+
+            /* ── citação (blockquote) — acumula linhas consecutivas com '>' ── */
+            if (/^>\s?/.test(line)) {
+                var quoteLines = [];
+                while (i < lines.length && /^>\s?/.test(lines[i])) {
+                    quoteLines.push(lines[i].replace(/^>\s?/, ''));
+                    i++;
+                }
+                output.push('<blockquote>' + quoteLines.map(_inlineToHtml).join('<br>') + '</blockquote>');
+                continue;
+            }
+
             /* ── lista não ordenada ── */
             if (/^[-*]\s+/.test(line)) {
                 var ulResult = _parseList(lines, i, 'ul');
@@ -140,12 +193,15 @@
             /* ── linha em branco ── */
             if (_trim(line) === '') { i++; continue; }
 
-            /* ── parágrafo — acumula linhas consecutivas não vazias ── */
+            /* ── parágrafo — acumula linhas consecutivas não vazias ──
+               (para tambem antes de '>'/hr sem linha em branco no meio,
+               senao o paragrafo engoliria a citacao/linha horizontal) */
             var paraLines = [];
             while (
                 i < lines.length &&
                 _trim(lines[i]) !== '' &&
-                !/^(#{1,6}\s|```|[-*]\s|\d+\.\s|\|)/.test(lines[i])
+                !/^(#{1,6}\s|```|[-*]\s|\d+\.\s|\||>)/.test(lines[i]) &&
+                !/^ {0,3}([-*_])( *\1){2,}\s*$/.test(lines[i])
                 ) {
                 paraLines.push(lines[i]);
                 i++;
@@ -177,6 +233,25 @@
 
         /* **negrito** */
         text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+
+        /* ~~riscado~~ — checado antes de *itálico* (delimitador '~' nao colide) */
+        text = text.replace(/~~([^~]+)~~/g, '<s>$1</s>');
+
+        /* ![alt](url) — CHECADO ANTES de [texto](url): a regex de link casaria
+           a parte [alt](url) e deixaria um "!" solto na frente, produzindo
+           !<a href="url">alt</a> em vez de uma imagem. alt passa por
+           _escapeHtml (robustez de parsing, evita truncar no 1o "); url cru,
+           mesmo padrao ja usado no link — valida esquema fica pro
+           _sanitizeHtml do ozi-editor.js (_convertIn), que tambem descarta
+           qualquer atributo injetado via quebra de aspas (apaga tudo e
+           restaura so o que foi validado). */
+        text = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, function (_, alt, url) {
+            return '<img src="' + url + '" alt="' + _escapeHtml(alt) + '">';
+        });
+
+        /* [texto](url) — validacao de esquema fica pro _sanitizeHtml do
+           ozi-editor.js (_convertIn ja passa o resultado por la) */
+        text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
 
         /* *itálico* ou _itálico_ */
         text = text.replace(/\*([^*]+)\*/g, '<em>$1</em>');
@@ -294,6 +369,26 @@
             /* <u> sem equivalente MD — mantém como HTML literal */
             case 'U':
                 return '<u>' + inner + '</u>';
+
+            case 'S':
+            case 'STRIKE':
+                return '~~' + _trim(inner) + '~~';
+
+            case 'BLOCKQUOTE': {
+                var quoteMd = _trim(inner).split('\n').map(function (l) {
+                    return '> ' + _trim(l);
+                }).join('\n');
+                return '\n\n' + quoteMd + '\n\n';
+            }
+
+            case 'HR':
+                return '\n\n---\n\n';
+
+            case 'A':
+                return '[' + _trim(inner) + '](' + (node.getAttribute('href') || '') + ')';
+
+            case 'IMG':
+                return '![' + (node.getAttribute('alt') || '') + '](' + (node.getAttribute('src') || '') + ')';
 
             case 'CODE':
                 /* se pai é PRE, o PRE cuida do bloco */

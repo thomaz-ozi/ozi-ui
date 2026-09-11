@@ -2,8 +2,8 @@
  * ------------------------------------------
  * ozi-password-rules
  * ------------------------------------------
- * Ver: 1.0.1
- * 2026-05-30
+ * Ver: 1.1.0
+ * 2026-08-18
  *
  * Responsabilidade:
  *   - Motor puro de validacao de regras de senha
@@ -19,6 +19,11 @@
  * Expoe: OZI.modules.passwordRules, window.oziPasswordRules (compat)
  *
  * Changelog:
+ *   - v1.1.0: [feat] params.disabled — array de tokens publicos (lowercase,
+ *     uppercase, number, special, no-space, no-email-parts, confirm, user,
+ *     length) e/ou chaves internas. Regras desligadas saem do access e do
+ *     rulesList(). 'mail' nao e desabilitavel (sempre obrigatorio). Paridade
+ *     com o motor embutido de ozi-auth v4.1.0.
  *   - v1.0.1: [FIX-B] Removido hook afterRender vazio ('module:password-rules').
  *     Modulo e funcao pura sem estado — nao ha reinit necessario.
  *     Hook vazio apenas poluia o log OZI.hooks.run() com entradas inuteis.
@@ -38,6 +43,49 @@
     // ---------------------------------------------
 
     if (window.OziPasswordRules) return;
+
+
+    // ---------------------------------------------
+    // [1b] DISABLE — tokens publicos -> chaves internas
+    // ---------------------------------------------
+
+    // paridade com ozi-auth v4.1.0. 'mail' ausente de proposito: email
+    // e sempre obrigatorio.
+    var _DISABLE_TOKENS = {
+        'lowercase':      'passLowercase',
+        'uppercase':      'passUppercase',
+        'number':         'passNumber',
+        'special':        'passSpecial',
+        'no-space':       'passNoSpace',
+        'no-email-parts': 'passNoEmailParts',
+        'confirm':        'passConfirm',
+        'user':           'userValid',
+        'length':         'passLength'
+    };
+
+    var _ACCESS_KEYS = [
+        'userValid', 'mailValid', 'passLength', 'passLowercase', 'passUppercase',
+        'passNumber', 'passSpecial', 'passNoSpace', 'passNoEmailParts', 'passConfirm'
+    ];
+
+    // aceita array (ou item unico) de tokens publicos e/ou chaves internas
+    // -> mapa { chave:true }. 'mail'/'mailValid' sao ignorados (sempre obrigatorio).
+    function _normalizeDisabled(list) {
+        var out = {};
+        if (!list) return out;
+        (Array.isArray(list) ? list : [list]).forEach(function (item) {
+            var t = String(item == null ? '' : item).trim();
+            if (!t) return;
+            var low = t.toLowerCase();
+            if (low === 'mail' || t === 'mailValid') return; // nunca desabilitavel
+            if (Object.prototype.hasOwnProperty.call(_DISABLE_TOKENS, low)) {
+                out[_DISABLE_TOKENS[low]] = true;
+            } else if (_ACCESS_KEYS.indexOf(t) !== -1) {
+                out[t] = true; // ja e chave interna
+            }
+        });
+        return out;
+    }
 
 
     // ---------------------------------------------
@@ -110,16 +158,23 @@
 
         var passConfirm = confirm.length > 0 && confirm === password;
 
-        var access = userValid
-            && mailValid
-            && passLength
-            && passLowercase
-            && passUppercase
-            && passNumber
-            && passSpecial
-            && passNoSpace
-            && passNoEmailParts
-            && passConfirm;
+        var checks = {
+            userValid:        userValid,
+            mailValid:        mailValid,
+            passLength:       passLength,
+            passLowercase:    passLowercase,
+            passUppercase:    passUppercase,
+            passNumber:       passNumber,
+            passSpecial:      passSpecial,
+            passNoSpace:      passNoSpace,
+            passNoEmailParts: passNoEmailParts,
+            passConfirm:      passConfirm
+        };
+
+        var disabled = _normalizeDisabled(params.disabled);
+        var access = _ACCESS_KEYS.every(function (k) {
+            return disabled[k] ? true : checks[k];
+        });
 
         return {
             userValid:        userValid,
@@ -212,7 +267,8 @@
             });
         }
 
-        return rules;
+        var disabled = _normalizeDisabled(params.disabled);
+        return rules.filter(function (r) { return !disabled[r.key]; });
     }
 
 

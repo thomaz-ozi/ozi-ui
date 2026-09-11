@@ -1,8 +1,14 @@
 /**
  * components/ozi-select/css/ozi-select.css
- * Versão: 1.2.0
+ * Versão: 1.3.0
  *
  * Changelog:
+ *   - v1.3.0: [FEAT] Action buttons por opção (.ozi-select-option-actions /
+ *     .ozi-select-option-action) — acompanha o ozi-select.js v6.4.0. `.ozi-select-option` é
+ *     `display:block` por padrão; o modificador `.is-with-actions` (aplicado só quando a opção
+ *     declara `actions[]`) vira flex pra pinar o wrapper de ações à direita sem alterar o
+ *     layout das opções sem ações. Tokens novos (com fallback): --ozi-select-option-action-color,
+ *     --ozi-select-option-action-hover-bg.
  *   - v1.2.0: [FEAT] Opção "creatable" (.ozi-select-option-creatable) — mesmo bloco visual
  *     de .ozi-select-option, com a cor de destaque (--ozi-select-creatable-color, fallback
  *     na cor primária do tema) para diferenciar do "Adicionar «texto»" das opções reais.
@@ -323,6 +329,32 @@
 .ozi-select-option-creatable .ozi-select-option-label {
     color:       var(--ozi-select-creatable-color, var(--ozi-color-primary, #2563eb));
     font-weight: 500;
+}
+
+/* ─── OPTION ACTIONS (v6.4.0) ────────────────────────── */
+/* .is-with-actions só entra quando a opção declara actions[] — não afeta o display:block
+   padrão de .ozi-select-option nem o layout das opções sem ações. */
+
+.ozi-select-option.is-with-actions {
+    display: flex; align-items: center; gap: 8px;
+}
+.ozi-select-option.is-with-actions > .ozi-select-option-content,
+.ozi-select-option.is-with-actions > .ozi-select-option-custom {
+    flex: 1 1 auto; min-width: 0;
+}
+.ozi-select-option-actions {
+    display: flex; align-items: center; gap: 0.25rem; flex: 0 0 auto;
+}
+.ozi-select-option-action {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 1.5rem; height: 1.5rem; padding: 0; background: transparent; border: 0;
+    border-radius: 0.25rem; cursor: pointer;
+    color: var(--ozi-select-option-action-color, var(--ozi-select-placeholder-color));
+}
+.ozi-select-option-action:hover,
+.ozi-select-option-action:focus {
+    background-color: var(--ozi-select-option-action-hover-bg, var(--ozi-select-hover-bg));
+    outline: 0;
 }
 
 /* ─── TAGS (multi) ──────────────────────────────────── */

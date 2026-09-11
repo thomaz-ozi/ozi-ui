@@ -2,8 +2,8 @@
  * ------------------------------------------
  * ozi-auth
  * ------------------------------------------
- * Ver: 4.0.1
- * 2026-07-23
+ * Ver: 4.1.0
+ * 2026-08-18
  *
  * Responsabilidade:
  *   - Validacao de senha/confirmacao/email/usuario aplicada a um <form> inteiro
@@ -15,7 +15,7 @@
  *     de eventos nativa no document (um unico bind global).
  *
  * Campos (atributos): data-ozi-auth-{user,mail,pass,confirm}
- * Config no submit:    data-ozi-auth-{submit,list-id,dropdown,check}
+ * Config no submit:    data-ozi-auth-{submit,list-id,dropdown,check,disable}
  *
  * Dependencias: ozi.js (OZI.hooks, OZI.helpers, OZI.lang, OZI.conf.pluginConf.auth)
  *   — zero jQuery (contrato de camadas v2 §2).
@@ -24,6 +24,15 @@
  * Eventos: ozi:init, ozi:auth-change, ozi:auth-ready, ozi:auth-broken, ozi:destroy
  *
  * Changelog:
+ *   - v4.1.0: [feat] data-ozi-auth-disable no botao submit — desliga regras
+ *       individuais (tokens: lowercase, uppercase, number, special, no-space,
+ *       no-email-parts, confirm, user, length). Regra desligada some da lista e
+ *       do dropdown, sai do AND do access, e o campo correspondente deixa de ser
+ *       decorado. 'mail' NAO e desabilitavel (email sempre obrigatorio) — com isso
+ *       o access nunca fica vacuamente true. Motor _oziAuth passa a aceitar
+ *       data.disabled (mapa de chaves internas). Espelhado no motor puro
+ *       ozi-password-rules v1.1.0. Retrocompativel: sem o atributo, as 9 regras
+ *       de sempre. (Pedido de customizacao — thomaz.)
  *   - v4.0.1: [i18n] Adicionadas 5 chaves de lang que o JS referencia mas os
  *       dicionarios nao tinham (caiam no fallback PT embutido; console avisava
  *       "chave nao encontrada" e en/es viam portugues): auth.mailRequired (193),
@@ -117,9 +126,58 @@
         return null;
     }
 
+    function _warn(msg) {
+        if (window.console && console.warn) console.warn('[ozi-auth] ' + msg);
+    }
+
+    // tokens publicos de data-ozi-auth-disable -> chave interna do resultado.
+    // 'mail' intencionalmente ausente: email e sempre obrigatorio (v4.1.0).
+    var _DISABLE_TOKENS = {
+        'lowercase':      'passLowercase',
+        'uppercase':      'passUppercase',
+        'number':         'passNumber',
+        'special':        'passSpecial',
+        'no-space':       'passNoSpace',
+        'no-email-parts': 'passNoEmailParts',
+        'confirm':        'passConfirm',
+        'user':           'userValid',
+        'length':         'passLength'
+    };
+
+    // chaves internas que compoem o access (na ordem de avaliacao)
+    var _ACCESS_KEYS = [
+        'userValid', 'mailValid', 'passLength', 'passLowercase', 'passUppercase',
+        'passNumber', 'passSpecial', 'passNoSpace', 'passNoEmailParts', 'passConfirm'
+    ];
+
+    // sub-conjunto que decora o campo senha (mailValid e passConfirm ficam de fora)
+    var _PASS_KEYS = [
+        'passLength', 'passLowercase', 'passUppercase', 'passNumber',
+        'passSpecial', 'passNoSpace', 'passNoEmailParts'
+    ];
+
+    // "lowercase, no-space" -> { passLowercase:true, passNoSpace:true }.
+    // Token desconhecido (ou 'mail') e ignorado com aviso no console.
+    function _parseDisabled(raw) {
+        var disabled = {};
+        String(raw == null ? '' : raw).split(',').forEach(function (tok) {
+            var t = _trim(tok).toLowerCase();
+            if (!t) return;
+            if (Object.prototype.hasOwnProperty.call(_DISABLE_TOKENS, t)) {
+                disabled[_DISABLE_TOKENS[t]] = true;
+            } else if (t === 'mail') {
+                _warn('data-ozi-auth-disable: "mail" nao pode ser desabilitado ' +
+                      '(email sempre obrigatorio) — ignorado.');
+            } else {
+                _warn('data-ozi-auth-disable: token desconhecido "' + t + '" — ignorado.');
+            }
+        });
+        return disabled;
+    }
+
 
     // ─────────────────────────────────────────────
-    // [2] MOTOR DE VALIDACAO (puro — inalterado)
+    // [2] MOTOR DE VALIDACAO (puro — access filtra data.disabled)
     // ─────────────────────────────────────────────
 
     function _oziAuth(data) {
@@ -174,17 +232,10 @@
 
         result.passConfirm = confirm.length > 0 && confirm === pass;
 
-        result.access =
-            result.userValid &&
-            result.mailValid &&
-            result.passLength &&
-            result.passLowercase &&
-            result.passUppercase &&
-            result.passNumber &&
-            result.passSpecial &&
-            result.passNoSpace &&
-            result.passNoEmailParts &&
-            result.passConfirm;
+        var disabled = data.disabled || {};
+        result.access = _ACCESS_KEYS.every(function (k) {
+            return disabled[k] ? true : result[k];
+        });
 
         return result;
     }
@@ -194,7 +245,8 @@
     // [3] REGRAS — textos via _t()
     // ─────────────────────────────────────────────
 
-    function _getPassRules(passMin, passMax) {
+    function _getPassRules(passMin, passMax, disabled) {
+        disabled = disabled || {};
         return [
             { key: 'mailValid',        text: _t('auth.mailRequired', 'Preencher email obrigatório') },
             { key: 'passLength',       text: _t('auth.passLength', '{min} até {max} caracteres', { min: passMin, max: passMax }), badge: true, passMin: passMin, passMax: passMax },
@@ -204,11 +256,13 @@
             { key: 'passSpecial',      text: _t('auth.special', '1 caractere especial') },
             { key: 'passNoSpace',      text: _t('auth.noSpace', 'Não pode conter espaços') },
             { key: 'passNoEmailParts', text: _t('auth.noEmailParts', 'Não pode conter partes do email') }
-        ];
+        ].filter(function (r) { return !disabled[r.key]; });
     }
 
-    function _getConfirmRules() {
-        return [{ key: 'passConfirm', text: _t('auth.confirm', 'Senha e confirmação devem ser iguais') }];
+    function _getConfirmRules(disabled) {
+        disabled = disabled || {};
+        return [{ key: 'passConfirm', text: _t('auth.confirm', 'Senha e confirmação devem ser iguais') }]
+            .filter(function (r) { return !disabled[r.key]; });
     }
 
 
@@ -218,19 +272,20 @@
 
     function _getMode(form) {
         var submit = form.querySelector('[data-ozi-auth-submit]');
-        if (!submit) return { submit: null, listId: '', list: false, dropdown: true, checkIcons: null };
+        if (!submit) return { submit: null, listId: '', list: false, dropdown: true, checkIcons: null, disabled: {} };
 
         var listId      = _trim(submit.getAttribute('data-ozi-auth-list-id'));
         var hasDropdown = submit.matches('[data-ozi-auth-dropdown]');
         var checkRaw    = _trim(submit.getAttribute('data-ozi-auth-check'));
         var checkIcons  = null;
+        var disabled    = _parseDisabled(submit.getAttribute('data-ozi-auth-disable'));
 
         if (checkRaw) {
             var parts = checkRaw.split(',').map(_trim).filter(Boolean);
             checkIcons = { invalid: parts[0] || '', valid: parts[1] || parts[0] || '' };
         }
 
-        return { submit: submit, listId: listId, list: !!listId, dropdown: hasDropdown || !listId, checkIcons: checkIcons };
+        return { submit: submit, listId: listId, list: !!listId, dropdown: hasDropdown || !listId, checkIcons: checkIcons, disabled: disabled };
     }
 
 
@@ -345,8 +400,8 @@
         if (_listReady.has(container)) return container;
         _listReady.add(container);
 
-        var passRules    = _getPassRules(passMin, passMax);
-        var confirmRules = _getConfirmRules();
+        var passRules    = _getPassRules(passMin, passMax, mode.disabled);
+        var confirmRules = _getConfirmRules(mode.disabled);
         var rulesHtml    = '';
         passRules.forEach(function (r) { rulesHtml += _buildRuleItemHtml(r); });
         confirmRules.forEach(function (r) { rulesHtml += _buildRuleItemHtml(r); });
@@ -422,12 +477,12 @@
 
         if (pass && !_dropdownReady.has(pass)) {
             _dropdownReady.add(pass);
-            _bindDropdown(pass, _createDropdown(pass, _getPassRules(passMin, passMax), 'ozi-auth-dropdown-pass'));
+            _bindDropdown(pass, _createDropdown(pass, _getPassRules(passMin, passMax, mode.disabled), 'ozi-auth-dropdown-pass'));
         }
 
-        if (confirm && !_dropdownReady.has(confirm)) {
+        if (confirm && !_dropdownReady.has(confirm) && !mode.disabled.passConfirm) {
             _dropdownReady.add(confirm);
-            _bindDropdown(confirm, _createDropdown(confirm, _getConfirmRules(), 'ozi-auth-dropdown-confirm'));
+            _bindDropdown(confirm, _createDropdown(confirm, _getConfirmRules(mode.disabled), 'ozi-auth-dropdown-confirm'));
         }
     }
 
@@ -575,7 +630,8 @@
     // ─────────────────────────────────────────────
 
     function _evaluateForm(form, source) {
-        var mode = _getMode(form);
+        var mode     = _getMode(form);
+        var disabled = mode.disabled || {};
 
         var mail    = form.querySelector('[data-ozi-auth-mail]');
         var pass    = form.querySelector('[data-ozi-auth-pass]');
@@ -594,17 +650,17 @@
             password:     _val(pass),
             confirm:      _val(confirm),
             passMin:      passMin,
-            passMax:      passMax
+            passMax:      passMax,
+            disabled:     disabled
         });
 
         result.passLen = _val(pass).length;
 
         _updateFieldState(mail, result.mailValid, _val(pass) === '');
-        _updateFieldState(pass, (
-            result.passLength && result.passLowercase && result.passUppercase &&
-            result.passNumber && result.passSpecial && result.passNoSpace && result.passNoEmailParts
-        ), true);
-        _updateConfirmState(confirm, result);
+        _updateFieldState(pass, _PASS_KEYS.every(function (k) {
+            return disabled[k] ? true : result[k];
+        }), true);
+        if (!disabled.passConfirm) _updateConfirmState(confirm, result);
         _updateButton(form, result, mode);
         _updateList(form, result, mode, passMax);
         _updateDropdowns(form, result, mode, passMax);

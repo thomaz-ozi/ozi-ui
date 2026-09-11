@@ -1,0 +1,148 @@
+/**
+ * themes/_template/tokens.css
+ * Template para criação de tema custom no OZI-UI.
+ *
+ * Instruções:
+ *   1. Copie esta pasta para themes/meu-tema/
+ *   2. Preencha os valores dos tokens abaixo
+ *   3. Crie overrides.css com estilos dos componentes
+ *   4. Crie classmap.js com as classes do seu framework
+ *   5. Configure: oziConf({ theme: 'custom', classMap: {...} })
+ *
+ * Todos os tokens são opcionais — o que não declarar herda do default.
+ */
+
+:root {
+    /* ─── CORES PRINCIPAIS ──── substitua pelos valores do seu design ── */
+    --ozi-color-primary:/* ex: #7c3aed */;
+    --ozi-color-primary-hover:  ;
+    --ozi-color-primary-light:  ;
+    --ozi-color-secondary:      ;
+    --ozi-color-success:        ;
+    --ozi-color-success-light:  ;
+    --ozi-color-danger:         ;
+    --ozi-color-danger-light:   ;
+    --ozi-color-warning:        ;
+    --ozi-color-warning-light:  ;
+
+    /* ─── NEUTROS ────────────────────────────────────────────────────── */
+    --ozi-color-white:          ;
+    --ozi-color-gray-50:        ;
+    --ozi-color-gray-100:       ;
+    --ozi-color-gray-200:       ;
+    --ozi-color-gray-300:       ;
+    --ozi-color-gray-400:       ;
+    --ozi-color-gray-500:       ;
+    --ozi-color-gray-600:       ;
+    --ozi-color-gray-700:       ;
+    --ozi-color-gray-800:       ;
+    --ozi-color-gray-900:       ;
+
+    /* ─── TIPOGRAFIA ─────────────────────────────────────────────────── */
+    --ozi-font-family:          ;
+    --ozi-font-size-base:       ;
+    --ozi-font-size-sm:         ;
+
+    /* ─── BORDAS ─────────────────────────────────────────────────────── */
+    --ozi-border-width:         ;
+    --ozi-border-color:         ;
+    --ozi-border-color-focus:   ;
+    --ozi-radius-sm:            ;
+    --ozi-radius-md:            ;
+    --ozi-radius-lg:            ;
+
+    /* ─── SOMBRAS ────────────────────────────────────────────────────── */
+    --ozi-shadow-sm:            ;
+    --ozi-shadow-md:            ;
+    --ozi-shadow-lg:            ;
+
+    /* ─── VALIDAÇÃO ──────────────────────────────────────────────────── */
+    --ozi-invalid-color:        ;
+    --ozi-invalid-border:       ;
+    --ozi-valid-color:          ;
+    --ozi-valid-border:         ;
+}
+
+
+/**
+ * themes/_template/classmap.js
+ * Template do classMap para tema custom.
+ *
+ * Copie para themes/meu-tema/classmap.js e preencha com as
+ * classes CSS do seu framework ou design system.
+ */
+/*
+(function (window) {
+    'use strict';
+
+    window.oziConf({
+        classMap: {
+            // validação
+            invalid:        '',   // classe para campo inválido
+            valid:          '',   // classe para campo válido
+            formValidated:  '',   // classe no form após validação
+            feedback:       '',   // classe da mensagem de erro
+
+            // botões
+            button:          '',  // botão padrão
+            buttonPrimary:   '',  // botão primário
+            buttonSecondary: '',  // botão secundário
+            buttonDanger:    '',  // botão de perigo
+
+            // utilitários
+            hidden:   '',         // esconde elemento
+            loading:  '',         // estado de carregamento
+            disabled: '',         // elemento desabilitado
+            active:   '',         // elemento ativo
+            badge:    ''          // badge/pill
+        }
+    });
+
+})(window);
+*/
+
+
+/**
+ * themes/_template/README.md (inline)
+ *
+ * # Criando um tema custom
+ *
+ * ## Estrutura de arquivos
+ *
+ * themes/meu-tema/
+ * ├── tokens.css      ← variáveis --ozi-* do seu design
+ * ├── overrides.css   ← estilos dos componentes OZI no seu tema
+ * ├── classmap.js     ← mapa de classes do seu framework/design system
+ * └── dark.css        ← tokens dark mode (opcional)
+ *
+ * ## Configuração
+ *
+ * oziConf({
+ *     theme: 'custom',    // não carrega preset automático
+ *     classMap: {
+ *         invalid:   'minha-classe-invalido',
+ *         valid:     'minha-classe-valido',
+ *         feedback:  'minha-classe-feedback',
+ *         hidden:    'minha-classe-oculto',
+ *         disabled:  'minha-classe-desabilitado',
+ *         button:    'meu-botao meu-botao-primario',
+ *         active:    'meu-ativo',
+ *         badge:     'meu-badge'
+ *     }
+ * });
+ *
+ * ## Tokens obrigatórios
+ *
+ * Os tokens --ozi-color-primary e --ozi-color-danger são os mais
+ * usados pelos componentes. Defina esses primeiro.
+ *
+ * ## Tokens opcionais
+ *
+ * Qualquer token não declarado herda o valor do tema default.
+ * Você não precisa redefinir tudo — só o que diferencia seu tema.
+ *
+ * ## dark.css
+ *
+ * Use @media (prefers-color-scheme: dark) para suporte automático,
+ * ou [data-ozi-theme="dark"] para controle manual via JavaScript.
+ */
