@@ -2,8 +2,8 @@
  * ------------------------------------------
  * ozi-editor
  * ------------------------------------------
- * Ver: 4.7.0
- * 2026-09-10
+ * Ver: 4.9.0
+ * 2026-09-21
  *
  * Editor WYSIWYG (contenteditable) com toolbar declarativa, modos html/md,
  * dropdowns de heading/classes, source view, sanitizacao e validacao.
@@ -18,6 +18,130 @@
  * Eventos: ozi:init, ozi:change, ozi:destroy (CustomEvent nativos, contrato v2)
  *
  * Changelog:
+ *   - v4.9.0: [FEAT] `indent`/`outdent` — sublista por botao e por Tab/Shift+Tab.
+ *       Ate aqui NAO havia como criar sublista: a tecla Tab nao era tratada
+ *       (o foco saia do campo, comportamento padrao do browser), nao existia
+ *       ferramenta de indentacao no TOOL_META, e o conversor MD nao sabia
+ *       representar nivel. As tres camadas precisavam andar juntas — um
+ *       botao sozinho produziria um <ul> aninhado que o `htmlToMd`
+ *       descartaria em silencio.
+ *       **Por que nao `execCommand('indent')` puro** (os dois medidos em
+ *       probe antes de decidir): (1) dentro de lista, o Chromium produz
+ *       markup INVALIDO — `<ul><li>um</li><ul><li>dois</li></ul></ul>`, com
+ *       o `<ul>` aninhado como IRMAO do `<li>` em vez de filho dele. O
+ *       `_listToMd` itera filhos diretos e ignora o que nao e `<li>`, entao
+ *       o item indentado **sumia** na conversao pra MD (medido: vira
+ *       `"- um"`, o "dois" desaparece) — mesma familia do bug do <thead> da
+ *       4.8.0; (2) FORA de lista, `indent` vira
+ *       `<blockquote style="margin-left:40px">` — e o sanitizador apaga o
+ *       style, deixando uma CITACAO de verdade: a semantica do texto mudava
+ *       sem o usuario pedir.
+ *       **A solucao mantem o undo nativo:** `execCommand` primeiro (que
+ *       entra na pilha) e `_normalizeNestedLists` logo depois, movendo o
+ *       `<ul>`/`<ol>` solto pra dentro do `<li>` anterior. Medido em probe:
+ *       um UNICO Ctrl+Z desfaz os dois e volta ao estado original — a
+ *       normalizacao nao quebra a pilha, ao contrario do que a licao da
+ *       4.8.0 (tabela via Range) fazia temer. Sem isso seria preciso pilha
+ *       de undo propria, que e cara.
+ *       **Decisoes de produto (via AskUserQuestion, antes de codar):**
+ *       Tab so indenta DENTRO de lista — fora dela o Tab segue levando o
+ *       foco pro proximo campo, senao quem navega por teclado ficaria preso
+ *       no editor; e os botoes aparecem DESABILITADOS fora de lista (mesmo
+ *       tratamento visual de ferramenta inativa), em vez de deixar virar
+ *       citacao.
+ *       `ozi-editor-md` 2.4.0 acompanha: `_listToMd` emite 2 espacos por
+ *       nivel e `_parseList` reconhece a indentacao — sem os dois, a
+ *       sublista nao sobrevive ao round-trip.
+ *   - v4.8.0: [FEAT] Criacao e edicao de tabela. Ate aqui `table` era uma
+ *       acao direta no dispatcher generico (`_runTool`), no mesmo nivel de
+ *       `hr`: 5 linhas de `execCommand('insertHTML')` com uma tabela 2x2
+ *       FIXA, sem UI, sem cabecalho e sem edicao depois de inserida. Era a
+ *       unica ferramenta estrutural do editor que nunca ganhou interface —
+ *       as Fases 1/2/3 cobriram strike/quote/hr/undo/redo, link/color/
+ *       highlight/paste e image, e a tabela ficou para tras. O desenho ja
+ *       existia: o mockup do designer (ozi-ui-designer/OZI-UI/demo/
+ *       ozi-editor.html) traz o CSS do seletor em dois blocos comentados
+ *       desde 2026-08-27, nunca implementados.
+ *       `table` passa a ser popover, pelo MESMO caminho de link/color/
+ *       highlight/image (`_buildPopoverButton`) — entra na linha de guarda
+ *       do `_runTool` e no seletor delegado de abertura, e o `case 'table'`
+ *       do switch sai. Um unico popover com DOIS paineis, alternados pelo
+ *       `onOpen` conforme o caret: fora de tabela mostra o painel de
+ *       INSERCAO (grade 10x8 com highlight de hover/teclado, label vivo
+ *       "N x M celulas", checkbox de cabecalho, campos colunas/linhas e
+ *       botao Inserir); com o caret dentro de um TD/TH mostra o painel de
+ *       EDICAO (linha acima/abaixo, coluna antes/depois, remover linha/
+ *       coluna/tabela). Reaproveita o precedente do popover de imagem, que
+ *       ja reabria sobre um elemento existente — zero UI nova na toolbar.
+ *       O painel de edicao e lista de TEXTO (padrao heading/classes), nao
+ *       botoes com icone: evitou 7 SVGs novos para acoes que so fazem
+ *       sentido lidas.
+ *       `_insertTable(cols, rows, withHeader)` substitui a versao fixa.
+ *       `rows` e o TOTAL de linhas visiveis (o que o usuario conta na
+ *       grade): com cabecalho, 1 vai pro `<thead>` e o resto pro `<tbody>`
+ *       — `rows:1` + cabecalho gera tabela so com `<thead>` (HTML e GFM
+ *       validos) em vez de um `<tbody>` vazio.
+ *       [FIX] de carona, no modo md: GFM EXIGE linha de cabecalho, e o
+ *       `_tableToMd` tem o fallback "sem <thead> promove a primeira linha"
+ *       (correto pra HTML vindo de fora). Como o `_insertTable` nunca
+ *       gerava `<thead>`, a primeira linha que o usuario digitou virava
+ *       cabecalho no round-trip, em silencio. Agora o checkbox nasce ligado
+ *       e no modo md fica forcado ligado + desabilitado — o dado nao muda
+ *       mais de papel sozinho.
+ *       Celulas da grade sao `<span>` num container `[role=grid]` com
+ *       `tabindex=0`, nao 80 botoes: 80 elementos focaveis destruiriam o
+ *       tab-order do popover, e o highlight ja e delegado por `mousemove`
+ *       no container. Nenhum elemento do popover leva `.ozi-editor-btn` nem
+ *       `data-ozi-editor-tool` (mesmo cuidado dos botoes de alinhamento de
+ *       imagem na 4.7.0) — os dois fariam o dispatcher generico de
+ *       mousedown trata-los como ferramenta.
+ *       Sem `colspan`/`rowspan` de proposito: o `_cleanNode` do sanitizador
+ *       apaga os dois (restaura so class/href/src/alt/width/height), entao
+ *       mesclar celula exigiria abrir o modulo de sanitizacao — feature
+ *       propria, fora do escopo desta. Modulo `ozi-editor-sanitize`
+ *       INTOCADO nesta versao (TABLE/THEAD/TBODY/TR/TD/TH ja estavam na
+ *       ALLOWED_TAGS desde a Fase 3).
+ *   - v4.7.1: [FIX] Popover/dropdown cortado pela moldura do editor. Ate aqui
+ *       todo popover era `position:absolute` ancorado no wrap do proprio
+ *       botao — vivia DENTRO da caixa do editor e obedecia a qualquer
+ *       `overflow` de ancestral. Dois cortes reais, ambos medidos:
+ *       (1) `.ozi-editor-wrap{overflow:hidden}` (o clip do border-radius) —
+ *       o popover de imagem tem ~260px e um editor com o `min-height`
+ *       padrao tem ~257px: estourava ~50px e o `Aplicar`/`Remover` ficava
+ *       NAO-CLICAVEL (elementFromPoint no centro do botao devolvia <html>),
+ *       que foi o sintoma reportado pelo usuario; (2)
+ *       `.ozi-editor-toolbar-scroll-track{overflow-x:auto}` (modo Scroll da
+ *       toolbar, 4.6.0) — a track tem ~44px, entao o corte era de ~236px e
+ *       abrir o popover ainda dava scroll VERTICAL na barra de ferramentas
+ *       (scrollHeight 298 x clientHeight 34). Os paineis de `{}` ja tinham
+ *       sido tirados da track pelo mesmo motivo (ver _buildScrollToolbarInto);
+ *       os popovers tinham ficado de fora daquele cuidado.
+ *       `overflow:visible` no wrap so resolveria (1) — e ainda perderia o
+ *       clip do radius. A correcao tira o popover do fluxo clipado:
+ *       `position:fixed` + coordenadas calculadas contra o rect do TRIGGER
+ *       (`_positionFloating`, secao [11c]), aplicadas no ponto unico que ja
+ *       abria/fechava tudo (`_setPopoverOpen`) — entao vale para os popovers
+ *       de link/color/highlight/image E para os dropdowns de heading/classes
+ *       de uma vez. O DOM NAO muda: o popover continua filho do seu
+ *       `.ozi-editor-popover-wrap`, preservando `_popoverIdFromElement`/
+ *       `_closeOutsidePopovers` (delegacao por `closest`) e o `destroy()`.
+ *       Com as coordenadas na mao vem o que o absolute nunca cobriu: VIRA
+ *       PRA CIMA quando nao cabe embaixo (editor no rodape da tela), clamp
+ *       lateral, e `max-height` + scroll proprio quando nao cabe dos dois
+ *       lados. `_repositionOpenPopovers` religa o popover ao trigger em
+ *       `scroll`/`resize` — o `scroll` precisa de CAPTURE (o evento nao
+ *       borbulha: sem isso, rolar o proprio `.ozi-editor-content` deixaria o
+ *       popover parado na tela), por isso `_on` ganhou o 4o parametro
+ *       `opts`, devolvido ao `removeEventListener` no `destroy()` (capture
+ *       faz parte da identidade do listener). Trigger inteiro fora da
+ *       viewport fecha o popover em vez de deixa-lo orfao sobre outra parte
+ *       da pagina. **Nota pra quem for testar:** `offsetParent` e sempre
+ *       `null` em elemento `fixed` — use `style.display !== 'none'`
+ *       (o `_isShown` do arquivo) pra saber se um popover esta aberto.
+ *       Ressalva conhecida (custo de qualquer UI flutuante, Bootstrap/Popper
+ *       inclusive): ancestral com `transform`/`filter`/`contain` vira
+ *       containing block do `fixed` e desloca as coordenadas — nao ocorre
+ *       nos temas do plugin.
  *   - v4.7.0: [FEAT] Alinhamento de imagem — linha "Alinhamento" nova dentro
  *       do popover de imagem (ao lado de Largura/Altura), com 4 modos:
  *       `left`/`right` (float, texto corre ao lado), `center` (bloco
@@ -302,6 +426,8 @@
             'editor.strike':         'Strikethrough',
             'editor.ul':             'List',
             'editor.ol':             'Numbered list',
+            'editor.indent':         'Indent (Tab)',
+            'editor.outdent':        'Outdent (Shift+Tab)',
             'editor.codeblock':      'Code',
             'editor.source':         'HTML source',
             'editor.source.md':      'Markdown source',
@@ -339,6 +465,22 @@
             'editor.imageAlignRight':  'Right (text wraps)',
             'editor.imageAlignCenter': 'Centered',
             'editor.imageAlignFree':   'Free position (drag)',
+            /* tabela (v4.8.0) — a lição das 9 chaves de imagem acima: chave
+               que não entra AQUI aparece literal quando não há dicionário */
+            'editor.tableCols':      'Columns',
+            'editor.tableRows':      'Rows',
+            'editor.tableHeader':    'Header row',
+            'editor.tableInsert':    'Insert',
+            'editor.tableSize':      'cells',
+            'editor.tableGrid':      'Table size',
+            'editor.tableEdit':      'Edit table',
+            'editor.tableRowAbove':  'Insert row above',
+            'editor.tableRowBelow':  'Insert row below',
+            'editor.tableColBefore': 'Insert column before',
+            'editor.tableColAfter':  'Insert column after',
+            'editor.tableRowRemove': 'Delete row',
+            'editor.tableColRemove': 'Delete column',
+            'editor.tableRemove':    'Delete table',
             'editor.apply':          'Apply',
             'editor.remove':         'Remove',
             'editor.none':           'None',
@@ -434,7 +576,14 @@
     var DEFAULT_TOOLS_HTML = '[bold,italic,underline], [ul,ol], [left,center,right]; [heading,classes], table, clear, codeblock, source';
     var DEFAULT_TOOLS_MD   = '[bold,italic], [ul,ol]; heading; codeblock, table; source';
 
-    var BLOCKED_IN_MD = { left: true, center: true, right: true, clear: true, color: true, highlight: true };
+    /* [v4.8.0 FIX] `justify` entrou aqui — tinha ficado de fora desde a Fase 1
+       (v4.2.0), que o adicionou ao TOOL_META sem lembrar desta lista. Os
+       irmaos left/center/right ja estavam bloqueados pelo mesmo motivo: sao
+       alinhamento de PARAGRAFO, e o `htmlToMd` serializa <p> como texto puro,
+       descartando o `text-align`. Sem o bloqueio, o botao aparecia habilitado
+       no type md, aplicava o estilo no contenteditable e a conversao jogava
+       fora — no-op silencioso, exatamente o que esta lista existe pra evitar. */
+    var BLOCKED_IN_MD = { left: true, center: true, right: true, justify: true, clear: true, color: true, highlight: true };
 
     /* toolbar responsiva — min-width estilo Bootstrap (mesma tabela numerica,
        consistente com a direcao de breakpoint ja fechada com o usuario).
@@ -461,7 +610,15 @@
     var BUILT_IN_THEMES_MD = {
         minimal:  '[bold,italic]; source',
         standard: '[bold,italic], [ul,ol]; heading; codeblock; source',
-        full:     '[bold,italic,strike], [ul,ol]; heading; [quote,hr]; codeblock, table; source; [link,unlink,image]'
+        /* [v4.9.0] reorganizado a pedido do autor. Eram 5 linhas de toolbar
+           (`;` = nova linha) pra 14 ferramentas — muita altura de barra pra
+           pouca ferramenta por faixa. Agora sao 2 linhas agrupadas por
+           familia, e o tema ganha 4 tokens que ja funcionavam no md mas
+           estavam de fora do `full`: `undo`/`redo` e `paste`/`pasteFmt`.
+           Nada foi removido. Como isto e tema BUILT-IN, quem usa
+           `data-ozi-editor-theme="full"` num editor md ve a barra mudar —
+           aditivo (so ganha botao), mas e mudanca visivel. */
+        full:     '[undo,redo],[bold,italic,strike],[paste,pasteFmt],[ol,ul],[link,unlink];heading,table,image,[quote,hr],codeblock,source'
     };
 
     function _resolveTheme(name, devThemes, builtIn) {
@@ -488,6 +645,8 @@
         strike:    { labelKey: 'editor.strike',       icon: 'strike',    execCmd: 'strikeThrough' },
         ul:        { labelKey: 'editor.ul',           icon: 'ul',        execCmd: 'insertUnorderedList' },
         ol:        { labelKey: 'editor.ol',           icon: 'ol',        execCmd: 'insertOrderedList' },
+        indent:    { labelKey: 'editor.indent',       icon: 'indent',    execCmd: null },
+        outdent:   { labelKey: 'editor.outdent',      icon: 'outdent',   execCmd: null },
         codeblock: { labelKey: 'editor.codeblock',    icon: 'codeblock', execCmd: null },
         source:    { labelKey: 'editor.source',       icon: 'source',    execCmd: null },
         table:     { labelKey: 'editor.table',        icon: 'table',     execCmd: null },
@@ -693,6 +852,47 @@
     ];
 
     /* ─────────────────────────────────────────────
+     * [7d] TABELA — grade do seletor e acoes de edicao  (v4.8.0)
+     * ───────────────────────────────────────────── */
+
+    /* a grade cobre o caso comum; os campos numericos sao o escape pra
+       qualquer tamanho (decisao de 2026-09-14). Descartada a grade que
+       cresce ao chegar na borda: o popover e `fixed` e posicionado contra o
+       trigger desde a 4.7.1, entao mudar de tamanho durante o movimento
+       obrigaria a reposicionar no meio do gesto. */
+    var TABLE_GRID_COLS = 10;
+    var TABLE_GRID_ROWS = 8;
+
+    /* teto dos campos numericos. Nao e limite do HTML (uma tabela maior e
+       valida) — e limite de UX: 50x50 ja sao 2500 celulas, e o que passa
+       disso quase sempre e erro de digitacao. */
+    var TABLE_MAX = 50;
+
+    /* acoes do painel de edicao. Lista de TEXTO (mesmo padrao dos dropdowns
+       de heading/classes) em vez de botoes com icone: seriam 7 SVGs novos
+       pra acoes que so fazem sentido lidas. `danger` separa visualmente as
+       3 destrutivas. */
+    var TABLE_ACTIONS = [
+        { action: 'rowAbove',  labelKey: 'editor.tableRowAbove'  },
+        { action: 'rowBelow',  labelKey: 'editor.tableRowBelow'  },
+        { action: 'colBefore', labelKey: 'editor.tableColBefore' },
+        { action: 'colAfter',  labelKey: 'editor.tableColAfter'  },
+        { action: 'rowRemove', labelKey: 'editor.tableRowRemove', danger: true },
+        { action: 'colRemove', labelKey: 'editor.tableColRemove', danger: true },
+        { action: 'remove',    labelKey: 'editor.tableRemove',    danger: true }
+    ];
+
+    /* inteiro em [1, TABLE_MAX]; qualquer lixo cai no fallback. Os campos ja
+       sao <input type=number min=1 max=50>, mas o valor chega aqui como
+       STRING do DOM e o usuario pode digitar o que quiser dentro dele — o
+       `max` do input nao impede a digitacao, so marca :invalid. */
+    function _tableSize(value, fallback) {
+        var n = parseInt(value, 10);
+        if (!isFinite(n) || n < 1) return fallback;
+        return Math.min(n, TABLE_MAX);
+    }
+
+    /* ─────────────────────────────────────────────
      * [8] CONSTRUCTOR
      * ───────────────────────────────────────────── */
 
@@ -748,9 +948,21 @@
            isso a secao de upload do popover nem e construida (ver
            _buildImageButton) */
         this.uploadUrl   = this.textarea.getAttribute('data-ozi-editor-upload-url') || null;
+        /* [v4.8.0 FIX] o fallback `#3b82f6` nao e enfeite: este valor e
+           escrito INLINE no wrap (_buildUI), e estilo inline vence a regra do
+           CSS — que ja declarava `var(--ozi-color-primary, #3b82f6)` com
+           fallback justamente pra isso. Sem repeti-lo aqui, um host que nao
+           linkou `themes/<tema>/tokens.css` deixava `--ozi-color-primary`
+           indefinida, `--ozi-editor-uicolor` computava pra guaranteed-invalid
+           e TODA regra que dependia dela sumia em silencio (o anel de foco do
+           content, a borda do botao de alinhamento ativo). Passou despercebido
+           enquanto so afetava detalhe de contorno; a grade do seletor de
+           tabela usa essa cor como FUNDO e o botao Inserir a usa com texto
+           branco — sem ela, o retangulo aceso nao acende e o botao fica branco
+           no branco. Medido num probe headless antes de corrigir. */
         this.uicolor     = this.textarea.getAttribute('data-ozi-editor-uicolor')
             || (pluginConf && pluginConf.uicolor)
-            || 'var(--ozi-color-primary)';
+            || 'var(--ozi-color-primary, #3b82f6)';
 
         this.isDisabled      = _parseBool(this.textarea, 'data-ozi-editor-disabled', false);
         this.isRequired      = _parseBool(this.textarea, 'data-ozi-editor-required', false);
@@ -809,9 +1021,15 @@
     }
 
     /* rastreia listeners para remocao no destroy */
-    OziEditor.prototype._on = function (target, type, handler) {
-        target.addEventListener(type, handler);
-        this._listeners.push({ target: target, type: type, handler: handler });
+    /* `opts` (v4.7.1) so e usado pelo reposicionamento de popover flutuante,
+       que precisa de CAPTURE: o evento `scroll` nao borbulha, entao um
+       listener normal no window nao enxerga o scroll do proprio
+       `.ozi-editor-content` nem o de qualquer container do host. O mesmo
+       valor e devolvido ao removeEventListener no destroy (capture faz parte
+       da identidade do listener — sem isso ele nao seria removido). */
+    OziEditor.prototype._on = function (target, type, handler, opts) {
+        target.addEventListener(type, handler, opts);
+        this._listeners.push({ target: target, type: type, handler: handler, opts: opts });
     };
 
     /* ─────────────────────────────────────────────
@@ -859,7 +1077,7 @@
 
     OziEditor.prototype.destroy = function () {
         this._dbg('destroy() chamado — trace de quem chamou:', undefined, true);
-        (this._listeners || []).forEach(function (l) { l.target.removeEventListener(l.type, l.handler); });
+        (this._listeners || []).forEach(function (l) { l.target.removeEventListener(l.type, l.handler, l.opts); });
         this._listeners = [];
         if (this.wrap && this.wrap.parentNode) this.wrap.parentNode.removeChild(this.wrap);
         this.textarea.style.display = '';
@@ -1112,6 +1330,7 @@
         if (tool === 'color')     return self._buildColorButton('color', label);
         if (tool === 'highlight') return self._buildColorButton('highlight', label);
         if (tool === 'image')     return self._buildImageButton(label);
+        if (tool === 'table')     return self._buildTableButton(label);
 
         var btn = _el('button', 'ozi-editor-btn', {
             type: 'button', 'data-ozi-editor-tool': tool, title: label, 'aria-label': label
@@ -1223,10 +1442,125 @@
         return candidates[0] || null;
     };
 
+    /* ─────────────────────────────────────────────
+     * [11c] POSICIONAMENTO FLUTUANTE  (v4.7.1)
+     *
+     * Ate a 4.7.0 todo popover/dropdown era `position:absolute` ancorado no
+     * proprio wrap do botao — ou seja, vivia DENTRO da caixa do editor e
+     * obedecia a qualquer `overflow` de ancestral. Isso cortava a ferramenta
+     * em dois lugares reais, medidos:
+     *
+     *   1. `.ozi-editor-wrap { overflow:hidden }` (o radius da moldura) — o
+     *      popover de imagem tem ~260px e um editor com o `min-height`
+     *      padrao tem ~257px: estourava ~50px e o `Aplicar`/`Remover` ficava
+     *      NAO-CLICAVEL (elementFromPoint no centro do botao devolvia <html>).
+     *   2. `.ozi-editor-toolbar-scroll-track { overflow-x:auto }` (modo Scroll
+     *      da toolbar responsiva, 4.6.0) — a track tem ~44px de altura, entao
+     *      o popover estourava ~236px E ainda dava scroll VERTICAL na barra
+     *      de ferramentas (scrollHeight 298 x clientHeight 34).
+     *
+     * `overflow:visible` no wrap so resolveria (1). A correcao e tirar o
+     * popover do fluxo clipado: ele passa a `position:fixed` (viewport) e
+     * recebe coordenadas calculadas contra o rect do TRIGGER. O DOM nao muda
+     * — o popover continua sendo filho do seu `.ozi-editor-popover-wrap`, o
+     * que preserva toda a delegacao por `closest()`
+     * (`_popoverIdFromElement`/`_closeOutsidePopovers`) e o `destroy()`.
+     *
+     * De brinde, ter as coordenadas na mao resolve o que o absolute nunca
+     * cobriu: VIRAR PRA CIMA quando nao cabe embaixo (editor no rodape da
+     * tela) e clamp lateral. Quando nao cabe dos dois lados, o lado mais
+     * folgado ganha `max-height` + scroll proprio (ver o CSS) em vez de
+     * vazar pra fora da tela.
+     *
+     * Ressalva conhecida: um ancestral com `transform`/`filter`/`perspective`/
+     * `contain` vira containing block do `fixed` e as coordenadas de viewport
+     * ficariam deslocadas. E o mesmo custo que qualquer UI flutuante paga
+     * (Bootstrap/Popper incluidos) e nao ocorre nos temas do plugin.
+     * ───────────────────────────────────────────── */
+
+    var FLOAT_GAP  = 4;    /* px entre o trigger e o popover */
+    var FLOAT_EDGE = 8;    /* px de respiro minimo ate a borda da viewport */
+    var FLOAT_MIN  = 96;   /* px — altura util minima antes de desistir do lado */
+
+    OziEditor.prototype._positionFloating = function (el, trigger) {
+        if (!el || !trigger) return;
+
+        /* a medicao precisa do elemento sem limite do posicionamento
+           anterior, senao o max-height de uma abertura passada encolheria a
+           altura natural e o lado escolhido agora sairia errado */
+        el.style.maxHeight = '';
+
+        var r  = trigger.getBoundingClientRect();
+        var vw = document.documentElement.clientWidth;
+        var vh = document.documentElement.clientHeight;
+        var w  = el.offsetWidth;
+        var h  = el.offsetHeight;
+
+        var left = r.left;
+        if (left + w > vw - FLOAT_EDGE) left = vw - FLOAT_EDGE - w;
+        if (left < FLOAT_EDGE)          left = FLOAT_EDGE;
+
+        var below = vh - r.bottom - FLOAT_GAP - FLOAT_EDGE;   /* espaco abaixo do trigger */
+        var above = r.top - FLOAT_GAP - FLOAT_EDGE;           /* espaco acima do trigger   */
+        var top;
+
+        /* preferencia por abrir pra baixo (o comportamento historico); so
+           vira pra cima quando NAO cabe embaixo e cabe melhor em cima */
+        if (h <= below || below >= above) {
+            top = r.bottom + FLOAT_GAP;
+            if (h > below) el.style.maxHeight = Math.max(below, FLOAT_MIN) + 'px';
+        } else {
+            top = r.top - FLOAT_GAP - Math.min(h, above);
+            if (h > above) {
+                el.style.maxHeight = Math.max(above, FLOAT_MIN) + 'px';
+                top = r.top - FLOAT_GAP - Math.max(above, FLOAT_MIN);
+            }
+        }
+        if (top < FLOAT_EDGE) top = FLOAT_EDGE;
+
+        el.style.left = Math.round(left) + 'px';
+        el.style.top  = Math.round(top)  + 'px';
+    };
+
+    /* reposiciona o que estiver aberto — ligado a scroll (em CAPTURE, o
+       evento nao borbulha) e resize. Um popover `fixed` nao acompanha o
+       trigger sozinho: sem isso ele ficaria parado na tela enquanto a pagina
+       rola por baixo. Se o trigger saiu inteiro da viewport nao ha o que
+       ancorar, entao fecha (o popover flutuando sozinho sobre outra parte da
+       pagina seria pior que fechar). */
+    OziEditor.prototype._repositionOpenPopovers = function () {
+        var self = this;
+        (self._popovers || []).forEach(function (p) {
+            if (!_isShown(p.el)) return;
+            var trig = self.wrap.querySelector(p.triggerSelector);
+            if (!trig) return;
+            var r  = trig.getBoundingClientRect();
+            var vh = document.documentElement.clientHeight;
+            var vw = document.documentElement.clientWidth;
+            if (r.bottom < 0 || r.top > vh || r.right < 0 || r.left > vw) {
+                self._setPopoverOpen(p, false);
+                return;
+            }
+            self._positionFloating(p.el, trig);
+        });
+    };
+
     OziEditor.prototype._setPopoverOpen = function (entry, open) {
         if (!entry) return;
-        entry.el.style.display = open ? '' : 'none';
         var trig = this.wrap.querySelector(entry.triggerSelector);
+
+        if (open) {
+            /* medir exige estar renderizado, mas mostrar ANTES de posicionar
+               deixaria um frame na coordenada antiga — `visibility` esconde
+               sem tirar do layout, que e exatamente o que a medicao precisa */
+            entry.el.style.visibility = 'hidden';
+            entry.el.style.display    = '';
+            this._positionFloating(entry.el, trig);
+            entry.el.style.visibility = '';
+        } else {
+            entry.el.style.display = 'none';
+        }
+
         if (trig) trig.setAttribute('aria-expanded', open ? 'true' : 'false');
     };
 
@@ -2108,6 +2442,329 @@
     };
 
     /* ─────────────────────────────────────────────
+     * [13e] POPOVER DE TABELA — v4.8.0
+     *
+     * Um popover, DOIS paineis: o `onOpen` mostra o de INSERCAO quando o
+     * caret esta fora de tabela e o de EDICAO quando esta dentro de um
+     * TD/TH. E o mesmo precedente do popover de imagem (que ja reabria
+     * sobre uma imagem existente), e por isso a edicao nao custou botao
+     * novo na toolbar.
+     *
+     * Nenhum elemento daqui leva `.ozi-editor-btn` nem
+     * `data-ozi-editor-tool`: os dois fariam o dispatcher generico de
+     * mousedown (primeiro handler do _bindEvents) trata-los como
+     * ferramenta. Mesmo cuidado dos botoes de alinhamento de imagem
+     * (v4.7.0), que aprenderam isso por tentativa.
+     * ───────────────────────────────────────────── */
+
+    OziEditor.prototype._buildTableButton = function (label) {
+        var self = this;
+
+        return self._buildPopoverButton('table', label, function (popover) {
+            popover.classList.add('ozi-editor-popover--table');
+
+            /* ── painel de INSERCAO ── */
+            var insert = _el('div', 'ozi-editor-table-panel', { 'data-ozi-editor-table-panel': 'insert' });
+
+            /* celulas sao <span> num container [role=grid] com tabindex=0, nao
+               80 botoes: 80 elementos focaveis destruiriam o tab-order do
+               popover (o caminho de teclado util sao os campos numericos), e o
+               highlight ja e delegado por mousemove no proprio container. */
+            var grid = _el('div', 'ozi-editor-table-grid', {
+                role: 'grid', tabindex: '0',
+                'aria-label': _t('editor.tableGrid'),
+                'data-ozi-editor-table-grid': 'true'
+            });
+            grid.style.gridTemplateColumns = 'repeat(' + TABLE_GRID_COLS + ', 16px)';
+
+            for (var r = 1; r <= TABLE_GRID_ROWS; r++) {
+                for (var c = 1; c <= TABLE_GRID_COLS; c++) {
+                    grid.appendChild(_el('span', 'ozi-editor-table-cell', {
+                        'data-ozi-editor-table-col': c,
+                        'data-ozi-editor-table-row': r
+                    }));
+                }
+            }
+
+            var label_ = _el('div', 'ozi-editor-table-label', {
+                'data-ozi-editor-table-size-label': 'true', 'aria-live': 'polite'
+            });
+
+            /* cabecalho: ligado por padrao. No modo md fica ligado E
+               desabilitado — GFM exige linha de cabecalho, e sem <thead> o
+               _tableToMd promove a primeira linha do corpo (fallback correto
+               pra HTML vindo de fora, mas aqui vira perda silenciosa). Um
+               checkbox que o usuario pode desligar sem efeito seria pior que
+               nao ter checkbox. */
+            var headerField = _el('label', 'ozi-editor-table-header-field');
+            var headerCb    = _el('input', null, {
+                type: 'checkbox', 'data-ozi-editor-table-header': 'true'
+            });
+            headerCb.checked = true;
+            if (self.editorType === 'md') headerCb.disabled = true;
+            var headerTxt = _el('span', null);
+            headerTxt.textContent = _t('editor.tableHeader');
+            headerField.appendChild(headerCb);
+            headerField.appendChild(headerTxt);
+
+            var fields   = _el('div', 'ozi-editor-table-fields');
+            var colField = _el('div', 'ozi-editor-table-field');
+            var colLbl   = _el('span', 'ozi-editor-table-field-label');
+            colLbl.textContent = _t('editor.tableCols');
+            var colInput = _el('input', 'ozi-editor-table-input', {
+                type: 'number', min: '1', max: String(TABLE_MAX),
+                'data-ozi-editor-table-cols': 'true', 'aria-label': _t('editor.tableCols')
+            });
+            colInput.value = '2';
+            colField.appendChild(colLbl); colField.appendChild(colInput);
+
+            var rowField = _el('div', 'ozi-editor-table-field');
+            var rowLbl   = _el('span', 'ozi-editor-table-field-label');
+            rowLbl.textContent = _t('editor.tableRows');
+            var rowInput = _el('input', 'ozi-editor-table-input', {
+                type: 'number', min: '1', max: String(TABLE_MAX),
+                'data-ozi-editor-table-rows': 'true', 'aria-label': _t('editor.tableRows')
+            });
+            rowInput.value = '2';
+            rowField.appendChild(rowLbl); rowField.appendChild(rowInput);
+
+            var insertBtn = _el('button', 'ozi-editor-table-insert', {
+                type: 'button', 'data-ozi-editor-table-apply': 'true'
+            });
+            insertBtn.textContent = _t('editor.tableInsert');
+
+            fields.appendChild(colField);
+            fields.appendChild(rowField);
+            fields.appendChild(insertBtn);
+
+            insert.appendChild(grid);
+            insert.appendChild(label_);
+            insert.appendChild(headerField);
+            insert.appendChild(fields);
+
+            /* ── painel de EDICAO ── */
+            var edit = _el('div', 'ozi-editor-table-panel', { 'data-ozi-editor-table-panel': 'edit' });
+            edit.style.display = 'none';
+
+            var editLbl = _el('span', 'ozi-editor-popover-label');
+            editLbl.textContent = _t('editor.tableEdit');
+            edit.appendChild(editLbl);
+
+            TABLE_ACTIONS.forEach(function (item) {
+                var it = _el('button',
+                    'ozi-editor-table-action' + (item.danger ? ' ozi-editor-table-action--danger' : ''),
+                    { type: 'button', 'data-ozi-editor-table-action': item.action });
+                it.textContent = _t(item.labelKey);
+                edit.appendChild(it);
+            });
+
+            popover.appendChild(insert);
+            popover.appendChild(edit);
+
+        }, function (popoverEl) {
+            /* le/preenche o PROPRIO popover que esta abrindo — a toolbar
+               responsiva permite mais de um popover "table" no DOM ao mesmo
+               tempo (um por variante de breakpoint) */
+            var inEdit = !!self._getSelectedTableCell();
+            self._setTablePanel(popoverEl, inEdit ? 'edit' : 'insert');
+
+            if (inEdit) return;
+
+            /* o popover e reaproveitado entre aberturas: sem este reset, a
+               proxima insercao herdaria o tamanho da anterior sem o usuario
+               pedir (mesmo motivo do reset de alinhamento no popover de
+               imagem, v4.7.0) */
+            var colInput = popoverEl.querySelector('[data-ozi-editor-table-cols]');
+            var rowInput = popoverEl.querySelector('[data-ozi-editor-table-rows]');
+            var headerCb = popoverEl.querySelector('[data-ozi-editor-table-header]');
+            if (colInput) colInput.value = '2';
+            if (rowInput) rowInput.value = '2';
+            if (headerCb && !headerCb.disabled) headerCb.checked = true;
+
+            self._syncTableGrid(popoverEl, 2, 2);
+        });
+    };
+
+    /* alterna insercao <-> edicao dentro do mesmo popover */
+    OziEditor.prototype._setTablePanel = function (popoverEl, which) {
+        Array.prototype.forEach.call(
+            popoverEl.querySelectorAll('[data-ozi-editor-table-panel]'),
+            function (p) {
+                p.style.display = (p.getAttribute('data-ozi-editor-table-panel') === which) ? '' : 'none';
+            }
+        );
+    };
+
+    /* pinta o retangulo 1..cols x 1..rows e atualiza o label vivo. Fonte
+       unica pro hover do mouse, pras setas do teclado e pros campos
+       numericos — os tres so calculam o par (cols, rows) e chamam aqui. */
+    OziEditor.prototype._syncTableGrid = function (popoverEl, cols, rows) {
+        var grid = popoverEl.querySelector('[data-ozi-editor-table-grid]');
+        if (grid) {
+            Array.prototype.forEach.call(grid.querySelectorAll('.ozi-editor-table-cell'), function (cell) {
+                var c  = parseInt(cell.getAttribute('data-ozi-editor-table-col'), 10);
+                var r  = parseInt(cell.getAttribute('data-ozi-editor-table-row'), 10);
+                var on = (c <= cols && r <= rows);
+                cell.classList.toggle('is-on', on);
+            });
+        }
+
+        var label = popoverEl.querySelector('[data-ozi-editor-table-size-label]');
+        if (label) label.textContent = cols + ' × ' + rows + ' ' + _t('editor.tableSize');
+    };
+
+    /* par (cols, rows) que os campos numericos estao pedindo agora — o que o
+       botao Inserir usa, e o estado pro qual a grade volta quando o mouse
+       sai dela */
+    OziEditor.prototype._tableFieldValues = function (popoverEl) {
+        var colInput = popoverEl.querySelector('[data-ozi-editor-table-cols]');
+        var rowInput = popoverEl.querySelector('[data-ozi-editor-table-rows]');
+        return {
+            cols: _tableSize(colInput && colInput.value, 2),
+            rows: _tableSize(rowInput && rowInput.value, 2)
+        };
+    };
+
+    /* true = o host pediu cabecalho. No modo md o checkbox esta desabilitado
+       e marcado; ler `.checked` cobre os dois casos sem ramo especial. */
+    OziEditor.prototype._tableWantsHeader = function (popoverEl) {
+        var cb = popoverEl.querySelector('[data-ozi-editor-table-header]');
+        return cb ? !!cb.checked : true;
+    };
+
+    /* insere a partir do popover: escreve o tamanho escolhido de volta nos
+       campos (clique na grade tem que refleti-los) e fecha. Ponto unico dos
+       tres caminhos de insercao — clique na celula, Enter na grade e botao
+       Inserir. */
+    OziEditor.prototype._applyTableFromPopover = function (popoverEl, cols, rows) {
+        var values = this._tableFieldValues(popoverEl);
+        cols = _tableSize(cols, values.cols);
+        rows = _tableSize(rows, values.rows);
+
+        var colInput = popoverEl.querySelector('[data-ozi-editor-table-cols]');
+        var rowInput = popoverEl.querySelector('[data-ozi-editor-table-rows]');
+        if (colInput) colInput.value = String(cols);
+        if (rowInput) rowInput.value = String(rows);
+
+        this._restoreSelection();
+        this._insertTable(cols, rows, this._tableWantsHeader(popoverEl));
+        this._syncToTextarea();
+        this._updateToolbarState();
+        this.emitChange();
+    };
+
+    /* ─────────────────────────────────────────────
+     * [13e-2] EDICAO DE TABELA — v4.8.0
+     *
+     * A API nativa de HTMLTableElement (insertRow/deleteRow/insertCell/
+     * deleteCell) faz quase tudo. O que sobra e manter a contagem de
+     * celulas consistente entre <thead> e <tbody> ao mexer em COLUNA: as
+     * duas secoes tem que andar juntas, senao a tabela fica com linhas de
+     * larguras diferentes (e o _tableToMd, que casa celula com cabecalho
+     * por indice, passa a descartar dado).
+     * ───────────────────────────────────────────── */
+
+    OziEditor.prototype._getSelectedTableCell = function () {
+        return this._getClosestSelectionNode(['TD', 'TH']);
+    };
+
+    /* indice da celula na PROPRIA linha (nao no <table>) — e o indice de
+       coluna, porque sem colspan/rowspan toda linha tem a mesma largura */
+    OziEditor.prototype._cellColumnIndex = function (cell) {
+        var row = cell.parentNode;
+        return Array.prototype.indexOf.call(row.cells, cell);
+    };
+
+    /* celula nova respeitando a secao: linha de <thead> leva <th>, corpo
+       leva <td>. insertCell() cria <td> sempre, entao thead precisa do
+       caminho manual. O <br> nao e enfeite: celula totalmente vazia nao
+       recebe caret em nenhum navegador. */
+    OziEditor.prototype._insertCellInto = function (row, index) {
+        var isHead = !!(row.parentNode && row.parentNode.tagName === 'THEAD');
+        var cell;
+        if (isHead) {
+            cell = document.createElement('th');
+            row.insertBefore(cell, row.cells[index] || null);
+        } else {
+            cell = row.insertCell(index);
+        }
+        cell.appendChild(document.createElement('br'));
+        return cell;
+    };
+
+    OziEditor.prototype._tableAction = function (action) {
+        var cell = this._getSelectedTableCell();
+        if (!cell) return false;
+
+        var row   = cell.parentNode;
+        var table = this._closestIn(cell, 'table');
+        if (!row || !table) return false;
+
+        var colIndex = this._cellColumnIndex(cell);
+        var self     = this;
+
+        /* linha nova sempre no <tbody>, mesmo partindo de uma celula do
+           <thead>: uma 2a linha de cabecalho nao tem representacao em GFM e
+           quase nunca e o que se quer. Partindo do thead, "acima" nao tem
+           destino valido — cai na primeira posicao do corpo. */
+        function addRow(below) {
+            var body = table.tBodies[0];
+            if (!body) {
+                body = document.createElement('tbody');
+                table.appendChild(body);
+            }
+
+            var width = row.cells.length;
+            /* veio do <thead>: "acima" nao tem destino valido no corpo, entao
+               as duas direcoes caem na primeira posicao dele */
+            var at = (row.parentNode === body)
+                ? Array.prototype.indexOf.call(body.rows, row) + (below ? 1 : 0)
+                : 0;
+
+            var newRow = body.insertRow(at);
+            for (var i = 0; i < width; i++) self._insertCellInto(newRow, i);
+            return true;
+        }
+
+        /* coluna mexe em TODAS as linhas da tabela (thead + tbody), senao as
+           secoes ficam com larguras diferentes */
+        function addCol(after) {
+            var at = colIndex + (after ? 1 : 0);
+            Array.prototype.forEach.call(table.rows, function (r) {
+                self._insertCellInto(r, Math.min(at, r.cells.length));
+            });
+            return true;
+        }
+
+        switch (action) {
+            case 'rowAbove': return addRow(false);
+            case 'rowBelow': return addRow(true);
+            case 'colBefore': return addCol(false);
+            case 'colAfter':  return addCol(true);
+
+            /* remover a ultima linha do corpo (ou a unica que existe)
+               deixaria uma tabela sem conteudo — remove a tabela inteira,
+               que e o que o usuario quer dizer com isso */
+            case 'rowRemove':
+                if (table.rows.length <= 1) { table.parentNode.removeChild(table); return true; }
+                row.parentNode.removeChild(row);
+                return true;
+
+            case 'colRemove':
+                if (row.cells.length <= 1) { table.parentNode.removeChild(table); return true; }
+                Array.prototype.forEach.call(table.rows, function (r) {
+                    if (r.cells[colIndex]) r.deleteCell(colIndex);
+                });
+                return true;
+
+            case 'remove':
+                table.parentNode.removeChild(table);
+                return true;
+        }
+        return false;
+    };
+
+    /* ─────────────────────────────────────────────
      * [13d] PASTE / PASTEFMT — acao imediata via
      * Clipboard API (nao e flag pro proximo Ctrl+V)
      * ───────────────────────────────────────────── */
@@ -2410,7 +3067,8 @@
         if (tool === 'heading') return;
         /* abertura de popover ja tratada por handler dedicado em _bindEvents —
            aqui e so o no-op do dispatch generico (mesmo padrao de heading/classes) */
-        if (tool === 'link' || tool === 'color' || tool === 'highlight' || tool === 'image') return;
+        if (tool === 'link' || tool === 'color' || tool === 'highlight' ||
+            tool === 'image' || tool === 'table') return;
 
         this.content.focus();
 
@@ -2426,7 +3084,9 @@
         switch (tool) {
             case 'codeblock': this._toggleCodeBlock();        break;
             case 'source':    this._toggleSourceMode();       break;
-            case 'table':     this._insertTable();            break;
+            /* [v4.8.0] `table` saiu daqui: virou popover (ver [13e]) e ja
+               retorna na guarda no topo deste metodo, junto de link/color/
+               highlight/image */
             case 'clear':     this._clearFormat();            break;
             case 'left':      this._applyTextAlign('left');    break;
             case 'center':    this._applyTextAlign('center');  break;
@@ -2434,6 +3094,11 @@
             case 'justify':   this._applyTextAlign('justify'); break;
             case 'quote':     this._toggleQuote();             break;
             case 'hr':        this._insertHr();                break;
+            /* [v4.9.0] fora de lista nao fazem nada (o botao ja aparece
+               desabilitado por _updateToolbarState) — `return` pula a cauda
+               sincrona, que emitiria ozi:change sem nada ter mudado */
+            case 'indent':    if (!this._applyListIndent(true))  return; break;
+            case 'outdent':   if (!this._applyListIndent(false)) return; break;
             /* assincronas — cuidam do proprio sync/emit ao resolver, por
                isso `return` em vez de `break` (pulam a cauda sincrona abaixo) */
             case 'paste':     this._pasteFromClipboard(false); return;
@@ -2538,13 +3203,125 @@
         }
     };
 
-    OziEditor.prototype._insertTable = function () {
-        document.execCommand('insertHTML', false,
-            '<table><tbody>' +
-            '<tr><td><br></td><td><br></td></tr>' +
-            '<tr><td><br></td><td><br></td></tr>' +
-            '</tbody></table><p><br></p>'
-        );
+    /* [v4.8.0] `rows` e o TOTAL de linhas visiveis — o que o usuario conta na
+       grade do seletor. Com cabecalho, 1 delas vai pro <thead> e o resto pro
+       <tbody>; `rows:1` + cabecalho gera tabela so com <thead> (HTML e GFM
+       validos) em vez de um <tbody> vazio.
+
+       O <p><br></p> final NAO e enfeite: e o escape que impede o caret de
+       ficar preso no fim da tabela (a versao 2x2 fixa ja o emitia, e a razao
+       nunca tinha sido escrita).
+
+       Assinatura defensiva com defaults: `_runTool` nao chama mais este
+       metodo (table virou popover), mas a chamada sem argumentos — de um
+       teste antigo ou de codigo do host — continua produzindo a 2x2 de
+       sempre em vez de NaN celulas. */
+    OziEditor.prototype._insertTable = function (cols, rows, withHeader) {
+        cols = _tableSize(cols, 2);
+        rows = _tableSize(rows, 2);
+
+        /* modo md: cabecalho obrigatorio. GFM exige a linha de cabecalho, e
+           sem <thead> o _tableToMd promove a primeira linha do corpo — o
+           dado do usuario mudaria de papel no round-trip, em silencio. O
+           checkbox da UI ja nasce ligado e desabilitado aqui; esta linha
+           cobre a chamada programatica. */
+        if (this.editorType === 'md') withHeader = true;
+
+        var cellsRow = function (tag) {
+            var out = '<tr>';
+            for (var c = 0; c < cols; c++) out += '<' + tag + '><br></' + tag + '>';
+            return out + '</tr>';
+        };
+
+        var bodyRows = withHeader ? rows - 1 : rows;
+        var html     = '<table>';
+
+        if (withHeader) html += '<thead>' + cellsRow('th') + '</thead>';
+
+        if (bodyRows > 0) {
+            html += '<tbody>';
+            for (var r = 0; r < bodyRows; r++) html += cellsRow('td');
+            html += '</tbody>';
+        }
+
+        html += '</table><p><br></p>';
+
+        this.content.focus();
+
+        /* `execCommand('insertHTML')` e nao `_insertHtmlAtCursor`: so o
+           primeiro entra no undo stack NATIVO do contenteditable, e a
+           ferramenta `undo` da toolbar e exatamente `execCommand('undo')`.
+           Manipular Range direto inseriria a tabela fora da pilha e o Ctrl+Z
+           seguinte desfaria a edicao ANTERIOR, deixando a tabela na tela —
+           era isso que a versao 2x2 fixa fazia certo sem dizer por que.
+           O fallback cobre o navegador que nao suporte o comando (mesmo
+           padrao do insertParagraph no keydown do Enter). */
+        try {
+            if (!document.execCommand('insertHTML', false, html)) {
+                this._insertHtmlAtCursor(html);
+            }
+        } catch (err) {
+            this._insertHtmlAtCursor(html);
+        }
+
+        this._saveSelection();
+    };
+
+    /* ─────────────────────────────────────────────
+     * [19b] INDENTACAO DE LISTA — v4.9.0
+     * ───────────────────────────────────────────── */
+
+    /* true = o caret esta dentro de um item de lista. E a UNICA condicao em
+       que indent/outdent agem: fora de lista o `indent` nativo vira
+       <blockquote style="margin-left:40px"> e, como o sanitizador apaga o
+       style, o texto viraria uma CITACAO de verdade (medido em probe). */
+    OziEditor.prototype._inListItem = function () {
+        return !!this._getClosestSelectionNode(['LI']);
+    };
+
+    /* O `indent` do Chromium produz markup INVALIDO dentro de lista:
+           <ul><li>um</li><ul><li>dois</li></ul></ul>
+       com o <ul> aninhado como IRMAO do <li>, nao filho dele. Alem de
+       invalido, isso APAGA o item na conversao pra MD (o _listToMd itera
+       filhos diretos e ignora o que nao e <li>).
+       Esta funcao move cada lista solta pra dentro do <li> imediatamente
+       anterior — a forma valida, que sobrevive ao round-trip. Roda logo
+       depois do execCommand: medido que o undo nativo continua desfazendo
+       os dois passos de uma vez (ver changelog da 4.9.0). */
+    OziEditor.prototype._normalizeNestedLists = function () {
+        var soltas = this.content.querySelectorAll('ul > ul, ul > ol, ol > ul, ol > ol');
+        Array.prototype.forEach.call(soltas, function (lista) {
+            var anterior = lista.previousElementSibling;
+
+            /* sem <li> antes (lista aninhada logo na 1a posicao) nao ha onde
+               encaixar sem inventar conteudo — cria um <li> vazio pra
+               segurar o nivel, que e o que o browser renderiza de todo jeito */
+            if (!anterior || anterior.tagName !== 'LI') {
+                anterior = document.createElement('li');
+                lista.parentNode.insertBefore(anterior, lista);
+            }
+            anterior.appendChild(lista);
+        });
+    };
+
+    /* `indent` true / `outdent` false. Devolve se algo foi aplicado — o
+       chamador so sincroniza/emite quando houve mudanca de verdade. */
+    OziEditor.prototype._applyListIndent = function (isIndent) {
+        if (!this._inListItem()) return false;
+
+        this.content.focus();
+        try {
+            document.execCommand(isIndent ? 'indent' : 'outdent', false, null);
+        } catch (err) {
+            return false;
+        }
+
+        /* so o indent cria lista solta; o outdent devolve markup valido
+           (medido) — mas normalizar nos dois e barato e cobre o caso de a
+           arvore ja estar torta de um paste ou de um setValue do host */
+        this._normalizeNestedLists();
+        this._saveSelection();
+        return true;
     };
 
     OziEditor.prototype._clearFormat = function () {
@@ -2639,6 +3416,20 @@
         var justifyActive = false;
         try { justifyActive = document.queryCommandState('justifyFull'); } catch (e) {}
         self._setToolActive('justify', justifyActive);
+
+        /* [v4.9.0] indent/outdent só se aplicam dentro de lista — fora dela
+           o botão fica DESABILITADO em vez de virar citação (o `indent`
+           nativo produz <blockquote> num parágrafo). `disabled` real, não só
+           classe: assim o botão também para de receber o clique.
+           Guardado por self.isDisabled pra não reabilitar botão de um editor
+           inteiro desabilitado (_setDisabled marca todos). */
+        var emLista = self._inListItem();
+        ['indent', 'outdent'].forEach(function (tool) {
+            Array.prototype.forEach.call(
+                self.toolbar.querySelectorAll('.ozi-editor-btn[data-ozi-editor-tool="' + tool + '"]'),
+                function (b) { b.disabled = self.isDisabled ? true : !emLista; }
+            );
+        });
 
         var block      = self._getClosestBlockElement();
         var currentTag = block ? String(block.tagName || '').toLowerCase() : '';
@@ -2756,17 +3547,31 @@
             self._updateToolbarState();
         });
 
-        /* botoes de popover (link/color/highlight/image) — abrem seu proprio popover */
+        /* botoes de popover (link/color/highlight/image/table) — abrem seu
+           proprio popover. `table` entrou na v4.8.0: ate a 4.7.1 era acao
+           direta do dispatcher generico (inseria uma 2x2 fixa). */
         self._on(self.wrap, 'mousedown', function (e) {
             var btn = self._closestIn(e.target,
                 '.ozi-editor-btn[data-ozi-editor-tool="link"], ' +
                 '.ozi-editor-btn[data-ozi-editor-tool="color"], ' +
                 '.ozi-editor-btn[data-ozi-editor-tool="highlight"], ' +
-                '.ozi-editor-btn[data-ozi-editor-tool="image"]');
+                '.ozi-editor-btn[data-ozi-editor-tool="image"], ' +
+                '.ozi-editor-btn[data-ozi-editor-tool="table"]');
             if (!btn) return;
             e.preventDefault();
             if (!self.isDisabled) self._togglePopover(btn.getAttribute('data-ozi-editor-popover-id'));
         });
+
+        /* popover flutuante (v4.7.1) — `position:fixed` nao acompanha o
+           trigger sozinho. CAPTURE no `scroll` porque o evento nao borbulha:
+           sem capture, rolar o proprio `.ozi-editor-content` (ou qualquer
+           container do host) deixaria o popover parado na tela. Gateado por
+           "tem popover aberto?" dentro do _repositionOpenPopovers, entao o
+           custo e um `forEach` vazio enquanto nada esta aberto. Registrado
+           pelo `_on` = removido pelo `destroy()`. */
+        var onReposition = function () { self._repositionOpenPopovers(); };
+        self._on(window, 'scroll', onReposition, true);
+        self._on(window, 'resize', onReposition);
 
         /* chevron de colapso (toolbar responsiva) — abre/fecha a 2a linha
            inline irma da row (data-ozi-editor-collapse-id liga trigger e
@@ -2977,6 +3782,150 @@
             self._uploadImage(file, input.closest('.ozi-editor-popover'));
         });
 
+        /* ── popover de tabela (v4.8.0) ────────────────────────────────── */
+
+        /* grade — hover pinta o retangulo. `mousemove` no CONTAINER (nao
+           `mouseenter` em 80 celulas): um listener delegado no lugar de 80,
+           e o alvo sai do e.target. Sem preventDefault aqui — mover o mouse
+           nao e gesto de intencao, e um preventDefault no mousemove atrapalha
+           a selecao do documento. */
+        self._on(self.wrap, 'mousemove', function (e) {
+            var cell = self._closestIn(e.target, '.ozi-editor-table-cell');
+            if (!cell) return;
+            var popover = cell.closest('.ozi-editor-popover');
+            if (!popover) return;
+            self._syncTableGrid(popover,
+                parseInt(cell.getAttribute('data-ozi-editor-table-col'), 10),
+                parseInt(cell.getAttribute('data-ozi-editor-table-row'), 10));
+        });
+
+        /* mouse saiu da grade — volta pro que os campos numericos pedem, nao
+           pro ultimo hover: o retangulo aceso tem que continuar dizendo a
+           verdade sobre o que o botao Inserir vai fazer.
+
+           CAPTURE porque `mouseleave` nao borbulha (mesmo motivo do `scroll`
+           do _repositionOpenPopovers, v4.7.1) — mas aqui o alvo tem que ser
+           a GRADE em si, testada por identidade e nao por `closest`: sair de
+           uma celula pra vizinha tambem dispara mouseleave NA CELULA, e um
+           `closest` acharia o grid ancestral e resetaria o highlight a cada
+           movimento dentro da propria grade. */
+        self._on(self.wrap, 'mouseleave', function (e) {
+            var grid = e.target;
+            if (!grid || !grid.getAttribute) return;
+            if (grid.getAttribute('data-ozi-editor-table-grid') !== 'true') return;
+            if (!self.wrap.contains(grid)) return;
+            var popover = grid.closest('.ozi-editor-popover');
+            if (!popover) return;
+            var v = self._tableFieldValues(popover);
+            self._syncTableGrid(popover, v.cols, v.rows);
+        }, true);
+
+        /* grade — clique numa celula insere direto naquele tamanho */
+        self._on(self.wrap, 'mousedown', function (e) {
+            var cell = self._closestIn(e.target, '.ozi-editor-table-cell');
+            if (!cell) return;
+            e.preventDefault();
+            if (self.isDisabled) return;
+            var popover = cell.closest('.ozi-editor-popover');
+            self._applyTableFromPopover(popover,
+                parseInt(cell.getAttribute('data-ozi-editor-table-col'), 10),
+                parseInt(cell.getAttribute('data-ozi-editor-table-row'), 10));
+            self._togglePopover(self._popoverIdFromElement(cell), true);
+        });
+
+        /* grade — navegacao por teclado. O container e o unico elemento
+           focavel da grade (tabindex=0), entao as setas movem o retangulo em
+           vez de rolar a pagina e o Enter insere. Sem isso a grade seria
+           exclusiva de mouse — os campos numericos continuam sendo o caminho
+           alternativo, mas a grade e o que tem foco visivel. */
+        self._on(self.wrap, 'keydown', function (e) {
+            var grid = self._closestIn(e.target, '[data-ozi-editor-table-grid]');
+            if (!grid) return;
+
+            var popover = grid.closest('.ozi-editor-popover');
+            if (!popover) return;
+            var v = self._tableFieldValues(popover);
+            var cols = v.cols, rows = v.rows;
+
+            if (e.key === 'ArrowRight')      cols = Math.min(cols + 1, TABLE_GRID_COLS);
+            else if (e.key === 'ArrowLeft')  cols = Math.max(cols - 1, 1);
+            else if (e.key === 'ArrowDown')  rows = Math.min(rows + 1, TABLE_GRID_ROWS);
+            else if (e.key === 'ArrowUp')    rows = Math.max(rows - 1, 1);
+            else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (self.isDisabled) return;
+                self._applyTableFromPopover(popover, cols, rows);
+                self._togglePopover(self._popoverIdFromElement(grid), true);
+                return;
+            } else return;
+
+            e.preventDefault();
+            var colInput = popover.querySelector('[data-ozi-editor-table-cols]');
+            var rowInput = popover.querySelector('[data-ozi-editor-table-rows]');
+            if (colInput) colInput.value = String(cols);
+            if (rowInput) rowInput.value = String(rows);
+            self._syncTableGrid(popover, cols, rows);
+        });
+
+        /* campos numericos — digitar reflete na grade na hora (o retangulo e
+           o feedback de "o que vai ser inserido", nao so um enfeite do hover) */
+        self._on(self.wrap, 'input', function (e) {
+            var input = self._closestIn(e.target,
+                '[data-ozi-editor-table-cols], [data-ozi-editor-table-rows]');
+            if (!input) return;
+            var popover = input.closest('.ozi-editor-popover');
+            if (!popover) return;
+            var v = self._tableFieldValues(popover);
+            self._syncTableGrid(popover, v.cols, v.rows);
+        });
+
+        /* botao Inserir */
+        self._on(self.wrap, 'mousedown', function (e) {
+            var btn = self._closestIn(e.target, '[data-ozi-editor-table-apply]');
+            if (!btn) return;
+            e.preventDefault();
+            if (self.isDisabled) return;
+            var popover = btn.closest('.ozi-editor-popover');
+            var v = self._tableFieldValues(popover);
+            self._applyTableFromPopover(popover, v.cols, v.rows);
+            self._togglePopover(self._popoverIdFromElement(btn), true);
+        });
+
+        /* Enter nos campos numericos insere (mesmo precedente do campo de URL
+           do link/imagem) */
+        self._on(self.wrap, 'keydown', function (e) {
+            var input = self._closestIn(e.target,
+                '[data-ozi-editor-table-cols], [data-ozi-editor-table-rows]');
+            if (!input || e.key !== 'Enter') return;
+            e.preventDefault();
+            if (self.isDisabled) return;
+            var popover = input.closest('.ozi-editor-popover');
+            var v = self._tableFieldValues(popover);
+            self._applyTableFromPopover(popover, v.cols, v.rows);
+            self._togglePopover(self._popoverIdFromElement(input), true);
+        });
+
+        /* painel de edicao — acoes sobre a tabela do caret */
+        self._on(self.wrap, 'mousedown', function (e) {
+            var btn = self._closestIn(e.target, '[data-ozi-editor-table-action]');
+            if (!btn) return;
+            e.preventDefault();
+            if (self.isDisabled) return;
+
+            /* o popover roubou o foco do contenteditable ao abrir; sem
+               restaurar, _getSelectedTableCell() nao acha celula nenhuma —
+               mesmo motivo dos handlers de aplicar/remover do link e da
+               imagem */
+            self._restoreSelection();
+
+            if (self._tableAction(btn.getAttribute('data-ozi-editor-table-action'))) {
+                self._syncToTextarea();
+                self._updateToolbarState();
+                self.emitChange();
+            }
+            self._togglePopover(self._popoverIdFromElement(btn), true);
+        });
+
         /* popover de cor/realce — clique num swatch aplica. `data-ozi-editor-
            popover-wrap` agora carrega o ID UNICO do popover (nao mais o
            nome bruto do tool, ver secao [11b]) — o nome semantico
@@ -3051,6 +4000,25 @@
                 self.emitChange();
             } else if (self._closestIn(e.target, '.ozi-editor-source')) {
                 self._syncToTextarea();
+                self.emitChange();
+            }
+        });
+
+        /* [v4.9.0] Tab / Shift+Tab — indenta SO dentro de item de lista.
+           Fora de lista o evento passa direto e o Tab segue levando o foco
+           pro proximo campo: capturar sempre prenderia quem navega por
+           teclado dentro do editor, sem saida (decisao do usuario). Por isso
+           o preventDefault fica DEPOIS do guard de lista, nao antes. */
+        self._on(self.wrap, 'keydown', function (e) {
+            if (e.key !== 'Tab') return;
+            if (!self._closestIn(e.target, '.ozi-editor-content')) return;
+            if (self.isDisabled || self.isSourceMode) return;
+            if (!self._inListItem()) return;   /* deixa o foco sair */
+
+            e.preventDefault();
+            if (self._applyListIndent(!e.shiftKey)) {
+                self._syncToTextarea();
+                self._updateToolbarState();
                 self.emitChange();
             }
         });

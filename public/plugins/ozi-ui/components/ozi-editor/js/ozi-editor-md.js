@@ -2,7 +2,21 @@
  * ------------------------------------------
  * ozi-editor-md
  * ------------------------------------------
- * Ver: 2.3.0
+ * Ver: 2.4.0
+ *
+ * Changelog:
+ *   - v2.4.0: [FEAT] LISTA ANINHADA nos dois sentidos (acompanha
+ *       ozi-editor 4.9.0, que ganhou indent/outdent).
+ *       `_listToMd` recebe `depth` e emite 2 espacos por nivel; antes ele
+ *       ignorava qualquer <ul>/<ol> dentro do <li> — a sublista vinha
+ *       concatenada NA MESMA LINHA do item pai, achatando o nivel.
+ *       `_parseList` recebe `baseIndent` e reconhece o recuo: linha mais
+ *       recuada abre sublista (recursao) DENTRO do ultimo <li>, linha menos
+ *       recuada encerra o nivel. Antes o padrao era ancorado em `^[-*]` e
+ *       uma linha recuada nao casava: a lista terminava ali e o resto virava
+ *       paragrafo solto. Tolera recuo de 2, 3 ou 4 espacos (e TAB) pra
+ *       aceitar Markdown escrito a mao, e encerra o nivel quando o TIPO muda
+ *       (`-` vira `1.`) em vez de misturar os dois numa lista so.
  * 2026-08-28
  *
  * [2.3.0] Fase 3 da nova leva de ferramentas do ozi-editor: conversor real
@@ -265,15 +279,58 @@
         return text;
     }
 
-    function _parseList(lines, startIndex, type) {
-        var items   = [];
-        var i       = startIndex;
-        var pattern = type === 'ul' ? /^[-*]\s+(.*)/ : /^\d+\.\s+(.*)/;
+    /* [v2.4.0] reconhece SUBLISTA por recuo. Antes o padrão era ancorado em
+       `^[-*]` e uma linha recuada (`  - filho`) simplesmente não casava: a
+       lista terminava ali e o resto virava parágrafo solto.
+
+       `baseIndent` é o recuo do nível atual. Uma linha mais recuada abre uma
+       sublista (recursão) que entra DENTRO do último <li> — a forma válida,
+       e a única que o `_listToMd` consegue devolver para Markdown. Uma linha
+       menos recuada encerra este nível e devolve o controle a quem chamou.
+
+       O recuo é medido em espaços, e cada nível do `_listToMd` emite 2 — mas
+       aqui qualquer recuo maior que o da base abre nível, para tolerar
+       Markdown escrito à mão com 3 ou 4 espaços (e TAB, normalizado antes). */
+    function _parseList(lines, startIndex, type, baseIndent) {
+        baseIndent = baseIndent || 0;
+
+        var items = [];
+        var i     = startIndex;
+
+        var reUl  = /^(\s*)[-*]\s+(.*)/;
+        var reOl  = /^(\s*)\d+\.\s+(.*)/;
 
         while (i < lines.length) {
-            var match = lines[i].match(pattern);
+            var raw   = String(lines[i]).replace(/\t/g, '  ');
+            var mUl   = raw.match(reUl);
+            var mOl   = raw.match(reOl);
+            var match = mUl || mOl;
             if (!match) break;
-            items.push('<li>' + _inlineToHtml(match[1]) + '</li>');
+
+            var indent = match[1].length;
+
+            /* recuo menor que a base: o item pertence a um nível acima —
+               encerra este e deixa o chamador seguir */
+            if (indent < baseIndent) break;
+
+            if (indent > baseIndent) {
+                /* sublista: consome o bloco inteiro recursivamente e pendura
+                   no último <li>. Sem item anterior (Markdown malformado
+                   começando recuado) cria um <li> vazio para não perder o
+                   conteúdo. */
+                var sub = _parseList(lines, i, mOl ? 'ol' : 'ul', indent);
+                if (!items.length) items.push('<li></li>');
+                items[items.length - 1] =
+                    items[items.length - 1].replace(/<\/li>$/, '') + sub.html + '</li>';
+                i = sub.nextIndex;
+                continue;
+            }
+
+            /* mudou o TIPO no mesmo nível (- vira 1.) — encerra para o
+               chamador abrir a lista certa, em vez de misturar os dois */
+            if ((type === 'ul' && !mUl) || (type === 'ol' && !mOl)) break;
+
+            items.push('<li>' + _inlineToHtml(match[2]) + '</li>');
             i++;
         }
 
@@ -445,15 +502,43 @@
         }
     }
 
-    function _listToMd(listNode, type) {
+    /* [v2.4.0] `depth` = nível de aninhamento (0 = raiz), usado pro recuo de
+       2 espaços por nível — a convenção que o `_parseList` lê de volta.
+       Antes desta versão a função ignorava qualquer <ul>/<ol> dentro do
+       <li>: o `_nodeToMd(child)` devolvia a sublista já convertida e ela era
+       concatenada NA MESMA LINHA do item pai, achatando o nível. Agora a
+       sublista é separada do texto do item e emitida como linhas próprias,
+       recuadas. */
+    function _listToMd(listNode, type, depth) {
+        depth = depth || 0;
+
         var items  = [];
         var count  = 1;
+        var recuo  = new Array(depth + 1).join('  ');   /* 2 espaços por nível */
+
         Array.prototype.slice.call(listNode.childNodes).forEach(function (child) {
             if (child.nodeType !== 1) return;
             if (String(child.tagName || '').toUpperCase() !== 'LI') return;
-            var text = _trim(_nodeToMd(child));
-            items.push(type === 'ol' ? (count++) + '. ' + text : '- ' + text);
+
+            /* separa o texto do item das sublistas que ele contém: sem isso
+               as duas partes saem grudadas numa linha só */
+            var subListas = [];
+            var proprio   = '';
+
+            Array.prototype.slice.call(child.childNodes).forEach(function (n) {
+                var tag = n.nodeType === 1 ? String(n.tagName || '').toUpperCase() : '';
+                if (tag === 'UL' || tag === 'OL') {
+                    subListas.push(_listToMd(n, tag === 'OL' ? 'ol' : 'ul', depth + 1));
+                } else {
+                    proprio += _nodeToMd(n);
+                }
+            });
+
+            var prefixo = type === 'ol' ? (count++) + '. ' : '- ';
+            items.push(recuo + prefixo + _trim(proprio));
+            subListas.forEach(function (sub) { if (sub) items.push(sub); });
         });
+
         return items.join('\n');
     }
 

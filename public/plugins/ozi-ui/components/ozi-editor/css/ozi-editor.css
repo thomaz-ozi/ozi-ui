@@ -1,6 +1,36 @@
 /**
  * components/ozi-editor/css/ozi-editor.css
- * Versão: 2.7.0
+ * Versão: 2.8.0
+ *
+ * [2.8.0] FEAT Seletor e editor de tabela (ozi-editor.js 4.8.0) — grade de
+ *         tamanho (`.ozi-editor-table-grid`/`-cell`), label vivo, checkbox de
+ *         cabeçalho, campos colunas/linhas (`.ozi-editor-table-fields`) e
+ *         lista de ações do painel de edição (`.ozi-editor-table-action`).
+ *         Portados do mockup do designer (`ozi-ui-designer/OZI-UI/demo/
+ *         ozi-editor.html`, blocos "[10] SELETOR DE TABELA" e "[12] CAMPOS
+ *         DO SELETOR DE TABELA"), desenhados em 2026-08-27 e nunca
+ *         implementados.
+ *         [FIX] de carona: `.ozi-editor-content th` não tinha NENHUMA regra
+ *         própria — só o `td, th` compartilhado de borda/padding. Um
+ *         cabeçalho era visualmente idêntico a uma linha comum, o que
+ *         tornaria o checkbox novo invisível no resultado.
+ *
+ * [2.7.1] FIX Popover/dropdown cortado pela moldura (ozi-editor.js 4.7.1):
+ *         `.ozi-editor-popover` e `.ozi-editor-heading-dropdown`/
+ *         `-classes-dropdown` trocam `position:absolute` por `fixed` — como
+ *         absolute eles eram cortados pelo `overflow:hidden` do
+ *         `.ozi-editor-wrap` (o popover de imagem tem ~260px e um editor com
+ *         o `min-height` padrão tem ~257px: o `Aplicar`/`Remover` ficava
+ *         fora e NÃO-CLICÁVEL) e, no modo Scroll da toolbar, pelo
+ *         `overflow-x:auto` da track (corte de ~236px + scroll vertical
+ *         parasita na barra). O `top`/`left` do CSS viram só estado inicial:
+ *         quem manda são as coordenadas que o `_positionFloating` escreve
+ *         inline ao abrir. `overflow-y:auto` dá o scroll interno quando o JS
+ *         precisa limitar a altura por falta de espaço na viewport, e
+ *         `flex-shrink:0` nos filhos diretos impede que eles encolham em vez
+ *         de rolar (o popover é `flex-direction:column`).
+ *         A moldura **continua** com `overflow:hidden` — o fix não é abrir o
+ *         clip do border-radius, é tirar o popover do fluxo clipado.
  *
  * [2.7.0] FEAT-9 Alinhamento de imagem (ozi-editor.js 4.7.0):
  *         `.ozi-editor-content` ganha `position:relative` — é o que dá
@@ -470,6 +500,15 @@
 .ozi-editor-content td,
 .ozi-editor-content th         { border: 1px solid var(--ozi-editor-border); padding: 8px; vertical-align: top; }
 
+/* [2.8.0] até aqui `th` só herdava o `td, th` acima — cabeçalho era
+   indistinguível de linha comum, e o checkbox de cabeçalho do seletor
+   (4.8.0) não teria efeito visível nenhum. Regra portada do mockup. */
+.ozi-editor-content th {
+    background:  color-mix(in srgb, var(--ozi-editor-text) 6%, transparent);
+    font-weight: 600;
+    text-align:  left;
+}
+
 .ozi-editor-content blockquote {
     margin:       0 0 10px;
     padding:      2px 14px;
@@ -605,11 +644,16 @@
     display:  inline-flex;
 }
 
+/* [2.7.1] `fixed` + coordenadas do JS (_positionFloating): como `absolute`
+   estes dropdowns eram cortados pelo `overflow:hidden` do .ozi-editor-wrap e
+   pelo `overflow-x:auto` da track do modo Scroll. `top`/`left` abaixo sao so
+   o estado inicial — o JS sobrescreve os dois ao abrir. */
 .ozi-editor-heading-dropdown,
 .ozi-editor-classes-dropdown {
-    position:       absolute;
-    top:            calc(100% + 4px);
+    position:       fixed;
+    top:            0;
     left:           0;
+    overflow-y:     auto;
     z-index:        var(--ozi-z-dropdown, 1000);
     min-width:      160px;
     background:     var(--ozi-editor-bg);
@@ -638,10 +682,15 @@
 
 .ozi-editor-popover-wrap { position: relative; display: inline-flex; }
 
+/* [2.7.1] mesma troca de absolute -> fixed dos dropdowns acima (era este o
+   popover que o usuario via cortado: o de imagem tem ~260px e um editor com
+   o min-height padrao tem ~257px). `overflow-y:auto` da o scroll interno
+   quando o JS precisa limitar a altura por falta de espaco na viewport. */
 .ozi-editor-popover {
-    position:       absolute;
-    top:            calc(100% + 4px);
+    position:       fixed;
+    top:            0;
     left:           0;
+    overflow-y:     auto;
     z-index:        var(--ozi-z-dropdown, 1000);
     display:        flex;
     flex-direction: column;
@@ -661,6 +710,10 @@
     background:   var(--ozi-editor-toolbar-bg);
     border-color: var(--ozi-editor-border);
 }
+
+/* [2.7.1] com max-height + scroll (popover que nao cabe na viewport), os
+   filhos de um container flex-column encolheriam em vez de rolar */
+.ozi-editor-popover > * { flex-shrink: 0; }
 
 .ozi-editor-popover-field {
     display:        flex;
@@ -805,6 +858,156 @@
     overflow:   hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+/* ─── SELETOR DE TABELA (v4.8.0) ─────────────────────────── */
+/* Portado do mockup do designer (blocos "[10] SELETOR DE TABELA" e
+   "[12] CAMPOS DO SELETOR DE TABELA"). Mesmo motivo do popover de cor logo
+   abaixo pro `width:auto`: a largura vem da grade, que é fixa em colunas de
+   16px — o container não pode impor 220px. */
+
+.ozi-editor-popover--table { width: auto; gap: 8px; }
+
+/* as duas faces do popover: inserção e edição (alternadas pelo JS, o caret
+   decide qual) */
+.ozi-editor-table-panel {
+    display:        flex;
+    flex-direction: column;
+    gap:            8px;
+}
+
+.ozi-editor-table-grid {
+    display: grid;   /* grid-template-columns vem do JS (TABLE_GRID_COLS) */
+    gap:     2px;
+}
+
+.ozi-editor-table-grid:focus { outline: none; }
+
+.ozi-editor-table-grid:focus-visible {
+    outline:        2px solid var(--ozi-editor-uicolor);
+    outline-offset: 3px;
+    border-radius:  3px;
+}
+
+.ozi-editor-table-cell {
+    width:         16px;
+    height:        16px;
+    border:        1px solid var(--ozi-editor-border);
+    border-radius: 3px;
+    background:    var(--ozi-editor-bg);
+    cursor:        pointer;
+    transition:    background 0.08s linear, border-color 0.08s linear;
+}
+
+.ozi-editor-table-cell.is-on {
+    border-color: var(--ozi-editor-uicolor);
+    background:   color-mix(in srgb, var(--ozi-editor-uicolor) 28%, transparent);
+}
+
+.ozi-editor-table-label {
+    font-family:          ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size:            11px;
+    font-variant-numeric: tabular-nums;
+    text-align:           center;
+    color:                var(--ozi-editor-muted);
+}
+
+.ozi-editor-table-header-field {
+    display:     flex;
+    align-items: center;
+    gap:         6px;
+    font-size:   11.5px;
+    color:       var(--ozi-editor-text);
+    cursor:      pointer;
+}
+
+/* no modo md o checkbox fica marcado e desabilitado (GFM exige cabeçalho) —
+   o rótulo precisa dizer isso visualmente, senão parece quebrado */
+.ozi-editor-table-header-field:has(input:disabled) { opacity: 0.6; cursor: default; }
+
+.ozi-editor-table-fields {
+    display:     flex;
+    align-items: flex-end;
+    gap:         6px;
+    padding-top: 8px;
+    border-top:  1px solid var(--ozi-editor-border);
+}
+
+.ozi-editor-table-field {
+    display:        flex;
+    flex-direction: column;
+    gap:            4px;
+    min-width:      0;
+    flex:           1;
+}
+
+.ozi-editor-table-field-label {
+    font-size:      9.5px;
+    font-weight:    700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color:          var(--ozi-editor-muted);
+}
+
+.ozi-editor-table-input {
+    width:         100%;
+    height:        28px;
+    padding:       0 6px;
+    border:        1px solid var(--ozi-editor-border);
+    border-radius: 7px;
+    background:    var(--ozi-editor-bg);
+    color:         var(--ozi-editor-text);
+    font-family:   ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size:     12px;
+    text-align:    center;
+    outline:       none;
+}
+
+.ozi-editor-table-input:focus {
+    border-color: var(--ozi-editor-uicolor);
+    box-shadow:   0 0 0 3px color-mix(in srgb, var(--ozi-editor-uicolor) 18%, transparent);
+}
+
+.ozi-editor-table-insert {
+    height:        28px;
+    padding:       0 12px;
+    border:        0;
+    border-radius: 7px;
+    background:    var(--ozi-editor-uicolor);
+    color:         #fff;
+    font-family:   inherit;
+    font-size:     11.5px;
+    font-weight:   600;
+    cursor:        pointer;
+}
+
+.ozi-editor-table-insert:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* painel de edição — lista de texto, mesmo espírito dos itens de
+   heading/classes (não são botões com ícone: seriam 7 SVGs pra ações que só
+   fazem sentido lidas) */
+.ozi-editor-table-action {
+    display:       block;
+    width:         100%;
+    padding:       5px 8px;
+    border:        0;
+    border-radius: var(--ozi-radius-sm, 0.25rem);
+    background:    transparent;
+    color:         var(--ozi-editor-text);
+    font-family:   inherit;
+    font-size:     0.8125rem;
+    text-align:    left;
+    cursor:        pointer;
+}
+
+.ozi-editor-table-action:hover {
+    background: color-mix(in srgb, var(--ozi-editor-uicolor) 12%, transparent);
+}
+
+.ozi-editor-table-action--danger { color: var(--ozi-color-danger, #b02a37); }
+
+.ozi-editor-table-action--danger:hover {
+    background: var(--ozi-color-danger-light, #fbe6e7);
 }
 
 /* ─── GRADE DE SWATCHES (color/highlight) ────────────────── */
