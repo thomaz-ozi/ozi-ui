@@ -75,14 +75,24 @@ class OziCoreServiceProvider extends ServiceProvider
      *
      * O prefixo espelha config('ozi-ui.base_path') — a mesma base que o
      * OziAssets usa em asset('plugins/ozi-ui/...').
+     *
+     * ⚠️ A closure é `static` e recebe os escalares por `use` DE PROPÓSITO.
+     * Uma closure de rota que captura `$this` arrasta o ServiceProvider inteiro
+     * — e, com ele, o container — para o `laravel/serializable-closure` quando
+     * o app roda `php artisan route:cache`, estourando a memória. A falha não
+     * aparece em desenvolvimento: aparece no deploy, que é onde o route:cache
+     * roda. Não volte a usar `$this` aqui.
      */
     protected function registerAssetRoute(): void
     {
         $base = trim((string) config('ozi-ui.base_path', 'plugins/ozi-ui'), '/');
 
-        Route::get($base . '/{path}', function (string $path) {
-            $root = realpath($this->assetsRoot);
-            $file = realpath($this->assetsRoot . '/' . $path);
+        $assetsRoot = $this->assetsRoot;
+        $mimes      = $this->mimes;
+
+        Route::get($base . '/{path}', static function (string $path) use ($assetsRoot, $mimes) {
+            $root = realpath($assetsRoot);
+            $file = realpath($assetsRoot . '/' . $path);
 
             // 404 se: base inacessível, path traversal para fora da raiz, ou não é arquivo.
             abort_if(
@@ -94,10 +104,10 @@ class OziCoreServiceProvider extends ServiceProvider
             );
 
             $ext = strtolower(pathinfo($file, PATHINFO_EXTENSION));
-            abort_unless(isset($this->mimes[$ext]), 404);
+            abort_unless(isset($mimes[$ext]), 404);
 
             $response = new BinaryFileResponse($file);
-            $response->headers->set('Content-Type', $this->mimes[$ext]);
+            $response->headers->set('Content-Type', $mimes[$ext]);
             $response->setAutoLastModified();
 
             // O OziAssets já faz cache-busting via ?v=; em debug evitamos cache

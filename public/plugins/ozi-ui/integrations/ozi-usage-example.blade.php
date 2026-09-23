@@ -1,31 +1,37 @@
 {{-- ============================================================
-     OZI-UI v1.0.0 — Exemplo de integração completa com Livewire
+     OZI-UI v2 — Exemplo de integração completa com Livewire
      ============================================================
-     Ordem de carregamento correta para projeto Laravel + Livewire
+     Atualizado em 2026-09-23 (ozi-ui/core 2.6.0).
+
+     ⚠️ Este arquivo já esteve defasado: ensinava o boot manual da v1,
+     carregando `core/ozi-core.js`, `core/ozi-en.js` e `ozi-copy` — três
+     arquivos que NÃO existem mais no pacote. Quem copiava daqui tomava 404
+     e um editor que nunca inicializava. Ao mexer nos componentes, mexa aqui
+     junto: exemplo publicado desatualizado ensina o erro ativamente.
      ============================================================ --}}
 
-{{-- [1] CSS --}}
-<link rel="stylesheet" href="{{ asset('plugins/ozi-ui/themes/bootstrap5/tokens.css') }}">
-<link rel="stylesheet" href="{{ asset('plugins/ozi-ui/themes/bootstrap5/overrides.css') }}">
-<link rel="stylesheet" href="{{ asset('plugins/ozi-ui/shared/css/ozi-utilities.css') }}">
-<link rel="stylesheet" href="{{ asset('plugins/ozi-ui/components/ozi-select/css/ozi-select.css') }}">
-<link rel="stylesheet" href="{{ asset('plugins/ozi-ui/components/ozi-select/css/ozi-select-bs5.css') }}">
-<link rel="stylesheet" href="{{ asset('plugins/ozi-ui/components/ozi-editor/css/ozi-editor.css') }}">
-<link rel="stylesheet" href="{{ asset('plugins/ozi-ui/modules/ozi-loaddata/css/ozi-loaddata.css') }}">
+{{-- ============================================================
+     [1] BOOT — as duas diretivas dão conta de tudo
+     ============================================================
+     @oziStyles / @oziScripts emitem CSS e JS na ordem correta, com o
+     locale do Laravel e cache-busting por versão do pacote.
 
-{{-- [2] Core JS — ordem obrigatória --}}
-<script src="{{ asset('plugins/ozi-ui/core/ozi-conf.js') }}"></script>
-<script src="{{ asset('plugins/ozi-ui/core/ozi-hooks.js') }}"></script>
-<script src="{{ asset('plugins/ozi-ui/core/ozi-en.js') }}"></script>
-<script src="{{ asset('plugins/ozi-ui/core/ozi-loader.js') }}"></script>
-<script src="{{ asset('plugins/ozi-ui/core/ozi-integrations.js') }}"></script>
-<script src="{{ asset('plugins/ozi-ui/core/helpers/ozi-helpers.js') }}"></script>
-<script src="{{ asset('plugins/ozi-ui/core/ozi-core.js') }}"></script>
+     Sem argumento = todos os plugins. Com lista, as DEPENDÊNCIAS são
+     resolvidas sozinhas (desde a 2.6.0): pedir 'editor' traz junto o
+     'validate' e o 'editor-sanitize', que o editor exige em runtime.
+     A ordem das tags é sempre a canônica, não a ordem que você digitou.
 
-{{-- [3] Tema classmap --}}
+     Grupos aceitos: auth · forms · livewire · shims-v1 · full
+     ============================================================ --}}
+
+@oziStyles(['select', 'autocomplete', 'editor', 'loaddata'])
+
+@oziScripts(['forms', 'editor', 'audio', 'auth', 'check', 'search', 'toggle', 'livewire'])
+
+{{-- [2] Tema classmap — só se o app usa bootstrap5/tailwind --}}
 <script src="{{ asset('plugins/ozi-ui/themes/bootstrap5/classmap.js') }}"></script>
 
-{{-- [4] Configuração global --}}
+{{-- [3] Configuração global — sempre DEPOIS do @oziScripts --}}
 <script>
 oziConf({
     theme:        'bootstrap5',
@@ -34,7 +40,6 @@ oziConf({
     fallbackLang: 'en',
     integrations: ['livewire'],
     core: {
-        urlBase:  '/plugins/ozi-ui/',
         log:      false,
         failFast: false
     },
@@ -46,50 +51,11 @@ oziConf({
 });
 </script>
 
-{{-- [5] Lang compartilhado --}}
-<script src="{{ asset('plugins/ozi-ui/shared/lang/pt-BR.js') }}"></script>
+{{-- ⓘ `core.urlBase` não precisa ser declarado no caminho @oziScripts:
+     o próprio OziAssets já injeta a base resolvida por asset(). --}}
 
-{{-- [6] Modules --}}
-<script src="{{ asset('plugins/ozi-ui/modules/ozi-loaddata/js/ozi-loaddata.js') }}"></script>
-<script src="{{ asset('plugins/ozi-ui/modules/ozi-validate/js/ozi-validate.js') }}"></script>
-<script src="{{ asset('plugins/ozi-ui/modules/ozi-actions/js/ozi-actions.js') }}"></script>
-<script src="{{ asset('plugins/ozi-ui/modules/ozi-suggest/js/ozi-suggest.js') }}"></script>
-<script src="{{ asset('plugins/ozi-ui/modules/ozi-password-rules/js/ozi-password-rules.js') }}"></script>
-
-{{-- [7] Components + lang --}}
-<script src="{{ asset('plugins/ozi-ui/components/ozi-select/lang/pt-BR.js') }}"></script>
-<script src="{{ asset('plugins/ozi-ui/components/ozi-select/js/ozi-select.js') }}"></script>
-
-<script src="{{ asset('plugins/ozi-ui/components/ozi-autocomplete/lang/pt-BR.js') }}"></script>
-<script src="{{ asset('plugins/ozi-ui/components/ozi-autocomplete/js/ozi-autocomplete.js') }}"></script>
-
-<script src="{{ asset('plugins/ozi-ui/components/ozi-editor/lang/pt-BR.js') }}"></script>
-<script src="{{ asset('plugins/ozi-ui/components/ozi-editor/js/ozi-editor.js') }}"></script>
-
-<script src="{{ asset('plugins/ozi-ui/components/ozi-audio/lang/pt-BR.js') }}"></script>
-<script src="{{ asset('plugins/ozi-ui/components/ozi-audio/js/ozi-audio.js') }}"></script>
-
-<script src="{{ asset('plugins/ozi-ui/components/ozi-auth/lang/pt-BR.js') }}"></script>
-<script src="{{ asset('plugins/ozi-ui/components/ozi-auth/js/ozi-auth.js') }}"></script>
-
-<script src="{{ asset('plugins/ozi-ui/components/ozi-check/js/ozi-check.js') }}"></script>
-<script src="{{ asset('plugins/ozi-ui/components/ozi-search/js/ozi-search.js') }}"></script>
-
-{{-- [8] Behaviors --}}
-<script src="{{ asset('plugins/ozi-ui/behaviors/ozi-copy/js/ozi-copy.js') }}"></script>
-<script src="{{ asset('plugins/ozi-ui/behaviors/ozi-toggle/js/ozi-toggle.js') }}"></script>
-
-{{-- [9] Integrations --}}
-<script src="{{ asset('plugins/ozi-ui/integrations/adapters/ozi-livewire.adapter.js') }}"></script>
-<script src="{{ asset('plugins/ozi-ui/integrations/plugins/ozi-select.plugin.js') }}"></script>
-<script src="{{ asset('plugins/ozi-ui/integrations/plugins/ozi-autocomplete.plugin.js') }}"></script>
-<script src="{{ asset('plugins/ozi-ui/integrations/plugins/ozi-editor.plugin.js') }}"></script>
-<script src="{{ asset('plugins/ozi-ui/integrations/plugins/ozi-audio.plugin.js') }}"></script>
-<script src="{{ asset('plugins/ozi-ui/integrations/plugins/ozi-auth.plugin.js') }}"></script>
-<script src="{{ asset('plugins/ozi-ui/integrations/plugins/ozi-check.plugin.js') }}"></script>
-<script src="{{ asset('plugins/ozi-ui/integrations/plugins/ozi-search.plugin.js') }}"></script>
-<script src="{{ asset('plugins/ozi-ui/integrations/plugins/ozi-copy.plugin.js') }}"></script>
-<script src="{{ asset('plugins/ozi-ui/integrations/plugins/ozi-toggle.plugin.js') }}"></script>
+{{-- ⓘ Verificação: `php artisan ozi:check` valida a instalação contra o
+     _pluginMap (fonte única) e acusa qualquer deriva, inclusive de deps. --}}
 
 
 {{-- ============================================================
@@ -128,8 +94,10 @@ oziConf({
 
 
 {{-- EDITOR com Livewire --}}
+{{-- A chave vai em data-ozi-editor-html (ou -md, para o editor Markdown).
+     `data-ozi-editor` sem sufixo é da v1 e NÃO inicializa o componente. --}}
 <div wire:ignore>
-    <textarea data-ozi-editor="descricao"
+    <textarea data-ozi-editor-html="descricao"
               data-ozi-editor-required="true"
               data-ozi-livewire-model="descricao"
               name="descricao">{{ $descricao ?? '' }}</textarea>
@@ -172,13 +140,9 @@ oziConf({
 </div>
 
 
-{{-- COPY --}}
-<button data-ozi-copy-value="Texto copiado!">Copiar</button>
-
-<div data-ozi-copy-content="codigo-ref">
-    <code>npm install ozi-ui</code>
-</div>
-<button data-ozi-copy="codigo-ref">Copiar código</button>
+{{-- ⚠️ ozi-copy / ozi-paste foram DESCONTINUADOS no corte 2.0.0 (uso medido = zero).
+     O exemplo que existia aqui foi removido. Substitutos: receitas Alpine, em
+     ozi-ui-docs/dev/_meta/receitas-alpine.md. O código segue na tag v1-final. --}}
 
 
 {{-- CHECKBOXES hierárquicos --}}

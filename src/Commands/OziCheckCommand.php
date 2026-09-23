@@ -24,6 +24,7 @@ use OziUI\Core\OziAssets;
  *   2. Todo js/css do _pluginMap existe em disco
  *   3. Todo path do OziAssets existe em disco
  *   4. Deriva OziAssets ↔ _pluginMap (dois sentidos, com exceções documentadas)
+ *   4c. Deriva do `deps:` — o $scriptDeps do OziAssets espelha o _pluginMap
  *   5. config/ozi-ui.php disponível (publicado OU merge do pacote)
  */
 class OziCheckCommand extends Command
@@ -78,6 +79,15 @@ class OziCheckCommand extends Command
      */
     protected array $assetsOnlyAllowed = [
         'modules/ozi-validate/css/ozi-validate.css',
+    ];
+
+    /**
+     * Chaves cujo nome diverge entre o _pluginMap (JS) e o OziAssets (PHP).
+     * Divergência histórica, mantida por compatibilidade do @oziScripts.
+     */
+    protected array $mapKeyAliases = [
+        'password-rules' => 'password',
+        'livewire'       => 'livewire-adapter',
     ];
 
     public function handle(): int
@@ -151,6 +161,13 @@ class OziCheckCommand extends Command
                 $this->line("  <fg=red>✘</> deriva: <fg=white>{$file}</> está no OziAssets.php mas não no _pluginMap");
                 $allOk = false;
             }
+
+            // ── 4c. Deriva do `deps:` ────────────────────────────────────
+            // O @oziScripts não passa pelo ozi-loader, então o OziAssets tem o
+            // seu próprio espelho das dependências ($scriptDeps). Se os dois
+            // divergirem, volta a valer o problema que a 2.6.0 corrigiu: uma
+            // chave emitida sem a dependência que ela precisa em runtime.
+            $allOk = $this->checkDepsDrift($assets) && $allOk;
         }
 
         // ── 5. Config disponível (publicado OU merge do pacote) ──────────
@@ -222,6 +239,96 @@ class OziCheckCommand extends Command
             return $this->pkg . '/' . $file;
         }
         return null;
+    }
+
+    /**
+     * Compara o $scriptDeps do OziAssets com o `deps:` do _pluginMap.
+     *
+     * Só compara chaves que existem nos DOIS lados: `copy`/`paste` (descontinuados)
+     * e qualquer chave do map fora do OziAssets são ignoradas aqui — o check 4
+     * já cobre esse tipo de ausência.
+     */
+    protected function checkDepsDrift(OziAssets $assets): bool
+    {
+        $mapDeps = $this->parsePluginDeps($this->resolvePath('core/ozi-conf.js'));
+
+        if ($mapDeps === null) {
+            $this->line('  <fg=yellow>⚠</> não foi possível ler o <fg=white>deps:</> do _pluginMap — deriva de deps não verificada');
+            return true;
+        }
+
+        $phpDeps = $assets->getScriptDeps();
+        $scripts = $assets->getAvailableScripts();
+        $ok      = true;
+
+        foreach ($mapDeps as $mapKey => $deps) {
+            $key = $this->mapKeyAliases[$mapKey] ?? $mapKey;
+
+            if (!isset($scripts[$key])) {
+                continue;
+            }
+
+            $expected = [];
+            foreach ($deps as $dep) {
+                $depKey = $this->mapKeyAliases[$dep] ?? $dep;
+                if (isset($scripts[$depKey])) {
+                    $expected[] = $depKey;
+                }
+            }
+
+            $actual = $phpDeps[$key] ?? [];
+
+            sort($expected);
+            sort($actual);
+
+            if ($expected !== $actual) {
+                $this->line(
+                    "  <fg=red>✘</> deriva de deps: <fg=white>{$key}</> — _pluginMap diz ["
+                    . implode(', ', $expected) . '], OziAssets diz [' . implode(', ', $actual) . ']'
+                );
+                $ok = false;
+            }
+        }
+
+        return $ok;
+    }
+
+    /**
+     * Extrai o `deps:` de cada chave do bloco `var _pluginMap = {...}`.
+     * Retorna null se o arquivo/bloco não puder ser lido.
+     *
+     * @return array<string,array<int,string>>|null
+     */
+    protected function parsePluginDeps(?string $confPath): ?array
+    {
+        if ($confPath === null || !file_exists($confPath)) {
+            return null;
+        }
+
+        $src = file_get_contents($confPath);
+
+        if (!preg_match('/var\s+_pluginMap\s*=\s*\{(.*?)\n    \};/s', $src, $block)) {
+            return null;
+        }
+
+        // `'chave': { deps: [ ... ]` — deps é sempre a 1ª propriedade da entrada.
+        if (!preg_match_all(
+            '/[\'"]([a-z0-9-]+)[\'"]\s*:\s*\{\s*deps:\s*\[([^\]]*)\]/i',
+            $block[1],
+            $matches,
+            PREG_SET_ORDER
+        )) {
+            return null;
+        }
+
+        $out = [];
+
+        foreach ($matches as $m) {
+            preg_match_all('/[\'"]([a-z0-9-]+)[\'"]/i', $m[2], $deps);
+            $out[$m[1]] = $deps[1];
+        }
+
+        return $out;
     }
 
     /**

@@ -95,6 +95,40 @@ class OziAssets
     /** Locales com dicionário publicado. Qualquer outro cai no fallback. */
     protected array $supportedLocales = ['pt-BR', 'en', 'es'];
 
+    /**
+     * Dependências entre chaves de script — espelho PHP do `deps:` do _pluginMap
+     * (core/ozi-conf.js, fonte única). O `php artisan ozi:check` valida a deriva
+     * entre os dois; ao mexer no `deps:` do JS, mexa aqui também.
+     *
+     * Existe porque o @oziScripts NÃO passa pelo ozi-loader: até a 2.6.0 esta
+     * classe era uma tradução literal chave → caminho, então
+     * `@oziScripts(['editor'])` emitia um editor SEM o ozi-editor-sanitize —
+     * que desde o editor 4.4.0 é módulo à parte e dá `throw` na 1ª sanitização.
+     * A mensagem do throw manda declarar `deps:` no ozi-conf, que é justamente
+     * o mecanismo que não se aplica a quem chegou por aqui.
+     *
+     * ⚠️ Nome divergente: o _pluginMap chama `password-rules`; a chave pública
+     * do @oziScripts é `password` (mantida por compatibilidade). O ozi:check
+     * conhece o alias.
+     */
+    protected array $scriptDeps = [
+        'loaddata'            => ['validate', 'actions'],
+        'select'              => ['loaddata', 'suggest', 'validate'],
+        'autocomplete'        => ['loaddata', 'suggest', 'validate'],
+        'editor'              => ['validate', 'editor-sanitize'],
+        'editor-md'           => ['editor'],
+        'audio'               => ['loaddata'],
+        'auth'                => ['password'],
+        'select-plugin'       => ['select'],
+        'autocomplete-plugin' => ['autocomplete'],
+        'editor-plugin'       => ['editor'],
+        'audio-plugin'        => ['audio'],
+        'auth-plugin'         => ['auth'],
+        'check-plugin'        => ['check'],
+        'search-plugin'       => ['search'],
+        'toggle-plugin'       => ['toggle'],
+    ];
+
     protected array $groups = [
         'auth'     => ['validate', 'password', 'auth', 'check', 'toggle'],
         'forms'    => ['validate', 'actions', 'loaddata', 'select', 'autocomplete'],
@@ -154,7 +188,7 @@ class OziAssets
 
     public function scripts(array $only = []): string
     {
-        $map = $this->resolveKeys($this->availableScripts, $only);
+        $map = $this->resolveKeys($this->availableScripts, $only, true);
 
         $helpersUrl      = $this->base . 'core/helpers/ozi-helpers.js?v='  . $this->version;
         $confUrl         = $this->base . 'core/ozi-conf.js?v='             . $this->version;
@@ -237,7 +271,17 @@ class OziAssets
         return $files;
     }
 
-    protected function resolveKeys(array $available, array $only): array
+    /**
+     * Traduz as chaves pedidas em caminhos de arquivo.
+     *
+     * Expande grupos, completa as dependências declaradas ($scriptDeps) e emite
+     * na ORDEM CANÔNICA de $available — que espelha o `_allPlugins` do ozi-conf,
+     * a mesma ordem que o ozi-loader usa no boot. A ordem em que o dev escreveu
+     * as chaves não define mais a ordem das tags: `['editor', 'editor-sanitize']`
+     * e `['editor-sanitize', 'editor']` emitem o mesmo HTML, com o módulo antes
+     * do componente nos dois casos.
+     */
+    protected function resolveKeys(array $available, array $only, bool $withDeps = false): array
     {
         if (empty($only)) {
             return array_values($available);
@@ -265,16 +309,55 @@ class OziAssets
             $keys[] = $key;
         }
 
+        if ($withDeps) {
+            $keys = $this->expandDeps($keys);
+        }
+
         $keys   = array_unique($keys);
         $result = [];
 
-        foreach ($keys as $key) {
-            if (isset($available[$key])) {
-                $result[] = $available[$key];
+        // Ordem canônica: percorre $available, não $keys.
+        foreach ($available as $key => $file) {
+            if (in_array($key, $keys, true)) {
+                $result[] = $file;
             }
         }
 
         return $result;
+    }
+
+    /**
+     * Completa a lista com as dependências declaradas, em profundidade.
+     *
+     * Só acrescenta chaves — nunca remove, nunca reordena (a ordem final é
+     * responsabilidade do resolveKeys). Uma dependência cíclica no mapa não
+     * trava: cada chave é visitada uma única vez.
+     *
+     * @param  array<int,string>  $keys
+     * @return array<int,string>
+     */
+    protected function expandDeps(array $keys): array
+    {
+        $seen  = [];
+        $queue = $keys;
+
+        while ($queue !== []) {
+            $key = array_shift($queue);
+
+            if (isset($seen[$key])) {
+                continue;
+            }
+
+            $seen[$key] = true;
+
+            foreach ($this->scriptDeps[$key] ?? [] as $dep) {
+                if (!isset($seen[$dep])) {
+                    $queue[] = $dep;
+                }
+            }
+        }
+
+        return array_keys($seen);
     }
 
     protected function url(string $file): string
@@ -304,6 +387,12 @@ class OziAssets
     public function getAvailableStyles(): array
     {
         return $this->availableStyles;
+    }
+
+    /** Exposto para verificação cruzada com o `deps:` do _pluginMap (php artisan ozi:check). */
+    public function getScriptDeps(): array
+    {
+        return $this->scriptDeps;
     }
 
     public function setBase(string $base): static

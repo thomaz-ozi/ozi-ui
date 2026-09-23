@@ -3,8 +3,8 @@
  * ------------------------------------------
  * ozi-livewire.adapter
  * ------------------------------------------
- * Ver: 2.1.0
- * 2026-08-20
+ * Ver: 2.2.0
+ * 2026-09-23
  *
  *
  * Responsabilidade:
@@ -38,6 +38,16 @@
  *     adapter NÃO instala hooks de render próprios.
  *
  * Changelog:
+ *   - v2.2.0: [FIX] Seletor de plugin com MAIS DE UM GRUPO (vírgula) era composto
+ *     errado. `_scan` e os eventos imperativos concatenavam `plugin.selector + '[attr]'`,
+ *     o que num seletor tipo `'[a], [b]'` produz `'[a], [b][attr]'` — o 1º grupo fica
+ *     SEM o sufixo e casa qualquer elemento do plugin, ignorando o filtro. Não era
+ *     visível porque todos os plugins tinham seletor de grupo único até o
+ *     `ozi-editor.plugin` 2.1.0 passar a declarar `'[data-ozi-editor-html],
+ *     [data-ozi-editor-md]'`. Agora `_composeSelector()` distribui o sufixo por cada
+ *     grupo. [FEAT] Campo opcional `keyAttributes: []` no contrato de registerPlugin,
+ *     p/ plugin cuja chave pode vir em mais de um atributo (o editor: `-html` ou `-md`);
+ *     `keyAttribute` (string) segue válido e é o fallback. Aditivo → MINOR.
  *   - v2.1.0: [FEAT] Modo `-footer-call` do rodapé do ozi-select. No evento
  *     `ozi:select-footer` (emitido pelo botão de rodapé, ozi-select v6.2.0), lê
  *     `data-ozi-select-footer-call` no root do select e chama `component.call(metodo)`
@@ -243,15 +253,60 @@
     // [5] SCAN — percorre DOM por elementos do plugin
     // ─────────────────────────────────────────────
 
+    /**
+     * Distribui um sufixo de atributo por TODOS os grupos do seletor do plugin.
+     *
+     * `plugin.selector` pode ter vírgula (ex.: o ozi-editor lê a chave em
+     * `data-ozi-editor-html` OU `-md`). Concatenar direto — `'[a], [b]' + '[x]'` —
+     * deixa o 1º grupo sem o sufixo, e ele passa a casar qualquer elemento do
+     * plugin. O erro é silencioso: traz elemento a mais, não a menos.
+     */
+    function _composeSelector(selector, suffix) {
+        var parts = String(selector).split(',');
+        var out   = [];
+
+        for (var i = 0; i < parts.length; i++) {
+            var part = parts[i].replace(/^\s+|\s+$/g, '');
+            if (part) out.push(part + suffix);
+        }
+
+        return out.join(',');
+    }
+
+    /**
+     * Atributos que carregam a chave do plugin. `keyAttributes` (lista) tem
+     * precedência; `keyAttribute` (string) é o contrato antigo e segue válido.
+     */
+    function _keyAttributes(plugin) {
+        if (plugin.keyAttributes && plugin.keyAttributes.length) return plugin.keyAttributes;
+        return plugin.keyAttribute ? [plugin.keyAttribute] : [];
+    }
+
+    /** Elemento do plugin cuja chave é `key`, procurando em todos os keyAttributes. */
+    function _findByKey(plugin, key) {
+        if (!plugin || !plugin.selector) return null;
+
+        var attrs = _keyAttributes(plugin);
+
+        for (var i = 0; i < attrs.length; i++) {
+            var el = document.querySelector(
+                _composeSelector(plugin.selector, '[' + attrs[i] + '="' + key + '"]')
+            );
+            if (el) return el;
+        }
+
+        return null;
+    }
+
     function _scan(plugin, scope) {
         if (!plugin || !plugin.selector) return;
         scope = scope || document;
 
         var elements = [];
         if (scope.querySelectorAll) {
-            var sel = plugin.selector + '[' + ATTR.model + '],' +
-                      plugin.selector + '[' + ATTR.optionsEvent + '],' +
-                      plugin.selector + '[' + ATTR.native + ']';
+            var sel = _composeSelector(plugin.selector, '[' + ATTR.model + ']') + ',' +
+                      _composeSelector(plugin.selector, '[' + ATTR.optionsEvent + ']') + ',' +
+                      _composeSelector(plugin.selector, '[' + ATTR.native + ']');
             elements = scope.querySelectorAll(sel);
         }
 
@@ -275,7 +330,7 @@
         var plugin = plugins.getPlugin(detail.plugin);
         if (!plugin) return;
 
-        var el = document.querySelector(plugin.selector + '[' + plugin.keyAttribute + '="' + detail.key + '"]');
+        var el = _findByKey(plugin, detail.key);
         if (!el) return;
 
         try { plugin.setValue(el, detail.value); } catch (err) {}
@@ -289,7 +344,7 @@
         var plugin = plugins.getPlugin(detail.plugin);
         if (!plugin || typeof plugin.setOptions !== 'function') return;
 
-        var el = document.querySelector(plugin.selector + '[' + plugin.keyAttribute + '="' + detail.key + '"]');
+        var el = _findByKey(plugin, detail.key);
         if (!el) return;
 
         try { plugin.setOptions(el, detail.options || []); } catch (err) {}
