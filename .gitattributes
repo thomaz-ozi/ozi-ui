@@ -1,0 +1,8 @@
+# Fora do dist do Packagist: não vai para o vendor/ do consumidor.
+/.github          export-ignore
+/.idea            export-ignore
+/tests            export-ignore
+/.gitattributes   export-ignore
+/.gitignore       export-ignore
+/phpunit.xml      export-ignore
+/testbench.yaml   export-ignore

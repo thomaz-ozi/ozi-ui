@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [master, v2]
+  pull_request:
+
+jobs:
+  check:
+    name: PHP ${{ matrix.php }} · Laravel ${{ matrix.laravel }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.2', '8.3', '8.4']
+        laravel: ['10', '11', '12', '13']
+        include:
+          - laravel: '10'
+            testbench: '8'
+          - laravel: '11'
+            testbench: '9'
+          - laravel: '12'
+            testbench: '10'
+          - laravel: '13'
+            testbench: '11'
+        exclude:
+          # Laravel 10 suporta PHP 8.1–8.3
+          - laravel: '10'
+            php: '8.4'
+          # Laravel 13 exige PHP ^8.3
+          - laravel: '13'
+            php: '8.2'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+
+      - name: Validar composer.json
+        run: composer validate --no-check-publish
+
+      - name: Fixar Laravel ${{ matrix.laravel }}
+        run: |
+          composer require "illuminate/support:^${{ matrix.laravel }}.0" --no-interaction --no-update
+          composer require "orchestra/testbench:^${{ matrix.testbench }}.0" --dev --no-interaction --no-update
+
+      - name: Instalar dependências
+        run: composer update --prefer-dist --no-interaction --no-progress --with-all-dependencies
+
+      # Valida o pacote dentro de um app Laravel real (Testbench): arquivos em disco,
+      # deriva OziAssets ↔ _pluginMap (inclusive deps:) e config mesclada.
+      - name: php artisan ozi:check
+        run: vendor/bin/testbench ozi:check

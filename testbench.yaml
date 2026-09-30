@@ -1,0 +1,2 @@
+providers:
+  - OziUI\Core\OziCoreServiceProvider

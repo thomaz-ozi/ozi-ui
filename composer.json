@@ -8,6 +8,11 @@
   "homepage": "https://oziui.com",
   "authors": [
     {
+      "name": "Thomaz Ozi",
+      "homepage": "https://github.com/thomaz-ozi",
+      "role": "Author"
+    },
+    {
       "name": "Support",
       "email": "support@oziui.com",
       "homepage": "https://oziui.com"
@@ -16,6 +21,9 @@
   "require": {
     "php": "^8.2",
     "illuminate/support": "^10.0|^11.0|^12.0|^13.0"
+  },
+  "require-dev": {
+    "orchestra/testbench": "^8.0|^9.0|^10.0|^11.0"
   },
   "autoload": {
     "psr-4": {
