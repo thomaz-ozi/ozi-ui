@@ -245,12 +245,20 @@ class OziAssets
      * não deve puxar o dicionário do select. O 'shared' é global e entra sempre.
      * Arquivo ausente em disco é ignorado (locale sem tradução publicada).
      *
+     * A existência é conferida nas DUAS origens, como no ozi:check: a cópia
+     * publicada (public/{base_path}) e o próprio pacote (rota-fallback). Até a
+     * 2.6.1 só a publicada era olhada, então quem instalou só com
+     * `composer require` (o modo recomendado desde a 2.1.0) não recebia nenhum
+     * dicionário e todo _t() caía no fallback embutido.
+     *
      * @param  array<int,string>  $scriptPaths  paths já resolvidos por resolveKeys()
      * @return array<int,string>
      */
     protected function resolveLangs(array $scriptPaths): array
     {
-        $files = [];
+        $files     = [];
+        $published = public_path(trim((string) config('ozi-ui.base_path', 'plugins/ozi-ui'), '/'));
+        $package   = __DIR__ . '/../public/plugins/ozi-ui';
 
         foreach ($this->availableLangs as $key => $template) {
             if ($key !== 'shared') {
@@ -263,7 +271,7 @@ class OziAssets
 
             $file = str_replace('{lang}', $this->locale, $template);
 
-            if (is_file(public_path('plugins/ozi-ui/' . $file))) {
+            if (is_file($published . '/' . $file) || is_file($package . '/' . $file)) {
                 $files[] = $file;
             }
         }
