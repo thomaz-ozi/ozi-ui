@@ -30,6 +30,11 @@
       "OziUI\\Core\\": "src/"
     }
   },
+  "autoload-dev": {
+    "psr-4": {
+      "OziUI\\Core\\Tests\\": "tests/"
+    }
+  },
   "extra": {
     "laravel": {
       "providers": [

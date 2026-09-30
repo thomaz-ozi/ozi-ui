@@ -58,6 +58,9 @@ jobs:
       - name: Instalar dependências
         run: composer update --prefer-dist --no-interaction --no-progress --with-all-dependencies
 
+      - name: Testes (PHPUnit)
+        run: vendor/bin/phpunit
+
       # Valida o pacote dentro de um app Laravel real (Testbench): arquivos em disco,
       # deriva OziAssets ↔ _pluginMap (inclusive deps:) e config mesclada.
       - name: php artisan ozi:check
