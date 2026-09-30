@@ -48,6 +48,13 @@ jobs:
           composer require "illuminate/support:^${{ matrix.laravel }}.0" --no-interaction --no-update
           composer require "orchestra/testbench:^${{ matrix.testbench }}.0" --dev --no-interaction --no-update
 
+      # Laravel 10 e 11 estão fora de suporte: todas as versões têm advisory corrigido só no 12.x+,
+      # e o Composer >= 2.9 bloqueia a instalação. Aqui o CI mede a compatibilidade do ozi-ui,
+      # não a segurança do framework — quem ainda roda L10/L11 já convive com isso.
+      - name: Liberar advisories (Laravel EOL)
+        if: matrix.laravel == '10' || matrix.laravel == '11'
+        run: composer config audit.block-insecure false
+
       - name: Instalar dependências
         run: composer update --prefer-dist --no-interaction --no-progress --with-all-dependencies
 
