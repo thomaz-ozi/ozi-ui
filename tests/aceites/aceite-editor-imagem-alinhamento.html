@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite ozi-editor: alinhamento de imagem</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .3rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+    .fixtures { border-top: 1px dashed #ddd; margin-top: 1rem; padding-top: 1rem; opacity: .5; }
+    textarea { width: 100%; }
+    /* fixtures de HOST — simulam a pagina que exibe o conteudo salvo. O CSS do
+       plugin nao alcanca aqui (as regras de <img> sao escopadas em
+       .ozi-editor-content), que e exatamente o cenario a testar. */
+    #host-rel { position: relative; width: 400px; min-height: 120px; }
+    #host-sem { width: 400px; min-height: 120px; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite ozi-editor <small>(alinhamento de imagem — v4.7.0)</small></h1>
+<p>Critério: linha <code>Alinhamento</code> no popover de imagem com 4 modos
+(<code>left</code>/<code>right</code> por float, <code>center</code> por bloco centrado,
+<code>free</code> por <code>position:absolute</code> + arrasto); estado gravado em
+<strong>inline style</strong> na própria <code>&lt;img&gt;</code> e sobrevivendo ao
+round-trip do sanitizador (<code>setValue(getValue())</code> e modo source); trocar de modo
+não deixa resíduo; arrasto separa clique de gesto, faz clamp nos limites e aborta com o botão
+solto; linha ausente do DOM no modo <code>md</code>; e a whitelist do sanitizador rejeitando
+<code>fixed</code>, negativos, unidades de viewport, <code>calc()</code>, <code>z-index</code>
+e <code>position</code> fora de <code>&lt;img&gt;</code>.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<div class="fixtures">
+    <textarea id="ta-align" data-ozi-editor-html="conteudo"
+              data-ozi-editor-tools="[bold], [link,unlink,image]"></textarea>
+
+    <textarea id="ta-md" data-ozi-editor-md="notas"
+              data-ozi-editor-tools="[bold]; [link,image]"></textarea>
+
+    <div id="host-rel"></div>
+    <div id="host-sem"></div>
+</div>
+
+<!-- ÚNICO script externo — SEM jQuery: -->
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['editor-md'], core: { log: true } });
+
+    var erros = [];
+    var errosOpacos = 0;
+    window.addEventListener('error', function (ev) {
+        var isOpaco = (ev.message === 'Script error.' && !ev.filename && !ev.lineno);
+        if (isOpaco) { errosOpacos++; return; }
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    var ok = 0, total = 0;
+    function check(nome, cond, extra) {
+        total++; if (cond) ok++;
+        var li = document.createElement('li');
+        li.className = cond ? 'pass' : 'fail';
+        li.textContent = (cond ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return cond;
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+    function placeCursor(inst, el, atEnd) {
+        var range = document.createRange();
+        range.selectNodeContents(el);
+        range.collapse(!atEnd);
+        var sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        inst._saveSelection();
+    }
+    function selectImage(inst, imgEl) {
+        var range = document.createRange();
+        range.selectNode(imgEl);
+        var sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        inst._saveSelection();
+    }
+    function click(btn) { btn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true })); }
+    function isShown(el) { return !!el && el.style.display !== 'none'; }
+
+    /* ── arrasto sintetico ────────────────────────────────────────────────
+       O motor do browser nao entrega mousemove sozinho sob
+       --virtual-time-budget (lessons-learned 2026-08-31), entao o teste
+       despacha os 3 eventos na mao.
+       `buttons: 1` NAO e decoracao: o handler aborta o arrasto quando
+       `e.buttons === 0` (guarda anti-drag-grudado), e o default de
+       `new MouseEvent` e justamente 0. */
+    function mdown(el, x, y) {
+        el.dispatchEvent(new MouseEvent('mousedown', {
+            bubbles: true, cancelable: true, button: 0, buttons: 1, clientX: x, clientY: y
+        }));
+    }
+    function mmove(x, y, buttons) {
+        document.dispatchEvent(new MouseEvent('mousemove', {
+            bubbles: true, cancelable: true,
+            buttons: (buttons === undefined ? 1 : buttons), clientX: x, clientY: y
+        }));
+    }
+    function mup() {
+        document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, buttons: 0 }));
+    }
+
+    function styleOf(img, prop) { return img.style.getPropertyValue(prop); }
+    function num(v) { return parseFloat(v) || 0; }
+    function near(a, b, tol) { return Math.abs(a - b) <= (tol === undefined ? 1.5 : tol); }
+
+    /* imagem SEMPRE com width/height como ATRIBUTO: em headless sem rede a
+       imagem nao carrega e offsetWidth seria 0 — o clamp nunca dispararia e
+       os testes de limite passariam por acidente. Nada de data: URI aqui:
+       `data:` esta fora de SAFE_URL_SCHEMES e o sanitizador removeria a tag. */
+    var IMG_HTML = '<p>antes</p><p><img src="https://exemplo.com/foto.png" alt="foto" width="80" height="60"></p><p>depois</p>';
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 9s';
+        vered.className = 'fail';
+        document.title = 'DONE:TIMEOUT ' + ok + '/' + total;
+    }, 9000);
+
+    OZI.ready(function () {
+        (async function () {
+            var api  = OZI.components.editor;
+            var wrap = document.querySelector('#ta-align + .ozi-editor-wrap');
+            var inst = api.get('conteudo');
+            var content = wrap.querySelector('.ozi-editor-content');
+
+            await wait(200);
+
+            /* o editor md nasce depois (o ozi-editor-md.js entra por
+               oziConf({plugins:['editor-md']})), entao a consulta vem DEPOIS
+               do wait — antes dele o wrap ainda nao existe */
+            var wrapMd = document.querySelector('#ta-md + .ozi-editor-wrap');
+
+            var imgBtn     = wrap.querySelector('[data-ozi-editor-tool="image"]');
+            var imgPopover = wrap.querySelector('[data-ozi-editor-popover-wrap^="image-"] .ozi-editor-popover');
+            var applyBtn   = wrap.querySelector('[data-ozi-editor-image-apply]');
+            var urlInput   = wrap.querySelector('[data-ozi-editor-image-url-input]');
+
+            function alignBtn(mode) {
+                return wrap.querySelector('[data-ozi-editor-image-align="' + mode + '"]');
+            }
+            function firstImg() { return content.querySelector('img'); }
+
+            /* aplica um modo numa imagem ja existente, pelo caminho real da UI:
+               seleciona -> abre popover -> clica no botao do modo */
+            function applyModeViaUi(mode) {
+                selectImage(inst, firstImg());
+                click(imgBtn);
+                click(alignBtn(mode));
+            }
+
+            // ─── 1. a linha existe (html) e não existe (md) ───────────────
+            check('popover de imagem tem a linha "Alinhamento" com os 4 modos',
+                !!alignBtn('left') && !!alignBtn('center') && !!alignBtn('right') && !!alignBtn('free'));
+
+            check('modo md: a linha de alinhamento NÃO existe no DOM (não é só oculta)',
+                !wrapMd.querySelector('[data-ozi-editor-image-align]'));
+
+            // ─── 2. cada modo escreve o style canônico ────────────────────
+            inst.setValue(IMG_HTML);
+            applyModeViaUi('left');
+            var img = firstImg();
+            check('modo esquerda: float:left + margens + max-width no inline style',
+                styleOf(img, 'float') === 'left' &&
+                styleOf(img, 'margin-right') === '10px' &&
+                styleOf(img, 'margin-left') === '0px' &&
+                styleOf(img, 'max-width') === '100%',
+                img.getAttribute('style'));
+
+            applyModeViaUi('right');
+            img = firstImg();
+            check('modo direita: float:right + margens espelhadas',
+                styleOf(img, 'float') === 'right' &&
+                styleOf(img, 'margin-left') === '10px' &&
+                styleOf(img, 'margin-right') === '0px',
+                img.getAttribute('style'));
+
+            applyModeViaUi('center');
+            img = firstImg();
+            check('modo centralizado: display:block + margin auto nos dois lados',
+                styleOf(img, 'display') === 'block' &&
+                styleOf(img, 'margin-left') === 'auto' &&
+                styleOf(img, 'margin-right') === 'auto',
+                img.getAttribute('style'));
+
+            // ─── 3. trocar de modo não deixa resíduo ──────────────────────
+            applyModeViaUi('left');
+            img = firstImg();
+            check('trocar centro -> esquerda não deixa resíduo (display some, float entra)',
+                styleOf(img, 'display') === '' && styleOf(img, 'float') === 'left' &&
+                styleOf(img, 'margin-left') === '0px',
+                img.getAttribute('style'));
+
+            // ─── 4. _getImageAlign deriva o modo do style ─────────────────
+            check('_getImageAlign deriva "left" do style', inst._getImageAlign(firstImg()) === 'left');
+            applyModeViaUi('center');
+            check('_getImageAlign deriva "center" do style', inst._getImageAlign(firstImg()) === 'center');
+
+            // ─── 5. popover reabre refletindo o modo da imagem ────────────
+            selectImage(inst, firstImg());
+            click(imgBtn);
+            await wait(30);
+            check('reabrir o popover sobre a imagem marca o botão do modo atual',
+                alignBtn('center').classList.contains('is-active') &&
+                alignBtn('center').getAttribute('aria-pressed') === 'true' &&
+                !alignBtn('left').classList.contains('is-active'));
+            click(imgBtn); // fecha
+
+            // ─── 6. inserir imagem NOVA já com alinhamento pendente ───────
+            inst.setValue('<p>texto</p>');
+            placeCursor(inst, content.querySelector('p'), true);
+            click(imgBtn);
+            await wait(30);
+            click(alignBtn('right'));            // sem imagem selecionada: fica pendente
+            urlInput.value = 'https://exemplo.com/nova.png';
+            click(applyBtn);
+            img = firstImg();
+            check('inserir imagem nova aplica o alinhamento pendente escolhido antes do Aplicar',
+                !!img && styleOf(img, 'float') === 'right', img ? img.getAttribute('style') : 'sem img');
+
+            check('o pendente NÃO vaza para a próxima abertura do popover (reset no onOpen)',
+                (function () {
+                    inst.setValue('<p>outro</p>');
+                    placeCursor(inst, content.querySelector('p'), true);
+                    click(imgBtn);
+                    var pend = imgPopover.getAttribute('data-ozi-editor-image-align-pending');
+                    click(imgBtn);
+                    return pend === 'none';
+                })());
+
+            // ─── 7. modo livre: absolute + offsetParent + sem salto ───────
+            inst.setValue(IMG_HTML);
+            await wait(30);
+            var beforeLeft = firstImg().offsetLeft;
+            var beforeTop  = firstImg().offsetTop;
+            applyModeViaUi('free');
+            img = firstImg();
+            check('modo livre: position:absolute com left em % e top em px',
+                styleOf(img, 'position') === 'absolute' &&
+                /%$/.test(styleOf(img, 'left')) && /px$/.test(styleOf(img, 'top')),
+                img.getAttribute('style'));
+
+            check('modo livre: a imagem é posicionada contra o .ozi-editor-content (position:relative do CSS 2.7.0)',
+                img.offsetParent === content, String(img.offsetParent && img.offsetParent.className));
+
+            check('modo livre: entrar no modo não move a imagem (mede o fluxo antes de sair dele)',
+                near(img.offsetLeft, beforeLeft, 2) && near(img.offsetTop, beforeTop, 2),
+                beforeLeft + ',' + beforeTop + ' -> ' + img.offsetLeft + ',' + img.offsetTop);
+
+            // ─── 8. arrasto ──────────────────────────────────────────────
+            img = firstImg();
+            var boxW    = content.clientWidth;
+            var leftPct0 = num(styleOf(img, 'left'));
+            var topPx0   = num(styleOf(img, 'top'));
+
+            mdown(img, 100, 100);
+            mmove(140, 130);
+            mup();
+            img = firstImg();
+            check('arrasto: mover +40x/+30y desloca a imagem na mesma proporção',
+                near(num(styleOf(img, 'left')), leftPct0 + (40 / boxW) * 100, 0.6) &&
+                near(num(styleOf(img, 'top')), topPx0 + 30, 1),
+                img.getAttribute('style'));
+
+            check('arrasto: o popover NÃO abre quando houve movimento', !isShown(imgPopover));
+
+            // clique (sem movimento) na imagem livre ABRE o popover
+            mdown(img, 100, 100);
+            mup();
+            await wait(30);
+            check('clique (sem movimento) numa imagem livre abre o popover normalmente',
+                isShown(imgPopover));
+            click(imgBtn); // fecha
+
+            // botão solto no meio do gesto aborta (drag grudado)
+            img = firstImg();
+            var leftAntes = styleOf(img, 'left');
+            mdown(img, 100, 100);
+            mmove(200, 100, 0);      // buttons:0 — mouseup perdido
+            mmove(300, 100, 1);      // já não deve mover: o estado morreu
+            mup();
+            check('arrasto: mousemove com buttons:0 aborta o gesto (guarda anti-drag-grudado)',
+                styleOf(firstImg(), 'left') === leftAntes,
+                leftAntes + ' -> ' + styleOf(firstImg(), 'left'));
+
+            // clamp nos limites
+            img = firstImg();
+            mdown(img, 300, 300);
+            mmove(-5000, -5000);
+            mup();
+            check('arrasto: clamp no canto superior esquerdo (nunca negativo)',
+                num(styleOf(firstImg(), 'left')) === 0 && num(styleOf(firstImg(), 'top')) === 0,
+                firstImg().getAttribute('style'));
+
+            img = firstImg();
+            mdown(img, 10, 10);
+            mmove(9000, 9000);
+            mup();
+            img = firstImg();
+            var maxLeftPct = ((content.clientWidth - img.offsetWidth) / content.clientWidth) * 100;
+            check('arrasto: clamp na borda direita/inferior (imagem não sai do content)',
+                num(styleOf(img, 'left')) <= maxLeftPct + 0.5 &&
+                num(styleOf(img, 'left')) > 0 &&
+                img.offsetWidth > 0,
+                'left=' + styleOf(img, 'left') + ' max=' + maxLeftPct.toFixed(2) + ' imgW=' + img.offsetWidth);
+
+            // ─── 9. imagem NÃO-livre mantém o comportamento antigo ────────
+            inst.setValue(IMG_HTML);
+            await wait(20);
+            firstImg().dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+            await wait(20);
+            check('regressão Fase 3: imagem sem modo livre ainda abre o popover no próprio mousedown',
+                isShown(imgPopover));
+            click(imgBtn); // fecha
+
+            // ─── 10. round-trip do sanitizador (o teste central) ──────────
+            var modos = ['left', 'right', 'center', 'free'];
+            for (var i = 0; i < modos.length; i++) {
+                inst.setValue(IMG_HTML);
+                applyModeViaUi(modos[i]);
+                var antes = inst.getValue();
+                inst.setValue(antes);              // <- passa pelo sanitizador
+                await wait(10);
+                var depois = firstImg();
+                check('round-trip setValue(getValue()) preserva o modo "' + modos[i] + '"',
+                    !!depois && inst._getImageAlign(depois) === modos[i],
+                    depois ? depois.getAttribute('style') : 'imagem sumiu');
+            }
+
+            // round-trip pelo modo source (o que o usuário faz na mão)
+            inst.setValue(IMG_HTML);
+            applyModeViaUi('center');
+            inst._enterSourceMode();
+            inst._exitSourceMode();
+            await wait(10);
+            check('round-trip pelo modo source preserva o alinhamento',
+                inst._getImageAlign(firstImg()) === 'center',
+                firstImg() ? firstImg().getAttribute('style') : 'imagem sumiu');
+
+            // ─── 11. whitelist do sanitizador: o que NÃO pode passar ──────
+            function styleApos(html) {
+                inst.setValue(html);
+                var el = content.querySelector('img');
+                return el ? (el.getAttribute('style') || '') : '(sem img)';
+            }
+
+            check('sanitizador: position:fixed é rejeitado',
+                styleApos('<p><img src="https://e.com/a.png" style="position:fixed;left:0;top:0"></p>').indexOf('fixed') === -1);
+
+            check('sanitizador: position:sticky é rejeitado',
+                styleApos('<p><img src="https://e.com/a.png" style="position:sticky;top:0"></p>').indexOf('sticky') === -1);
+
+            check('sanitizador: offset negativo é rejeitado',
+                styleApos('<p><img src="https://e.com/a.png" style="position:absolute;left:-500px;top:10px"></p>').indexOf('-500') === -1);
+
+            check('sanitizador: unidade de viewport é rejeitada',
+                styleApos('<p><img src="https://e.com/a.png" style="position:absolute;top:100vh;left:10px"></p>').indexOf('vh') === -1);
+
+            check('sanitizador: calc() é rejeitado',
+                styleApos('<p><img src="https://e.com/a.png" style="position:absolute;left:calc(100% - 5px)"></p>').indexOf('calc') === -1);
+
+            check('sanitizador: z-index é rejeitado',
+                styleApos('<p><img src="https://e.com/a.png" style="position:absolute;left:10px;z-index:99999"></p>').indexOf('z-index') === -1);
+
+            check('sanitizador: left órfão (sem position) é descartado',
+                styleApos('<p><img src="https://e.com/a.png" style="left:300px;top:80px"></p>').indexOf('left') === -1);
+
+            check('sanitizador: position em <span> é rejeitado (whitelist é só de <img>)',
+                (function () {
+                    inst.setValue('<p><span style="position:absolute;left:0;top:0">texto</span></p>');
+                    return inst.getValue().indexOf('absolute') === -1;
+                })());
+
+            check('sanitizador: float válido sobrevive, valor inventado não',
+                (function () {
+                    var bom  = styleApos('<p><img src="https://e.com/a.png" style="float:right"></p>');
+                    var ruim = styleApos('<p><img src="https://e.com/a.png" style="float:inline-start"></p>');
+                    return bom.indexOf('right') > -1 && ruim.indexOf('inline-start') === -1;
+                })());
+
+            // ─── 12. contrato com o host ─────────────────────────────────
+            inst.setValue(IMG_HTML);
+            applyModeViaUi('free');
+            var salvo = inst.getValue();
+
+            var hostRel = document.getElementById('host-rel');
+            var hostSem = document.getElementById('host-sem');
+            hostRel.innerHTML = salvo;
+            hostSem.innerHTML = salvo;
+            await wait(20);
+
+            check('host COM position:relative: a imagem se posiciona contra o container (contrato cumprido)',
+                hostRel.querySelector('img').offsetParent === hostRel);
+
+            check('host SEM position:relative: a imagem escapa do container (é o custo documentado do modo livre)',
+                hostSem.querySelector('img').offsetParent !== hostSem,
+                'offsetParent = ' + (hostSem.querySelector('img').offsetParent || {}).tagName);
+
+            // ─── 13. erros JS ────────────────────────────────────────────
+            check('zero erros JS reais (opacos filtrados: ' + errosOpacos + ')',
+                erros.length === 0, erros.join(' | ') || null);
+
+            clearTimeout(watchdog);
+            var allPass = (ok === total);
+            vered.textContent = (allPass ? '✓ ACEITE ALINHAMENTO DE IMAGEM: PASSOU' : '✗ ACEITE ALINHAMENTO DE IMAGEM: FALHOU') + ' (' + ok + '/' + total + ')';
+            vered.className = allPass ? 'pass' : 'fail';
+            document.title = (allPass ? 'DONE:PASS ' : 'DONE:FAIL ') + ok + '/' + total;
+        })().catch(function (err) {
+            check('exceção não tratada no teste', false, String(err) + ' | ' + err.stack);
+            clearTimeout(watchdog);
+            vered.textContent = '✗ ACEITE ALINHAMENTO DE IMAGEM: FALHOU (' + ok + '/' + total + ')';
+            vered.className = 'fail';
+            document.title = 'DONE:FAIL ' + ok + '/' + total;
+        });
+    });
+</script>
+</body>
+</html>

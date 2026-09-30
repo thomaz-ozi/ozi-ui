@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite v2.2.0 (ozi-validate gate)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 780px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .35rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite v2.2.0 <small>(gate de envio do ozi-validate)</small></h1>
+<p>Critério: <code>data-ozi-validate</code> em <code>button[type=submit]</code> revalida tudo no
+submit (clique ou Enter/<code>requestSubmit()</code> implícito), bloqueia + foca o 1º inválido
+se inválido, deixa passar se válido; <code>data-ozi-validate-group</code> resolve alvo por id
+(fora do próprio &lt;form&gt;); emite <code>ozi:validate-broken</code>/<code>ozi:validate-ready</code>;
+bloqueia um listener de submit em fase de bolha no próprio <code>&lt;form&gt;</code> — o mesmo
+jeito que o Livewire real (<code>wire:submit</code> → <code>x-on:submit.prevent</code> do Alpine,
+confirmado no bundle real) registra o dele — sem nenhum código específico de framework.
+Também cobre o fix de <code>container({ container })</code>/<code>container({ groupId })</code>.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<!-- Fixture A — form simples + gate + stub "Livewire" (submit em fase de bolha no form) -->
+<form id="form-a" data-log>
+    <input name="nome" data-ozi-required="true">
+    <span class="ozi-feedback"></span>
+    <button type="submit" data-ozi-validate id="btn-a">Enviar</button>
+</form>
+
+<!-- Fixture B — gate + data-ozi-validate-group apontando p/ campo FORA do form -->
+<form id="form-b">
+    <button type="submit" data-ozi-validate data-ozi-validate-group="grupo-externo" id="btn-b">Enviar</button>
+</form>
+<div id="grupo-externo">
+    <input name="email" type="email" data-ozi-required="true">
+</div>
+
+<!-- Fixture C — submit implícito (sem submitter, simula Enter) — 1 gate único no form -->
+<form id="form-c">
+    <input name="cidade" data-ozi-required="true">
+    <button type="submit" data-ozi-validate id="btn-c">Enviar</button>
+</form>
+
+<!-- Fixture D — container()/groupId direto (API), sem passar pelo gate -->
+<div id="container-d">
+    <input name="apelido" data-ozi-required="true" value="">
+</div>
+
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['validate'], lang: 'pt-BR' });
+
+    var erros = [];
+    var errosOpacos = 0;
+    window.addEventListener('error', function (ev) {
+        var isOpaco = (ev.message === 'Script error.' && !ev.filename && !ev.lineno);
+        if (isOpaco) { errosOpacos++; return; }
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 9s';
+        vered.className = 'fail';
+    }, 9000);
+
+    OZI.ready(function () {
+        (async function () {
+            var todos = true;
+            var validate = OZI.modules.validate;
+
+            // ── Fixture A — clique BLOQUEIA quando inválido ──
+            var formA  = document.getElementById('form-a');
+            var inputA = formA.querySelector('input[name="nome"]');
+            var btnA   = document.getElementById('btn-a');
+
+            var lwStubFired = false;
+            formA.addEventListener('submit', function (e) {
+                // mesmo padrão do wire:submit real (Alpine x-on:submit.prevent): fase de
+                // BOLHA, direto no <form> — visto no bundle vendor/livewire/livewire/dist.
+                lwStubFired = true;
+                e.preventDefault();
+            });
+
+            var brokenDetail = null, readyDetail = null;
+            document.addEventListener('ozi:validate-broken', function h(e) { brokenDetail = e.detail; });
+            document.addEventListener('ozi:validate-ready',  function h(e) { readyDetail  = e.detail; });
+
+            btnA.click();
+            await wait(20);
+
+            todos = check('gate: clique com campo vazio NÃO deixa o "Livewire" (stub) rodar',
+                lwStubFired === false) && todos;
+            todos = check('gate: campo inválido ganha a classe ozi-invalid',
+                inputA.classList.contains('ozi-invalid')) && todos;
+            todos = check('gate: foco vai para o 1º campo inválido',
+                document.activeElement === inputA) && todos;
+            todos = check('gate: emite ozi:validate-broken com detail do contrato',
+                !!brokenDetail && brokenDetail.component === 'ozi-validate' &&
+                brokenDetail.isValid === false && brokenDetail.invalidFields.indexOf('nome') !== -1 &&
+                brokenDetail.source === 'user') && todos;
+
+            // preenche e clica de novo — agora deve passar e o "Livewire" stub roda
+            inputA.value = 'Ana';
+            btnA.click();
+            await wait(20);
+
+            todos = check('gate: clique com campo preenchido DEIXA o "Livewire" (stub) rodar',
+                lwStubFired === true) && todos;
+            todos = check('gate: campo válido ganha a classe ozi-valid',
+                inputA.classList.contains('ozi-valid')) && todos;
+            todos = check('gate: emite ozi:validate-ready quando válido',
+                !!readyDetail && readyDetail.isValid === true) && todos;
+
+            // ── Fixture B — data-ozi-validate-group aponta p/ fora do <form> ──
+            var formB = document.getElementById('form-b');
+            var btnB  = document.getElementById('btn-b');
+            var emailInput = document.getElementById('grupo-externo').querySelector('input[name="email"]');
+
+            var lwStubBFired = false;
+            formB.addEventListener('submit', function (e) { lwStubBFired = true; e.preventDefault(); });
+
+            btnB.click();
+            await wait(20);
+            todos = check('grupo externo: campo FORA do <form> (via data-ozi-validate-group) é validado e bloqueia',
+                lwStubBFired === false && emailInput.classList.contains('ozi-invalid')) && todos;
+
+            emailInput.value = 'a@b.com';
+            btnB.click();
+            await wait(20);
+            todos = check('grupo externo: preenchido, o submit passa (stub roda)', lwStubBFired === true) && todos;
+
+            // ── Fixture C — submit implícito (sem submitter, simula Enter) ──
+            var formC = document.getElementById('form-c');
+            var inputC = formC.querySelector('input[name="cidade"]');
+            var lwStubCFired = false;
+            formC.addEventListener('submit', function (e) { lwStubCFired = true; e.preventDefault(); });
+
+            formC.requestSubmit(); // sem argumento → e.submitter é null, como no Enter
+            await wait(20);
+            todos = check('submit implícito (sem submitter): resolve o gate único do form e bloqueia',
+                lwStubCFired === false && inputC.classList.contains('ozi-invalid')) && todos;
+
+            inputC.value = 'Recife';
+            formC.requestSubmit();
+            await wait(20);
+            todos = check('submit implícito: preenchido, passa (stub roda)', lwStubCFired === true) && todos;
+
+            // ── Fixture D — container({ container }) / container({ groupId }) direto (Achado #1) ──
+            var r1 = validate.container({ container: '#container-d' });
+            todos = check('container({ container: "#css" }): resolve o seletor (antes era ignorado)',
+                r1.isValid === false && !('apelido' in (r1.data || {}))) && todos;
+
+            document.getElementById('container-d').querySelector('input').value = 'joana';
+            var r2 = validate.container({ groupId: 'container-d' });
+            todos = check('container({ groupId: "id" }): resolve por id (antes era ignorado)',
+                r2.isValid === true && r2.data.apelido === 'joana') && todos;
+
+            await wait(150);
+            todos = check('zero erros JS reais (opacos filtrados: ' + errosOpacos + ')', erros.length === 0, erros.join(' | ') || null) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ ACEITE v2.2.0 (gate): PASSOU' : '✗ ACEITE v2.2.0 (gate): FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+            document.title = (todos ? 'DONE:PASS' : 'DONE:FAIL');
+        })().catch(function (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+            vered.textContent = '✗ ACEITE v2.2.0 (gate): FALHOU (exceção)';
+            vered.className = 'fail';
+            document.title = 'DONE:FAIL';
+        });
+    });
+</script>
+</body>
+</html>

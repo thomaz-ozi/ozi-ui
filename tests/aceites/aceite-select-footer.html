@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite v6.2.0 (ozi-select footer)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .35rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+    .ozi-select-dropdown { display: none; }
+    .ozi-select-ui.is-open .ozi-select-dropdown { display: block; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite v6.2.0 <small>(rodapé de ação do ozi-select)</small></h1>
+<p>Critério: rodapé no dropdown (slot + declarativo), fora da lista (sobrevive à busca), fecha o
+dropdown no clique sem matar o wire:click, emite <code>ozi:select-footer</code>, não é valor p/ o
+ozi-validate, adapter <code>-footer-call</code> chama <code>component.call()</code>, reload reencontra o slot.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<!-- Fixture A — SLOT (dentro de wire:id p/ o adapter resolver -footer-call) -->
+<div wire:id="lw-1">
+    <div data-ozi-select="conta" data-ozi-select-footer-call="gerenciar"></div>
+    <script type="application/json" data-ozi-select-options="conta">
+    [{"value":"1","label":"Conta A"},{"value":"2","label":"Conta B"}]
+    </script>
+</div>
+<template data-ozi-select-footer="conta">
+    <button type="button" id="host-foot-btn" class="ozi-select-footer-btn">⚙ Gerenciar contas</button>
+</template>
+
+<!-- Fixture B — DECLARATIVO (botão gerado) -->
+<div data-ozi-select="pais" data-ozi-select-footer-label="Adicionar país" data-ozi-select-footer-icon="ozi-ico-plus"></div>
+<script type="application/json" data-ozi-select-options="pais">
+[{"value":"br","label":"Brasil"},{"value":"us","label":"EUA"}]
+</script>
+
+<!-- Fixture C — REQUERIDO + rodapé (validate não deve contar o rodapé) -->
+<form id="form-teste">
+    <div id="req" data-ozi-select="req" data-ozi-select-required data-ozi-required="true"
+         data-ozi-select-footer-label="Gerenciar"></div>
+    <script type="application/json" data-ozi-select-options="req">
+    [{"value":"1","label":"Um"}]
+    </script>
+</form>
+
+<script>
+    // ── Livewire simulado ANTES do ozi.js (p/ testar -footer-call → component.call) ──
+    window.__lwCalls = [];
+    window.Livewire = {
+        find: function (id) {
+            return {
+                set:  function () {},
+                call: function (method) { window.__lwCalls.push({ id: id, method: method }); }
+            };
+        },
+        on: function () {}, hook: function () {}
+    };
+</script>
+
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script src="../plugins/ozi-ui/integrations/adapters/ozi-livewire.adapter.js"></script>
+<script>
+    oziConf({ plugins: ['select', 'validate'], core: { log: true } });
+
+    var erros = [];
+    var errosOpacos = 0;
+    window.addEventListener('error', function (ev) {
+        var isOpaco = (ev.message === 'Script error.' && !ev.filename && !ev.lineno);
+        if (isOpaco) { errosOpacos++; return; }
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    function visibles(nodes) {
+        return Array.prototype.filter.call(nodes, function (o) {
+            return o.offsetWidth || o.offsetHeight || o.getClientRects().length;
+        });
+    }
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 9s';
+        vered.className = 'fail';
+    }, 9000);
+
+    OZI.ready(function () {
+        (async function () {
+            var todos = true;
+            var select = OZI.components.select;
+
+            todos = check('OZI.components.select carregado', !!select) && todos;
+
+            // ── Fixture A — SLOT ──
+            var contaRoot = document.querySelector('[data-ozi-select="conta"]');
+            var contaDrop = contaRoot.querySelector('.ozi-select-dropdown');
+            var footer    = contaDrop.querySelector('.ozi-select-footer');
+
+            todos = check('slot: .ozi-select-footer renderizado no dropdown', !!footer) && todos;
+            todos = check('slot: rodapé é o ÚLTIMO filho do dropdown (depois da lista)',
+                !!footer && contaDrop.lastElementChild === footer) && todos;
+            todos = check('slot: rodapé fica FORA de .ozi-select-list',
+                !!footer && !footer.closest('.ozi-select-list') &&
+                contaRoot.querySelectorAll('.ozi-select-list .ozi-select-footer').length === 0) && todos;
+
+            var hostBtn = document.getElementById('host-foot-btn');
+            todos = check('slot: botão real do host (template) foi MOVIDO p/ o rodapé',
+                !!hostBtn && footer.contains(hostBtn)) && todos;
+
+            // abre + clica no rodapé: fecha, NÃO previne, emite ozi:select-footer, chama Livewire
+            contaRoot.querySelector('.ozi-select-control').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+            todos = check('slot: dropdown aberto antes do clique no rodapé',
+                contaRoot.querySelector('.ozi-select-ui').classList.contains('is-open')) && todos;
+
+            var hostClicked = false;
+            hostBtn.addEventListener('click', function () { hostClicked = true; });
+            var footDetail = null;
+            document.addEventListener('ozi:select-footer', function h(e) {
+                if (e.detail && e.detail.name === 'conta') { footDetail = e.detail; document.removeEventListener('ozi:select-footer', h); }
+            });
+
+            var clickEv = new MouseEvent('click', { bubbles: true, cancelable: true });
+            hostBtn.dispatchEvent(clickEv);
+
+            todos = check('slot: clique no rodapé FECHA o dropdown',
+                !contaRoot.querySelector('.ozi-select-ui').classList.contains('is-open')) && todos;
+            todos = check('slot: clique do host NÃO é preventDefault (wire:click preservado)',
+                hostClicked === true && clickEv.defaultPrevented === false) && todos;
+            todos = check('emit: ozi:select-footer com detail do contrato',
+                footDetail && footDetail.component === 'ozi-select' && footDetail.name === 'conta' &&
+                footDetail.source === 'user') && todos;
+            todos = check('adapter -footer-call: component.call("gerenciar") chamado no Livewire',
+                window.__lwCalls.length === 1 && window.__lwCalls[0].id === 'lw-1' &&
+                window.__lwCalls[0].method === 'gerenciar') && todos;
+
+            // busca que zera a lista → rodapé permanece
+            contaRoot.querySelector('.ozi-select-control').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+            var cSearch = contaRoot.querySelector('.ozi-select-search');
+            cSearch.value = 'zzzzzz';
+            cSearch.dispatchEvent(new Event('input', { bubbles: true }));
+            todos = check('busca sem match zera a lista', visibles(contaRoot.querySelectorAll('.ozi-select-option')).length === 0) && todos;
+            todos = check('rodapé SOBREVIVE à busca (segue no DOM)',
+                contaDrop.querySelector('.ozi-select-footer') !== null &&
+                document.getElementById('host-foot-btn') !== null) && todos;
+            contaRoot.querySelector('.ozi-select-toggle').dispatchEvent(new MouseEvent('click', { bubbles: true })); // fecha
+
+            // ── Fixture B — DECLARATIVO ──
+            var paisRoot = document.querySelector('[data-ozi-select="pais"]');
+            var genBtn = paisRoot.querySelector('.ozi-select-footer .ozi-select-footer-btn');
+            todos = check('declarativo: botão gerado a partir de -footer-label',
+                !!genBtn && /Adicionar país/.test(genBtn.textContent)) && todos;
+            todos = check('declarativo: ícone gerado (-footer-icon)',
+                !!genBtn && genBtn.querySelector('.ozi-select-footer-icon i.ozi-ico-plus') !== null) && todos;
+
+            var genFooterDetail = null;
+            document.addEventListener('ozi:select-footer', function h(e) {
+                if (e.detail && e.detail.name === 'pais') { genFooterDetail = e.detail; document.removeEventListener('ozi:select-footer', h); }
+            });
+            genBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+            todos = check('declarativo: clique no botão gerado emite ozi:select-footer', !!genFooterDetail) && todos;
+
+            // ── Fixture C — rodapé NÃO é valor p/ ozi-validate ──
+            var form = document.getElementById('form-teste');
+            var validate = OZI.modules.validate;
+            select.clear('req');
+            var r1 = validate.container({ container: form });
+            todos = check('validate: select requerido vazio segue inválido (rodapé ignorado)', r1.isValid === false) && todos;
+            select.value('req', '1');
+            var r2 = validate.container({ container: form });
+            todos = check('validate: preenchido fica válido; rodapé não vira campo extra',
+                r2.isValid === true && r2.data.req === '1' && !('footer' in r2.data)) && todos;
+
+            // ── reload reencontra o slot (teardown devolveu o conteúdo ao <template>) ──
+            select.reload('conta');
+            var contaRoot2 = document.querySelector('[data-ozi-select="conta"]');
+            todos = check('reload(): rodapé reaparece + botão do host reencontrado',
+                contaRoot2.querySelector('.ozi-select-footer') !== null &&
+                document.getElementById('host-foot-btn') !== null) && todos;
+
+            await wait(200);
+            todos = check('zero erros JS reais (opacos filtrados: ' + errosOpacos + ')', erros.length === 0, erros.join(' | ') || null) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ ACEITE v6.2.0 (footer): PASSOU' : '✗ ACEITE v6.2.0 (footer): FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+            document.title = (todos ? 'DONE:PASS' : 'DONE:FAIL');
+        })().catch(function (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+            vered.textContent = '✗ ACEITE v6.2.0 (footer): FALHOU (exceção)';
+            vered.className = 'fail';
+            document.title = 'DONE:FAIL';
+        });
+    });
+</script>
+</body>
+</html>

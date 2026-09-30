@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite F2 #9a (ozi-editor-md)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 820px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .3rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite F2 #9a <small>(ozi-editor-md)</small></h1>
+<p>Critério: <code>ozi-editor-md.js</code> carregado <b>isolado</b> (sem ozi.js, sem jQuery) —
+conversores <code>mdToHtml</code>/<code>htmlToMd</code> puros e boot zero-jQuery.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando…</div>
+
+<!-- carrega SÓ o editor-md.js, direto (prova autossuficiência / zero jQuery) -->
+<script src="../plugins/ozi-ui/components/ozi-editor/js/ozi-editor-md.js"></script>
+<script>
+    var erros = [];
+    var errosOpacos = 0;
+    window.addEventListener('error', function (ev) {
+        var isOpaco = (ev.message === 'Script error.' && !ev.filename && !ev.lineno);
+        if (isOpaco) { errosOpacos++; return; }
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function norm(s) { return String(s).replace(/\s+/g, ' ').trim(); }
+
+    var vered = document.getElementById('veredito');
+    try {
+        var todos = true;
+        var md = window.OziEditorMd;
+
+        // ---- exposição / camadas ----
+        todos = check('window.OziEditorMd exposto com mdToHtml/htmlToMd',
+            md && typeof md.mdToHtml === 'function' && typeof md.htmlToMd === 'function') && todos;
+        todos = check('jQuery ausente (window.jQuery === undefined)', typeof window.jQuery === 'undefined') && todos;
+        var reqJq = performance.getEntriesByType('resource').filter(function (r) { return /jquery/i.test(r.name); });
+        todos = check('zero requests a jQuery', reqJq.length === 0) && todos;
+
+        // ---- mdToHtml ----
+        todos = check('mdToHtml: heading', norm(md.mdToHtml('# Título')) === '<h1>Título</h1>',
+            md.mdToHtml('# Título')) && todos;
+        todos = check('mdToHtml: negrito/itálico em parágrafo',
+            norm(md.mdToHtml('**b** e *i*')) === '<p><strong>b</strong> e <em>i</em></p>',
+            md.mdToHtml('**b** e *i*')) && todos;
+        todos = check('mdToHtml: lista não ordenada',
+            norm(md.mdToHtml('- a\n- b')) === '<ul><li>a</li><li>b</li></ul>') && todos;
+        todos = check('mdToHtml: lista ordenada',
+            norm(md.mdToHtml('1. x\n2. y')) === '<ol><li>x</li><li>y</li></ol>') && todos;
+        todos = check('mdToHtml: code inline', norm(md.mdToHtml('`c`')) === '<p><code>c</code></p>') && todos;
+        var fenced = md.mdToHtml('```js\nvar x=1;\n```');
+        todos = check('mdToHtml: bloco de código com linguagem',
+            fenced.indexOf('<pre><code class="language-js">') === 0 && fenced.indexOf('var x=1;') > -1,
+            fenced) && todos;
+        var tbl = md.mdToHtml('| A | B |\n| --- | --- |\n| 1 | 2 |');
+        todos = check('mdToHtml: tabela GFM (thead/tbody)',
+            tbl.indexOf('<table>') === 0 && tbl.indexOf('<th>A</th>') > -1 && tbl.indexOf('<td>1</td>') > -1) && todos;
+
+        // ---- htmlToMd (trim: _cleanMd da v1 mantém \n\n final — comportamento herdado) ----
+        todos = check('htmlToMd: heading', md.htmlToMd('<h2>Sub</h2>').trim() === '## Sub') && todos;
+        todos = check('htmlToMd: negrito', md.htmlToMd('<strong>b</strong>').trim() === '**b**') && todos;
+        todos = check('htmlToMd: lista', md.htmlToMd('<ul><li>a</li><li>b</li></ul>').trim() === '- a\n- b') && todos;
+        todos = check('htmlToMd: <u> mantido como HTML (sem equiv. MD)',
+            md.htmlToMd('<u>x</u>').trim() === '<u>x</u>') && todos;
+
+        // ---- round-trip md → html → md ----
+        var src = '# Título\n\n**negrito** e *itálico*\n\n- um\n- dois';
+        var back = md.htmlToMd(md.mdToHtml(src));
+        todos = check('round-trip md→html→md preserva estrutura',
+            back.indexOf('# Título') > -1 && back.indexOf('**negrito**') > -1 &&
+            back.indexOf('*itálico*') > -1 && back.indexOf('- um') > -1 && back.indexOf('- dois') > -1,
+            JSON.stringify(back)) && todos;
+
+        todos = check('zero erros JS reais (opacos filtrados: ' + errosOpacos + ')', erros.length === 0, erros.join(' | ') || null) && todos;
+
+        vered.textContent = todos ? '✓ ACEITE F2 #9a (ozi-editor-md): PASSOU' : '✗ ACEITE F2 #9a (ozi-editor-md): FALHOU';
+        vered.className = todos ? 'pass' : 'fail';
+    } catch (err) {
+        check('exceção não tratada', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+        vered.textContent = '✗ ACEITE F2 #9a (ozi-editor-md): FALHOU (exceção)';
+        vered.className = 'fail';
+    }
+</script>
+</body>
+</html>

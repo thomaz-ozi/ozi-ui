@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite F2 #5 (ozi-autocomplete)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .35rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite F2 #5 <small>(ozi-autocomplete)</small></h1>
+<p>Critério: motor 100% JS puro (DOM/eventos), fim do dual-dispatch, adapter nativo
+no ozi-validate, grupo "unique" entre instâncias, comportamento idêntico (busca/teclado).</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<input id="pais" data-ozi-autocomplete="pais">
+<script type="application/json" data-ozi-autocomplete-options="pais">
+[{"value":"br","label":"Brasil"},{"value":"us","label":"EUA"},{"value":"ar","label":"Argentina"}]
+</script>
+
+<input id="uniqueA" data-ozi-autocomplete="uniqueA" data-ozi-autocomplete-unique="grp">
+<script type="application/json" data-ozi-autocomplete-options="uniqueA">
+[{"value":"1","label":"Um"},{"value":"2","label":"Dois"}]
+</script>
+<input id="uniqueB" data-ozi-autocomplete="uniqueB" data-ozi-autocomplete-unique="grp">
+<script type="application/json" data-ozi-autocomplete-options="uniqueB">
+[{"value":"1","label":"Um"},{"value":"2","label":"Dois"}]
+</script>
+
+<form id="form-teste">
+    <input id="requerido" data-ozi-autocomplete="requerido" data-ozi-autocomplete-required data-ozi-required="true">
+    <script type="application/json" data-ozi-autocomplete-options="requerido">
+    [{"value":"1","label":"Um"}]
+    </script>
+</form>
+
+<!-- ÚNICO script externo da página: -->
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['autocomplete', 'validate'], core: { log: true } });
+
+    var erros = [];
+    var errosOpacos = 0;
+    window.addEventListener('error', function (ev) {
+        var isOpaco = (ev.message === 'Script error.' && !ev.filename && !ev.lineno);
+        if (isOpaco) { errosOpacos++; return; }
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 9s';
+        vered.className = 'fail';
+    }, 9000);
+
+    OZI.ready(function () {
+        (async function () {
+            var todos = true;
+            var ac = OZI.components.autocomplete;
+
+            todos = check('OZI.components.autocomplete carregado', !!ac) && todos;
+            todos = check('window.OziAutocomplete exposto', typeof window.OziAutocomplete === 'object') && todos;
+            todos = check('jQuery ausente (window.jQuery === undefined)', typeof window.jQuery === 'undefined') && todos;
+            var reqJq = performance.getEntriesByType('resource').filter(function (r) { return /jquery/i.test(r.name); });
+            todos = check('zero requests a jQuery', reqJq.length === 0) && todos;
+
+            var paisInput = document.getElementById('pais');
+
+            // --- foco + digitação abre dropdown e filtra ---
+            paisInput.dispatchEvent(new Event('focus', { bubbles: true }));
+            paisInput.value = 'ar';
+            paisInput.dispatchEvent(new Event('input', { bubbles: true }));
+            var wrap = paisInput.parentElement;
+            todos = check('_buildUI(): input envelopado em .ozi-autocomplete-wrap',
+                wrap.classList.contains('ozi-autocomplete-wrap')) && todos;
+            var dropdown = wrap.querySelector('.ozi-autocomplete-dropdown');
+            todos = check('open(): dropdown visível ao digitar', dropdown.style.display !== 'none') && todos;
+            var options = wrap.querySelectorAll('.ozi-autocomplete-option');
+            todos = check('busca: filtra para 1 opção ("Argentina")',
+                options.length === 1 && options[0].textContent === 'Argentina') && todos;
+
+            // --- seleção via mousedown na opção + captura ozi:change ---
+            var changeDetail = null;
+            document.addEventListener('ozi:change', function handler(e) {
+                if (e.detail.name === 'pais') { changeDetail = e.detail; document.removeEventListener('ozi:change', handler); }
+            });
+            options[0].dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+
+            todos = check('_selectItem(): valor selecionado via API', ac.value('pais') === 'ar') && todos;
+            todos = check('_selectItem(): input mostra o label selecionado', paisInput.value === 'Argentina') && todos;
+            todos = check('_selectItem(): hidden input sincronizado',
+                wrap.querySelector('input[type="hidden"][name="pais"]').value === 'ar') && todos;
+            todos = check('_selectItem(): dropdown fecha', dropdown.style.display === 'none') && todos;
+            todos = check('emit(): ozi:change com contrato completo',
+                changeDetail && changeDetail.component === 'ozi-autocomplete' && changeDetail.name === 'pais' &&
+                changeDetail.value === 'ar' && changeDetail.source === 'user' &&
+                Array.isArray(changeDetail.items) && changeDetail.items[0].value === 'ar') && todos;
+
+            // --- teclado: ArrowDown abre e destaca, Enter seleciona ---
+            ac.clear('pais');
+            paisInput.focus();
+            paisInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+            todos = check('teclado: ArrowDown abre e destaca a 1ª opção',
+                wrap.querySelector('.ozi-autocomplete-option.is-highlighted') !== null) && todos;
+            paisInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+            todos = check('teclado: Enter seleciona a opção destacada', ac.value('pais') !== null) && todos;
+
+            // --- grupo "unique": violação detectada no blur ---
+            var uniqueAInput = document.getElementById('uniqueA');
+            var uniqueBInput = document.getElementById('uniqueB');
+            var uniqueAWrap  = uniqueAInput.parentElement;
+            var uniqueBWrap  = uniqueBInput.parentElement;
+
+            uniqueAInput.dispatchEvent(new Event('focus', { bubbles: true }));
+            uniqueAInput.value = 'um';
+            uniqueAInput.dispatchEvent(new Event('input', { bubbles: true }));
+            uniqueAWrap.querySelector('.ozi-autocomplete-option').dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+            todos = check('unique: primeira instância seleciona "Um" livremente', ac.value('uniqueA') === '1') && todos;
+
+            var uniqueInvalidDetail = null;
+            document.addEventListener('ozi:unique-invalid', function handler(e) {
+                uniqueInvalidDetail = e.detail; document.removeEventListener('ozi:unique-invalid', handler);
+            });
+            uniqueBInput.dispatchEvent(new Event('focus', { bubbles: true }));
+            uniqueBInput.value = 'um';
+            uniqueBInput.dispatchEvent(new Event('input', { bubbles: true }));
+            uniqueBInput.dispatchEvent(new Event('blur', { bubbles: true }));
+            await wait(200); // _validateUnique roda dentro de setTimeout(120ms) do blur
+
+            todos = check('unique: segunda instância rejeita valor duplicado no blur',
+                ac.value('uniqueB') === null) && todos;
+            todos = check('unique: classe de invalid aplicada no input rejeitado',
+                uniqueBInput.classList.contains('ozi-invalid')) && todos;
+            todos = check('unique: toast de aviso criado no DOM',
+                document.querySelector('.ozi-autocomplete-unique-toast') !== null) && todos;
+            todos = check('unique: emit(ozi:unique-invalid) com detail correto',
+                uniqueInvalidDetail && uniqueInvalidDetail.group === 'grp') && todos;
+
+            // --- validação: adapter nativo registrado no ozi-validate ---
+            var form = document.getElementById('form-teste');
+            var validate = OZI.modules.validate;
+            todos = check('validate.getAdapters() inclui "ozi-autocomplete"',
+                validate.getAdapters().indexOf('ozi-autocomplete') !== -1) && todos;
+
+            var r1 = validate.container({ container: form });
+            var requeridoInput = document.getElementById('requerido');
+            todos = check('adapter: container() marca autocomplete requerido vazio como inválido',
+                r1.isValid === false && requeridoInput.classList.contains('ozi-invalid')) && todos;
+
+            ac.value('requerido', '1');
+            var r2 = validate.container({ container: form });
+            todos = check('adapter: container() aceita autocomplete requerido preenchido',
+                r2.isValid === true && !requeridoInput.classList.contains('ozi-invalid')) && todos;
+            todos = check('adapter: getValue() via validate.container() retorna o valor',
+                r2.data.requerido === '1') && todos;
+
+            // --- setValue() via API programática emite source:'api' ---
+            var apiDetail = null;
+            document.addEventListener('ozi:change', function handler(e) {
+                if (e.detail.name === 'pais') { apiDetail = e.detail; document.removeEventListener('ozi:change', handler); }
+            });
+            ac.value('pais', 'us');
+            todos = check('setValue(): API programática emite source:"api"',
+                apiDetail && apiDetail.source === 'api' && apiDetail.value === 'us') && todos;
+
+            // --- destroy ---
+            ac.destroy('uniqueA');
+            todos = check('destroy(): remove a instância do registro', ac.get('uniqueA') === null) && todos;
+            todos = check('destroy(): desfaz o wrap (input volta ao pai original)',
+                !uniqueAWrap.isConnected || uniqueAInput.parentElement !== uniqueAWrap) && todos;
+
+            await wait(300);
+            todos = check('zero erros JS reais (opacos filtrados: ' + errosOpacos + ')', erros.length === 0, erros.join(' | ') || null) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ ACEITE F2 #5 (ozi-autocomplete): PASSOU' : '✗ ACEITE F2 #5 (ozi-autocomplete): FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+        })().catch(function (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+            vered.textContent = '✗ ACEITE F2 #5 (ozi-autocomplete): FALHOU (exceção)';
+            vered.className = 'fail';
+        });
+    });
+</script>
+</body>
+</html>

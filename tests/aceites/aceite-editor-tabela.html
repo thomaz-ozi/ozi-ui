@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite ozi-editor: criação e edição de tabela (v4.8.0)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .3rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+    .fixtures { border-top: 1px dashed #ddd; margin-top: 1rem; padding-top: 1rem; opacity: .5; }
+    textarea { width: 100%; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite ozi-editor <small>(tabela — v4.8.0)</small></h1>
+<p>Critério: <code>table</code> deixa de ser ação direta (tabela 2×2 fixa) e vira popover com
+<strong>seletor de grade</strong> + <strong>painel de edição</strong>. Cobre a geração do HTML
+(cabeçalho opt-in, <code>rows</code> = total de linhas visíveis), os três caminhos de inserção
+(clique na grade, Enter na grade, botão Inserir), a edição por linha/coluna mantendo
+<code>thead</code> e <code>tbody</code> com a mesma largura, o round-trip do modo md (GFM exige
+cabeçalho) e o <strong>undo nativo</strong> — que é o motivo de a inserção usar
+<code>execCommand</code> e não manipulação de Range. Mede <strong>clicabilidade</strong> por
+<code>elementFromPoint</code> e detecta popover aberto por <code>style.display</code>, nunca por
+<code>offsetParent</code> (é sempre <code>null</code> em elemento <code>fixed</code> desde a
+4.7.1).</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<div class="fixtures">
+    <textarea id="ta-html" data-ozi-editor-html="tbl" data-ozi-editor-height="100px"
+              data-ozi-editor-tools="[bold], table"></textarea>
+
+    <!-- os 4 tokens de alinhamento estão aqui só para o bloco 20b: no type md
+         todos devem chegar como botão incompatível, não como ferramenta -->
+    <textarea id="ta-md" data-ozi-editor-md="tblmd" data-ozi-editor-height="100px"
+              data-ozi-editor-tools="[bold], table, [left,center,right,justify]"></textarea>
+</div>
+
+<!-- ÚNICO script externo — SEM jQuery: -->
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ core: { log: true } });
+
+    var erros = [];
+    var errosOpacos = 0;
+    window.addEventListener('error', function (ev) {
+        var isOpaco = (ev.message === 'Script error.' && !ev.filename && !ev.lineno);
+        if (isOpaco) { errosOpacos++; return; }
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    var ok = 0, total = 0;
+    function check(nome, cond, extra) {
+        total++; if (cond) ok++;
+        var li = document.createElement('li');
+        li.className = cond ? 'pass' : 'fail';
+        li.textContent = (cond ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return cond;
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    function click(el) { el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true })); }
+    function move(el)  { el.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, cancelable: true })); }
+    /* mouseleave NÃO borbulha (por isso o handler é capture) — o evento
+       sintético tem que respeitar isso, senão o teste validaria um caminho
+       que o browser real nunca percorre */
+    function leave(el) { el.dispatchEvent(new MouseEvent('mouseleave', { bubbles: false, cancelable: true })); }
+    function key(el, k) { el.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true })); }
+    function input(el)  { el.dispatchEvent(new Event('input', { bubbles: true })); }
+
+    /* popover aberto = display. `offsetParent` é sempre null em `fixed`:
+       usá-lo aqui reportaria "nenhum popover aberto" em vez de falhar claro
+       (armadilha registrada na 4.7.1) */
+    function isShown(el) { return !!el && el.style.display !== 'none'; }
+
+    function recebeClique(el) {
+        var r = el.getBoundingClientRect();
+        var alvo = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        return !!alvo && (alvo === el || el.contains(alvo));
+    }
+
+    /* põe o caret DENTRO de um nó do content e persiste no editor — é o que
+       o onOpen lê pra decidir entre painel de inserção e de edição */
+    function caretEm(inst, node) {
+        var range = document.createRange();
+        range.selectNodeContents(node);
+        range.collapse(true);
+        var sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        inst._saveSelection();
+    }
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 12s';
+        vered.className = 'fail';
+        document.title = 'DONE:TIMEOUT ' + ok + '/' + total;
+    }, 12000);
+
+    OZI.ready(function () {
+        (async function () {
+            await wait(200);
+
+            var wrapH = document.querySelector('#ta-html + .ozi-editor-wrap');
+            var wrapM = document.querySelector('#ta-md + .ozi-editor-wrap');
+            var instH = OZI.components.editor.get('tbl');
+            var instM = OZI.components.editor.get('tblmd');
+
+            function btnDe(w)      { return w.querySelector('[data-ozi-editor-tool="table"]'); }
+            function popoverDe(w)  { return w.querySelector('[data-ozi-editor-popover-wrap^="table-"] .ozi-editor-popover'); }
+            function painel(w, q)  { return w.querySelector('[data-ozi-editor-table-panel="' + q + '"]'); }
+            function gridDe(w)     { return w.querySelector('[data-ozi-editor-table-grid]'); }
+            function celula(w,c,r) { return w.querySelector('.ozi-editor-table-cell[data-ozi-editor-table-col="' + c + '"][data-ozi-editor-table-row="' + r + '"]'); }
+            function acesas(w)     { return w.querySelectorAll('.ozi-editor-table-cell.is-on').length; }
+            function labelDe(w)    { return w.querySelector('[data-ozi-editor-table-size-label]').textContent; }
+            function colsDe(w)     { return w.querySelector('[data-ozi-editor-table-cols]'); }
+            function rowsDe(w)     { return w.querySelector('[data-ozi-editor-table-rows]'); }
+            function headerDe(w)   { return w.querySelector('[data-ozi-editor-table-header]'); }
+            function inserirDe(w)  { return w.querySelector('[data-ozi-editor-table-apply]'); }
+            function acaoDe(w, a)  { return w.querySelector('[data-ozi-editor-table-action="' + a + '"]'); }
+            function tabelaDe(i)   { return i.content.querySelector('table'); }
+
+            function limpar(inst) {
+                inst.setValue('<p>x</p>');
+                caretEm(inst, inst.content.querySelector('p'));
+            }
+
+            // ─── 1. o botão virou popover ────────────────────────────────
+            var btnH = btnDe(wrapH);
+            var popH = popoverDe(wrapH);
+            check('botão "table" existe e é trigger de popover',
+                !!btnH && btnH.getAttribute('aria-haspopup') === 'true' && !!popH);
+            check('popover de tabela nasce fechado', !isShown(popH));
+
+            limpar(instH);
+            click(btnH);
+            await wait(30);
+            check('clique no botão ABRE o popover e NÃO insere tabela direto',
+                isShown(popH) && !tabelaDe(instH));
+
+            // ─── 2. estrutura da grade ───────────────────────────────────
+            var gridH = gridDe(wrapH);
+            check('grade tem 10×8 = 80 células',
+                gridH.querySelectorAll('.ozi-editor-table-cell').length === 80,
+                'achou ' + gridH.querySelectorAll('.ozi-editor-table-cell').length);
+            check('grade é focável por teclado (tabindex=0, role=grid)',
+                gridH.getAttribute('tabindex') === '0' && gridH.getAttribute('role') === 'grid');
+            check('painel de INSERÇÃO visível e o de EDIÇÃO oculto (caret fora de tabela)',
+                isShown(painel(wrapH, 'insert')) && !isShown(painel(wrapH, 'edit')));
+            check('abre com 2×2 (reset entre aberturas)',
+                acesas(wrapH) === 4 && colsDe(wrapH).value === '2' && rowsDe(wrapH).value === '2',
+                'acesas=' + acesas(wrapH));
+
+            // ─── 3. hover pinta o retângulo ──────────────────────────────
+            move(celula(wrapH, 6, 7));
+            await wait(20);
+            check('hover em (6,7) acende 6×7 = 42 células', acesas(wrapH) === 42, 'acesas=' + acesas(wrapH));
+            check('label vivo mostra "6 × 7 células"',
+                labelDe(wrapH).indexOf('6 × 7') === 0, labelDe(wrapH));
+
+            move(celula(wrapH, 3, 2));
+            await wait(20);
+            check('hover em (3,2) acende 6 células (retângulo encolhe)', acesas(wrapH) === 6, 'acesas=' + acesas(wrapH));
+
+            /* o retângulo aceso tem que dizer a verdade sobre o que o botão
+               Inserir faria — voltar para o hover antigo seria mentira */
+            leave(gridH);
+            await wait(20);
+            check('sair da grade volta ao que os campos pedem (2×2), não ao último hover',
+                acesas(wrapH) === 4, 'acesas=' + acesas(wrapH));
+
+            // ─── 4. campos numéricos refletem na grade ───────────────────
+            colsDe(wrapH).value = '4'; rowsDe(wrapH).value = '3';
+            input(colsDe(wrapH));
+            await wait(20);
+            check('digitar nos campos repinta a grade (4×3 = 12)', acesas(wrapH) === 12, 'acesas=' + acesas(wrapH));
+
+            colsDe(wrapH).value = '999';
+            input(colsDe(wrapH));
+            await wait(20);
+            check('valor acima do teto é limitado a 50 no label (não NaN, não 999)',
+                labelDe(wrapH).indexOf('50 × 3') === 0, labelDe(wrapH));
+
+            // ─── 5. clicabilidade real do botão Inserir (lição 4.7.1) ────
+            check('botão Inserir RECEBE clique (popover não cortado pela moldura)',
+                recebeClique(inserirDe(wrapH)));
+
+            // ─── 6. inserção COM cabeçalho ───────────────────────────────
+            limpar(instH);
+            click(btnH); await wait(30);
+            colsDe(wrapH).value = '3'; rowsDe(wrapH).value = '4';
+            input(colsDe(wrapH));
+            headerDe(wrapH).checked = true;
+            click(inserirDe(wrapH));
+            await wait(50);
+
+            var t = tabelaDe(instH);
+            check('inseriu a tabela e fechou o popover', !!t && !isShown(popH));
+            check('com cabeçalho: 1 <thead> com 3 <th>',
+                !!t && t.tHead && t.tHead.rows.length === 1 && t.tHead.rows[0].cells.length === 3,
+                t && t.tHead ? t.tHead.rows[0].cells.length + ' th' : 'sem thead');
+            check('rows=4 é o TOTAL visível: 1 cabeçalho + 3 linhas de corpo',
+                !!t && t.tBodies[0] && t.tBodies[0].rows.length === 3,
+                t && t.tBodies[0] ? t.tBodies[0].rows.length + ' linhas' : 'sem tbody');
+            check('células do corpo são <td> e têm a mesma largura do cabeçalho',
+                !!t && t.tBodies[0].rows[0].cells.length === 3 &&
+                t.tBodies[0].rows[0].cells[0].tagName === 'TD');
+            check('<p> de escape depois da tabela (caret não fica preso)',
+                !!t && !!t.nextElementSibling && t.nextElementSibling.tagName === 'P');
+
+            // ─── 7. inserção SEM cabeçalho ───────────────────────────────
+            limpar(instH);
+            click(btnH); await wait(30);
+            colsDe(wrapH).value = '2'; rowsDe(wrapH).value = '3';
+            input(colsDe(wrapH));
+            headerDe(wrapH).checked = false;
+            click(inserirDe(wrapH));
+            await wait(50);
+
+            t = tabelaDe(instH);
+            check('sem cabeçalho: nenhum <thead> e 3 linhas de corpo',
+                !!t && !t.tHead && t.tBodies[0].rows.length === 3,
+                t ? (t.tHead ? 'tem thead' : t.tBodies[0].rows.length + ' linhas') : 'sem tabela');
+
+            // ─── 8. rows=1 + cabeçalho não gera <tbody> vazio ────────────
+            limpar(instH);
+            instH._insertTable(2, 1, true);
+            await wait(20);
+            t = tabelaDe(instH);
+            check('rows=1 com cabeçalho: só <thead>, sem <tbody> vazio',
+                !!t && !!t.tHead && t.tBodies.length === 0,
+                t ? (t.tBodies.length + ' tbody') : 'sem tabela');
+
+            // ─── 9. clique na grade insere direto ────────────────────────
+            limpar(instH);
+            click(btnH); await wait(30);
+            headerDe(wrapH).checked = false;
+            click(celula(wrapH, 5, 2));
+            await wait(50);
+            t = tabelaDe(instH);
+            check('clique na célula (5,2) insere 5 colunas × 2 linhas e fecha',
+                !!t && t.rows.length === 2 && t.rows[0].cells.length === 5 && !isShown(popH),
+                t ? t.rows.length + 'x' + t.rows[0].cells.length : 'sem tabela');
+            check('clique na grade escreve o tamanho de volta nos campos',
+                colsDe(wrapH).value === '5' && rowsDe(wrapH).value === '2');
+
+            // ─── 10. Enter na grade insere ───────────────────────────────
+            limpar(instH);
+            click(btnH); await wait(30);
+            headerDe(wrapH).checked = false;
+            key(gridH, 'ArrowRight');   /* 2 → 3 colunas */
+            key(gridH, 'ArrowDown');    /* 2 → 3 linhas  */
+            await wait(20);
+            check('setas movem o retângulo (3×3 = 9 acesas)', acesas(wrapH) === 9, 'acesas=' + acesas(wrapH));
+            key(gridH, 'Enter');
+            await wait(50);
+            t = tabelaDe(instH);
+            check('Enter na grade insere o tamanho selecionado (3×3)',
+                !!t && t.rows.length === 3 && t.rows[0].cells.length === 3,
+                t ? t.rows.length + 'x' + t.rows[0].cells.length : 'sem tabela');
+
+            // ─── 11. undo nativo (por isso a inserção usa execCommand) ───
+            limpar(instH);
+            instH.content.focus();
+            instH._insertTable(2, 2, false);
+            await wait(30);
+            check('tabela inserida antes do undo', !!tabelaDe(instH));
+            document.execCommand('undo');
+            await wait(30);
+            check('undo nativo desfaz a inserção (Range puro ficaria fora da pilha)',
+                !tabelaDe(instH), instH.content.innerHTML.slice(0, 60));
+
+            // ─── 12. painel de EDIÇÃO com o caret dentro da tabela ───────
+            limpar(instH);
+            instH._insertTable(3, 3, true);
+            await wait(30);
+            t = tabelaDe(instH);
+            caretEm(instH, t.tBodies[0].rows[0].cells[1]);
+            click(btnH);
+            await wait(30);
+            check('caret dentro de <td>: abre no painel de EDIÇÃO',
+                isShown(painel(wrapH, 'edit')) && !isShown(painel(wrapH, 'insert')));
+
+            // ─── 13. inserir linha abaixo ────────────────────────────────
+            click(acaoDe(wrapH, 'rowBelow'));
+            await wait(30);
+            t = tabelaDe(instH);
+            check('"linha abaixo" adiciona 1 linha de corpo com a largura certa',
+                t.tBodies[0].rows.length === 3 && t.tBodies[0].rows[1].cells.length === 3,
+                t.tBodies[0].rows.length + ' linhas');
+            check('a linha nova leva <td>, não <th>',
+                t.tBodies[0].rows[1].cells[0].tagName === 'TD');
+
+            // ─── 14. inserir coluna mexe em thead E tbody ────────────────
+            caretEm(instH, t.tBodies[0].rows[0].cells[0]);
+            click(btnH); await wait(30);
+            click(acaoDe(wrapH, 'colAfter'));
+            await wait(30);
+            t = tabelaDe(instH);
+            check('"coluna depois" cresce o <thead> junto com o <tbody> (4 células nos dois)',
+                t.tHead.rows[0].cells.length === 4 && t.tBodies[0].rows[0].cells.length === 4,
+                'thead=' + t.tHead.rows[0].cells.length + ' tbody=' + t.tBodies[0].rows[0].cells.length);
+            check('a célula nova do <thead> é <th>, a do corpo é <td>',
+                t.tHead.rows[0].cells[1].tagName === 'TH' &&
+                t.tBodies[0].rows[0].cells[1].tagName === 'TD');
+
+            // ─── 15. remover coluna ──────────────────────────────────────
+            caretEm(instH, t.tBodies[0].rows[0].cells[1]);
+            click(btnH); await wait(30);
+            click(acaoDe(wrapH, 'colRemove'));
+            await wait(30);
+            t = tabelaDe(instH);
+            check('"excluir coluna" remove em todas as seções (volta a 3)',
+                t.tHead.rows[0].cells.length === 3 && t.tBodies[0].rows[0].cells.length === 3,
+                'thead=' + t.tHead.rows[0].cells.length);
+
+            // ─── 16. remover a última linha remove a tabela ──────────────
+            limpar(instH);
+            instH._insertTable(2, 1, false);
+            await wait(30);
+            t = tabelaDe(instH);
+            caretEm(instH, t.rows[0].cells[0]);
+            click(btnH); await wait(30);
+            click(acaoDe(wrapH, 'rowRemove'));
+            await wait(30);
+            check('"excluir linha" na última linha remove a tabela inteira (não deixa casca vazia)',
+                !tabelaDe(instH));
+
+            // ─── 17. remover tabela ──────────────────────────────────────
+            limpar(instH);
+            instH._insertTable(3, 2, true);
+            await wait(30);
+            t = tabelaDe(instH);
+            caretEm(instH, t.tBodies[0].rows[0].cells[0]);
+            click(btnH); await wait(30);
+            click(acaoDe(wrapH, 'remove'));
+            await wait(30);
+            check('"excluir tabela" remove a tabela', !tabelaDe(instH));
+
+            // ─── 18. evento ozi:change na inserção ───────────────────────
+            limpar(instH);
+            var mudou = 0;
+            var onCh = function () { mudou++; };
+            instH.textarea.addEventListener('ozi:change', onCh);
+            click(btnH); await wait(30);
+            click(inserirDe(wrapH));
+            await wait(50);
+            instH.textarea.removeEventListener('ozi:change', onCh);
+            check('inserir emite ozi:change (contrato v2)', mudou > 0, 'emitiu ' + mudou);
+            check('textarea sincronizada com a tabela',
+                instH.textarea.value.indexOf('<table') > -1);
+
+            // ─── 19. modo md: cabeçalho forçado ──────────────────────────
+            var btnM = btnDe(wrapM);
+            limpar(instM);
+            click(btnM);
+            await wait(30);
+            check('md: checkbox de cabeçalho marcado E desabilitado (GFM exige)',
+                headerDe(wrapM).checked === true && headerDe(wrapM).disabled === true);
+
+            /* mesmo desligando na marra, o insert tem que gerar thead: sem
+               ele o _tableToMd promove a primeira linha do corpo e o dado do
+               usuário muda de papel no round-trip, em silêncio */
+            headerDe(wrapM).checked = false;
+            instM._insertTable(3, 3, false);
+            await wait(30);
+            var tm = tabelaDe(instM);
+            check('md: <thead> é gerado mesmo com withHeader=false (blindagem do round-trip)',
+                !!tm && !!tm.tHead && tm.tHead.rows[0].cells.length === 3);
+
+            // ─── 20. round-trip md ───────────────────────────────────────
+            var md = instM.getValue();
+            check('md: getValue() devolve tabela GFM com linha separadora',
+                /\|\s*---\s*\|/.test(md), JSON.stringify(md.slice(0, 60)));
+
+            instM.setValue(md);
+            await wait(30);
+            var tm2 = tabelaDe(instM);
+            check('md: round-trip preserva <thead> e a contagem de linhas',
+                !!tm2 && !!tm2.tHead &&
+                tm2.tHead.rows[0].cells.length === 3 &&
+                tm2.tBodies[0].rows.length === 2,
+                tm2 ? (tm2.tBodies[0] ? tm2.tBodies[0].rows.length + ' linhas' : 'sem tbody') : 'sem tabela');
+
+            // ─── 20b. alinhamento de parágrafo bloqueado no md ───────────
+            /* [v4.8.0 FIX] `justify` tinha ficado fora do BLOCKED_IN_MD desde a
+               Fase 1: o botão aparecia habilitado no md, aplicava text-align e
+               a conversão descartava — no-op silencioso. Os 4 são testados
+               juntos de propósito: o bug foi justamente um irmão ficar de fora
+               quando a lista não foi revisada. */
+            var mdWrap = document.querySelector('#ta-md + .ozi-editor-wrap');
+            ['left', 'center', 'right', 'justify'].forEach(function (tool) {
+                check('md: "' + tool + '" é bloqueado (alinhamento não sobrevive à conversão)',
+                    !!mdWrap.querySelector('[data-ozi-editor-tool-blocked="' + tool + '"]') &&
+                    !mdWrap.querySelector('.ozi-editor-btn[data-ozi-editor-tool="' + tool + '"]'));
+            });
+
+            // ─── 21. dispatcher genérico não insere mais ─────────────────
+            limpar(instH);
+            instH._runTool('table');
+            await wait(30);
+            check('_runTool("table") virou no-op (a tabela só sai do popover)',
+                !tabelaDe(instH));
+
+            // ─── 21b. TODA ferramenta da toolbar resolve um ícone ────────
+            /* Genérico de propósito, não uma lista de h1..h6: `h1`–`h6`
+               existiam no TOOL_META desde sempre e NUNCA tiveram SVG — o
+               helper caía no catch do fetch e escrevia o texto cru ("h1"),
+               com um 404 por botão. Ninguém viu porque nenhum aceite
+               conferia ícone. Este check varre o que estiver na toolbar,
+               então a próxima ferramenta sem SVG falha aqui. */
+            var todosTools = 'bold,italic,underline,strike,ul,ol,quote,hr,codeblock,table,' +
+                             'h1,h2,h3,h4,h5,h6,undo,redo,clear,left,center,right,justify,source';
+            var taIco = document.createElement('textarea');
+            taIco.setAttribute('data-ozi-editor-html', 'icones');
+            taIco.setAttribute('data-ozi-editor-tools', todosTools);
+            document.querySelector('.fixtures').appendChild(taIco);
+            OZI.components.editor.init(document);
+            await wait(400);
+
+            var wrapIco = document.querySelector('[data-ozi-editor-html="icones"] + .ozi-editor-wrap');
+            var semIcone = [];
+            todosTools.split(',').forEach(function (t) {
+                var b = wrapIco.querySelector('.ozi-editor-btn[data-ozi-editor-tool="' + t + '"] .ozi-editor-btn-icon');
+                if (!b || !b.querySelector('svg')) semIcone.push(t);
+            });
+            check('todas as ' + todosTools.split(',').length + ' ferramentas da toolbar resolvem um SVG',
+                semIcone.length === 0, semIcone.length ? 'sem ícone: ' + semIcone.join(', ') : null);
+
+            // ─── 22. destroy ─────────────────────────────────────────────
+            var antesL = instH._listeners.length;
+            instH.destroy();
+            check('destroy() zera os listeners rastreados',
+                instH._listeners.length === 0, 'antes=' + antesL);
+
+            // ─── 23. erros JS ────────────────────────────────────────────
+            check('zero erros JS reais (opacos filtrados: ' + errosOpacos + ')',
+                erros.length === 0, erros.join(' | ') || null);
+
+            clearTimeout(watchdog);
+            var allPass = (ok === total);
+            vered.textContent = (allPass ? '✓ ACEITE TABELA: PASSOU' : '✗ ACEITE TABELA: FALHOU') + ' (' + ok + '/' + total + ')';
+            vered.className = allPass ? 'pass' : 'fail';
+            document.title = (allPass ? 'DONE:PASS ' : 'DONE:FAIL ') + ok + '/' + total;
+        })().catch(function (err) {
+            check('exceção não tratada no teste', false, String(err) + ' | ' + err.stack);
+            clearTimeout(watchdog);
+            vered.textContent = '✗ ACEITE TABELA: FALHOU (' + ok + '/' + total + ')';
+            vered.className = 'fail';
+            document.title = 'DONE:FAIL ' + ok + '/' + total;
+        });
+    });
+</script>
+</body>
+</html>

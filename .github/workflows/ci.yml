@@ -65,3 +65,19 @@ jobs:
       # deriva OziAssets ↔ _pluginMap (inclusive deps:) e config mesclada.
       - name: php artisan ozi:check
         run: vendor/bin/testbench ozi:check
+
+  aceites:
+    name: Aceites JS (Chrome headless)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+
+      # JS puro, sem build: cada página carrega só o ozi.js do pacote e escreve o veredito
+      - name: Rodar aceites
+        run: bash tests/aceites/run.sh

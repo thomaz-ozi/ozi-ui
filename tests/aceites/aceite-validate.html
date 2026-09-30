@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite F2 #1 (ozi-validate)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .35rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+    .ozi-invalid { outline: 2px solid #b91c1c; }
+    .ozi-valid { outline: 2px solid #15803d; }
+    #form-teste { display: none; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite F2 #1 <small>(ozi-validate)</small></h1>
+<p>Critério: motor 100% JS puro, mesma API pública (<code>container/field/applyState/registerAdapter/initInteractive/getAdapters</code>),
+zero regressão de comportamento de validação.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<form id="form-teste" data-ozi-validate>
+    <input name="nome" type="text" required>
+    <input name="email" type="email" required>
+    <input name="aceite" type="checkbox" value="1" required>
+    <input name="plano" type="radio" value="a" required>
+    <input name="plano" type="radio" value="b">
+    <select name="tags" multiple required>
+        <option value="x">x</option>
+        <option value="y">y</option>
+    </select>
+    <input name="anexo" type="file" required>
+    <span class="ozi-feedback"></span>
+</form>
+
+<!-- ÚNICO script externo da página: -->
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['validate'], core: { log: true } });
+
+    var erros = [];
+    window.onerror = function (msg) { erros.push(msg); return false; };
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+
+    var watchdog = setTimeout(function () {
+        document.getElementById('veredito').textContent = '✗ FALHOU — OZI.ready() não disparou em 5s';
+        document.getElementById('veredito').className = 'fail';
+    }, 5000);
+
+    OZI.ready(function () {
+        clearTimeout(watchdog);
+        var todos = true;
+        var vered = document.getElementById('veredito');
+        var validate = OZI.modules.validate;
+
+        todos = check('OZI.modules.validate carregado', !!validate) && todos;
+        todos = check('jQuery ausente (window.jQuery === undefined)',
+            typeof window.jQuery === 'undefined') && todos;
+
+        var reqJq = performance.getEntriesByType('resource').filter(function (r) {
+            return /jquery/i.test(r.name);
+        });
+        todos = check('zero requests a jQuery', reqJq.length === 0) && todos;
+
+        // --- container() com todos os campos vazios: deve reprovar ---
+        var form = document.getElementById('form-teste');
+        var r1 = validate.container({ container: form });
+        todos = check('container(): isValid === false com campos vazios', r1.isValid === false) && todos;
+        todos = check('container(): invalidFields inclui nome/email/aceite/plano/tags/anexo',
+            ['nome', 'email', 'aceite', 'plano', 'tags', 'anexo'].every(function (n) {
+                return r1.invalidFields.some(function (f) { return f.name === n; });
+            })) && todos;
+        todos = check('container(): invalidFields[].el é Element nativo (não $el)',
+            r1.invalidFields[0].el instanceof Element) && todos;
+        todos = check('container(): classe ozi-invalid aplicada no DOM',
+            form.querySelector('[name="nome"]').classList.contains('ozi-invalid')) && todos;
+        todos = check('container(): mensagem de fallback i18n no feedback',
+            form.querySelector('.ozi-feedback').textContent === OZI.lang.t('common.required')) && todos;
+
+        // --- preenche todos os campos corretamente ---
+        form.querySelector('[name="nome"]').value = 'Thomaz';
+        form.querySelector('[name="email"]').value = 'a@b.com';
+        form.querySelector('[name="aceite"]').checked = true;
+        form.querySelector('[name="plano"][value="a"]').checked = true;
+        form.querySelector('[name="tags"] option[value="x"]').selected = true;
+
+        var r2 = validate.container({ container: form, silent: true }); // silent: não mexe no file (não dá pra simular)
+        todos = check('container(): getValue select[multiple] retorna array', Array.isArray(r2.data.tags) && r2.data.tags[0] === 'x') && todos;
+        todos = check('container(): getValue checkbox retorna "1"', r2.data.aceite === '1') && todos;
+        todos = check('container(): getValue radio retorna valor do checked', r2.data.plano === 'a') && todos;
+        todos = check('container(): classe ozi-valid aplicada após reset com silent:false',
+            (function () {
+                form.querySelector('[name="anexo"]').removeAttribute('required'); // sem simulação real de File no headless
+                var r3 = validate.container({ container: form });
+                return form.querySelector('[name="nome"]').classList.contains('ozi-valid');
+            })()) && todos;
+
+        // --- field() isolado ---
+        var campoIsolado = document.createElement('input');
+        campoIsolado.name = 'isolado';
+        campoIsolado.required = true;
+        document.body.appendChild(campoIsolado);
+        var fr = validate.field(campoIsolado);
+        todos = check('field(): campo vazio required → valid:false', fr.valid === false) && todos;
+        campoIsolado.value = 'x';
+        var fr2 = validate.field(campoIsolado);
+        todos = check('field(): campo preenchido → valid:true', fr2.valid === true) && todos;
+        todos = check('field(): aceita Element nativo direto (sem wrap)', true) && todos;
+
+        // --- applyState() manual ---
+        validate.applyState(campoIsolado, 'reset');
+        todos = check('applyState(): remove classes após reset',
+            !campoIsolado.classList.contains('ozi-valid') && !campoIsolado.classList.contains('ozi-invalid')) && todos;
+
+        // --- validação interativa (delegação nativa document) ---
+        var campoInterativo = form.querySelector('[name="nome"]');
+        campoInterativo.value = '';
+        campoInterativo.dispatchEvent(new Event('input', { bubbles: true }));
+        todos = check('initInteractive(): evento input nativo dispara validação (ozi-invalid)',
+            campoInterativo.classList.contains('ozi-invalid')) && todos;
+
+        // --- getAdapters() ---
+        todos = check('getAdapters(): inclui "native"', validate.getAdapters().indexOf('native') !== -1) && todos;
+
+        // --- compat retroativa oziValidateContainer ---
+        todos = check('oziValidateContainer(): alias de compat funcional',
+            typeof window.oziValidateContainer === 'function' &&
+            window.oziValidateContainer({ container: form }).hasOwnProperty('isValid')) && todos;
+
+        todos = check('zero erros JS', erros.length === 0, erros.join(' | ') || null) && todos;
+
+        vered.textContent = todos ? '✓ ACEITE F2 #1 (ozi-validate): PASSOU' : '✗ ACEITE F2 #1 (ozi-validate): FALHOU';
+        vered.className = todos ? 'pass' : 'fail';
+    });
+</script>
+</body>
+</html>

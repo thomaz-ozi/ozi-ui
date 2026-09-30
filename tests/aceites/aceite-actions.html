@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite F2 módulo (ozi-actions)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 860px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .3rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+    .fixtures { opacity: .3; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite módulo <small>(ozi-actions)</small></h1>
+<p>Critério: <code>ozi-actions.js</code> zero-jQuery — adapters default (DOM nativo),
+handlers universais, registry, e path bootstrap5 via <b>API nativa</b>
+<code>bootstrap.Modal</code> (não <code>$.fn.modal</code>).</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando…</div>
+
+<div class="fixtures">
+    <div id="meu-modal" class="ozi-modal" style="display:none">modal default</div>
+    <div id="meu-oc" class="ozi-offcanvas">offcanvas default</div>
+    <div id="bs-modal" class="modal">modal bootstrap</div>
+</div>
+
+<script>
+    // stub mínimo do OZI (controla o tema) + mock do bootstrap (registra chamadas nativas)
+    window.OZI = { conf: { core: { log: false }, theme: 'default' }, modules: {} };
+    var bsCalls = [];
+    window.bootstrap = {
+        Modal: {
+            getOrCreateInstance: function (el) { return { show: function () { bsCalls.push('modal-show:' + el.id); } }; },
+            getInstance:         function (el) { return { hide: function () { bsCalls.push('modal-hide:' + el.id); } }; }
+        }
+    };
+</script>
+<!-- carrega SÓ o actions.js, direto -->
+<script src="../plugins/ozi-ui/modules/ozi-actions/js/ozi-actions.js"></script>
+<script>
+    var erros = [];
+    window.addEventListener('error', function (ev) {
+        if (ev.message === 'Script error.' && !ev.filename && !ev.lineno) return;
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function shown(el) { return el.style.display !== 'none'; }
+    var vered = document.getElementById('veredito');
+
+    function runTests() {
+    try {
+        var todos = true;
+        var a = window.OziActions;
+
+        // ---- exposição / camadas ----
+        todos = check('window.OziActions + OZI.modules.actions expostos',
+            a && a === (window.OZI.modules && window.OZI.modules.actions) &&
+            typeof a.run === 'function') && todos;
+        todos = check('jQuery ausente', typeof window.jQuery === 'undefined') && todos;
+        var reqJq = performance.getEntriesByType('resource').filter(function (r) { return /jquery/i.test(r.name); });
+        todos = check('zero requests a jQuery', reqJq.length === 0) && todos;
+
+        // ---- adapter default: toast (DOM nativo, antes $('<div>').append) ----
+        a.run([{ type: 'toast', payload: { message: 'olá', level: 'info' } }]);
+        var toast = document.querySelector('.ozi-toast.ozi-toast-info');
+        todos = check('default toast: cria .ozi-toast no body via createElement',
+            !!toast && toast.textContent === 'olá' && toast.parentNode === document.body) && todos;
+
+        // ---- adapter default: modal-open / modal-close (display) ----
+        var modal = document.getElementById('meu-modal');
+        a.run([{ type: 'modal-open', payload: { id: 'meu-modal' } }]);
+        todos = check('default modal-open: exibe o elemento (display block)', shown(modal)) && todos;
+        a.run([{ type: 'modal-close', payload: { id: 'meu-modal' } }]);
+        todos = check('default modal-close: oculta o elemento', !shown(modal)) && todos;
+
+        // ---- adapter default: offcanvas (classList) ----
+        var oc = document.getElementById('meu-oc');
+        a.run([{ type: 'offcanvas-open', payload: { id: 'meu-oc' } }]);
+        todos = check('default offcanvas-open: adiciona classe ozi-open', oc.classList.contains('ozi-open')) && todos;
+        a.run([{ type: 'offcanvas-close', payload: { id: 'meu-oc' } }]);
+        todos = check('default offcanvas-close: remove ozi-open', !oc.classList.contains('ozi-open')) && todos;
+
+        // ---- handlers universais: set-value / set-options (CustomEvent) ----
+        var sv = null, so = null;
+        document.addEventListener('ozi:set-value', function (e) { sv = e.detail; });
+        document.addEventListener('ozi:set-options', function (e) { so = e.detail; });
+        a.run([{ type: 'set-value', payload: { plugin: 'select', key: 'uf', value: 'SP' } }]);
+        a.run([{ type: 'set-options', payload: { key: 'cid', options: [{ value: 1 }] } }]);
+        todos = check('universal set-value: dispara ozi:set-value com detail',
+            sv && sv.plugin === 'select' && sv.key === 'uf' && sv.value === 'SP') && todos;
+        todos = check('universal set-options: dispara ozi:set-options com detail',
+            so && so.key === 'cid' && Array.isArray(so.options) && so.options[0].value === 1) && todos;
+
+        // ---- universal eval (código executa) ----
+        a.run([{ type: 'eval', payload: { code: 'window.__oziActionsEval = 42;' } }]);
+        todos = check('universal eval: executa o código', window.__oziActionsEval === 42) && todos;
+
+        // ---- registry: registerHandler tem prioridade ----
+        var custom = null;
+        a.registerHandler('minha-acao', function (action) { custom = action.payload; });
+        a.run([{ type: 'minha-acao', payload: { x: 9 } }]);
+        todos = check('registerHandler: handler customizado é chamado', custom && custom.x === 9) && todos;
+        todos = check('getHandlers: lista custom/themes/universal',
+            a.getHandlers().custom.indexOf('minha-acao') > -1 &&
+            a.getHandlers().themes.indexOf('bootstrap5') > -1) && todos;
+
+        // ---- path bootstrap5: usa API NATIVA bootstrap.Modal (não $.fn.modal) ----
+        window.OZI.conf.theme = 'bootstrap5';
+        a.run([{ type: 'modal-open', payload: { id: 'bs-modal' } }]);
+        a.run([{ type: 'modal-close', payload: { id: 'bs-modal' } }]);
+        todos = check('bootstrap5 modal: usa bootstrap.Modal nativo (show+hide), sem jQuery',
+            bsCalls.indexOf('modal-show:bs-modal') > -1 && bsCalls.indexOf('modal-hide:bs-modal') > -1,
+            bsCalls.join(',')) && todos;
+        window.OZI.conf.theme = 'default';
+
+        // ---- compat zldActions ----
+        todos = check('compat window.zldActions definido', typeof window.zldActions === 'function') && todos;
+
+        todos = check('zero erros JS reais', erros.length === 0, erros.join(' | ') || null) && todos;
+
+        vered.textContent = todos ? '✓ ACEITE módulo (ozi-actions): PASSOU' : '✗ ACEITE módulo (ozi-actions): FALHOU';
+        vered.className = todos ? 'pass' : 'fail';
+    } catch (err) {
+        check('exceção não tratada', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+        vered.textContent = '✗ ACEITE módulo (ozi-actions): FALHOU (exceção)';
+        vered.className = 'fail';
+    }
+    }
+
+    // roda após o _boot do actions (que difere para DOMContentLoaded)
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', runTests);
+    } else {
+        runTests();
+    }
+</script>
+</body>
+</html>

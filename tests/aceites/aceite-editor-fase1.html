@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite ozi-editor Fase 1 (strike/justify/quote/hr/undo/redo/contador)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .3rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+    .fixtures { border-top: 1px dashed #ddd; margin-top: 1rem; padding-top: 1rem; opacity: .5; }
+    textarea { width: 100%; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite ozi-editor Fase 1 <small>(strike, justify, quote, hr, undo, redo, contador)</small></h1>
+<p>Critério: as 6 ferramentas simples da Fase 1 (sem UI nova, sem popover) + contador de
+palavras/caracteres — mecânica de <code>_runTool</code>, estado ativo em
+<code>_updateToolbarState</code>, sanitização das novas tags (<code>S</code>/<code>BLOCKQUOTE</code>/<code>HR</code>)
+e o round-trip MD (<code>~~</code>/<code>&gt;</code>/<code>---</code>).</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<div class="fixtures">
+    <textarea id="ta-tools" data-ozi-editor-html="conteudo"
+              data-ozi-editor-tools="[bold,strike]; [left,center,right,justify]; [quote,hr]; [undo,redo]"
+              data-ozi-editor-counter="true"></textarea>
+
+    <textarea id="ta-md" data-ozi-editor-md="notas"
+              data-ozi-editor-tools="[bold,strike]; quote; hr"></textarea>
+</div>
+
+<!-- ÚNICO script externo — SEM jQuery: -->
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['editor-md'], core: { log: true } });
+
+    var erros = [];
+    var errosOpacos = 0;
+    window.addEventListener('error', function (ev) {
+        var isOpaco = (ev.message === 'Script error.' && !ev.filename && !ev.lineno);
+        if (isOpaco) { errosOpacos++; return; }
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+    function placeCursor(inst, el, atEnd) {
+        var range = document.createRange();
+        range.selectNodeContents(el);
+        range.collapse(!atEnd);
+        var sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        inst._saveSelection();
+    }
+    function selectAll(inst, el) {
+        var range = document.createRange();
+        range.selectNodeContents(el);
+        var sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        inst._saveSelection();
+    }
+    function click(btn) { btn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true })); }
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 9s';
+        vered.className = 'fail';
+    }, 9000);
+
+    OZI.ready(function () {
+        (async function () {
+            var todos = true;
+            var api = OZI.components.editor;
+
+            var wrap = document.querySelector('#ta-tools + .ozi-editor-wrap');
+            var inst = api.get('conteudo');
+            var content = wrap.querySelector('.ozi-editor-content');
+
+            // ---- toolbar: botão strike presente ----
+            // (não testamos o SVG em si: h.icon() usa fetch(), que não funciona
+            // sob file:// no headless — mesma classe de limitação de ambiente já
+            // documentada em lessons-learned pro "Script error." opaco; em app
+            // servido via http funciona normalmente)
+            await wait(200);
+            var strikeBtn = wrap.querySelector('[data-ozi-editor-tool="strike"]');
+            todos = check('toolbar: botão strike presente', !!strikeBtn) && todos;
+
+            // ---- strike (execCmd genérico) ----
+            // getValue() logo após um execCommand reflete o HTML BRUTO do
+            // contenteditable (mesmo comportamento pré-existente do bold, que
+            // produz <b> não <strong> até o próximo _sanitizeHtml) — o navegador
+            // pode gerar <strike> (legado) em vez de <s>; a normalização STRIKE→S
+            // é testada à parte, direto no sanitizador (ver seção "sanitização").
+            inst.setValue('<p>Olá mundo</p>');
+            var p1 = content.querySelector('p');
+            selectAll(inst, p1);
+            click(strikeBtn);
+            todos = check('strike: getValue() contém <s> ou <strike> (bruto, pré-sanitize)',
+                /<(s|strike)>/i.test(inst.getValue()), inst.getValue()) && todos;
+            todos = check('strike: botão fica ativo (queryCommandState via _updateToolbarState)',
+                strikeBtn.classList.contains('ozi-editor-btn--active')) && todos;
+
+            // ---- justify (via _applyTextAlign, não execCommand genérico) ----
+            inst.setValue('<p>Texto pra justificar</p>');
+            var p2 = content.querySelector('p');
+            placeCursor(inst, p2, true);
+            var justifyBtn = wrap.querySelector('[data-ozi-editor-tool="justify"]');
+            click(justifyBtn);
+            todos = check('justify: bloco recebe text-align:justify',
+                content.querySelector('p').style.textAlign === 'justify') && todos;
+            todos = check('justify: sanitizador preserva o align (getValue tem text-align:justify)',
+                inst.getValue().indexOf('text-align:justify') > -1 || inst.getValue().indexOf('text-align: justify') > -1,
+                inst.getValue()) && todos;
+
+            // ---- quote (toggle p<->blockquote, mesmo padrão do heading) ----
+            inst.setValue('<p>Vira citação</p>');
+            var p3 = content.querySelector('p');
+            placeCursor(inst, p3, true);
+            var quoteBtn = wrap.querySelector('[data-ozi-editor-tool="quote"]');
+            click(quoteBtn);
+            todos = check('quote: p vira blockquote', !!content.querySelector('blockquote'), content.innerHTML) && todos;
+            todos = check('quote: botão fica ativo', quoteBtn.classList.contains('ozi-editor-btn--active')) && todos;
+            click(quoteBtn);
+            todos = check('quote: clicar de novo volta pra p (toggle)', !content.querySelector('blockquote') && !!content.querySelector('p')) && todos;
+
+            // ---- hr ----
+            inst.setValue('<p>Antes</p>');
+            var p4 = content.querySelector('p');
+            placeCursor(inst, p4, true);
+            var hrBtn = wrap.querySelector('[data-ozi-editor-tool="hr"]');
+            click(hrBtn);
+            todos = check('hr: insere <hr> no conteúdo', inst.getValue().indexOf('<hr>') > -1, inst.getValue()) && todos;
+
+            // ---- undo/redo (achado do agente: cirurgia manual de DOM em
+            //      heading/codeblock/classes pode não empilhar corretamente —
+            //      aqui testamos com o próprio hr, que é execCommand puro) ----
+            var beforeUndo = inst.getValue();
+            var undoBtn = wrap.querySelector('[data-ozi-editor-tool="undo"]');
+            var redoBtn = wrap.querySelector('[data-ozi-editor-tool="redo"]');
+            content.focus();
+            click(undoBtn);
+            await wait(50);
+            inst._syncToTextarea();
+            var afterUndo = inst.getValue();
+            todos = check('undo: reverte a inserção do <hr>', afterUndo.indexOf('<hr>') === -1, afterUndo) && todos;
+            click(redoBtn);
+            await wait(50);
+            inst._syncToTextarea();
+            var afterRedo = inst.getValue();
+            todos = check('redo: refaz a inserção do <hr>', afterRedo.indexOf('<hr>') > -1, afterRedo) && todos;
+
+            // ---- contador de palavras/caracteres (opt-in) ----
+            inst.setValue('<p>quatro palavras aqui sim</p>');
+            var counterEl = wrap.querySelector('.ozi-editor-counter');
+            todos = check('contador: elemento presente (data-ozi-editor-counter=true)', !!counterEl) && todos;
+            todos = check('contador: mostra "4" (palavras) e o total de caracteres',
+                counterEl && /^4\s/.test(counterEl.textContent), counterEl && counterEl.textContent) && todos;
+
+            // ---- sanitização das novas tags ----
+            inst.setValue('<blockquote onclick="x()">cita</blockquote><hr class="y"><strike>legado</strike><script>alert(1)<\/script>');
+            var sanitized = inst.getValue();
+            todos = check('sanitizer: <blockquote> permitido, onclick removido',
+                sanitized.indexOf('<blockquote>cita</blockquote>') > -1, sanitized) && todos;
+            todos = check('sanitizer: <hr> permitido', sanitized.indexOf('<hr') > -1, sanitized) && todos;
+            todos = check('sanitizer: <strike> normalizado pra <s> (TAG_REPLACE)',
+                sanitized.indexOf('<s>legado</s>') > -1, sanitized) && todos;
+            todos = check('sanitizer: <script> removido', sanitized.toLowerCase().indexOf('script') === -1, sanitized) && todos;
+
+            // ---- MD: strike/quote/hr (mdToHtml direto, sem depender do boot do editor md) ----
+            todos = check('md→html: ~~texto~~ vira <s>',
+                /<s>\s*texto\s*<\/s>/.test(window.OziEditorMd.mdToHtml('~~texto~~')),
+                window.OziEditorMd.mdToHtml('~~texto~~')) && todos;
+            todos = check('md→html: "> cita" vira <blockquote>',
+                /<blockquote>\s*cita\s*<\/blockquote>/.test(window.OziEditorMd.mdToHtml('> cita')),
+                window.OziEditorMd.mdToHtml('> cita')) && todos;
+            todos = check('md→html: "---" vira <hr>',
+                window.OziEditorMd.mdToHtml('Antes\n\n---\n\nDepois').indexOf('<hr>') > -1,
+                window.OziEditorMd.mdToHtml('Antes\n\n---\n\nDepois')) && todos;
+            todos = check('md→html: parágrafo sem linha em branco antes de "> cita" não engole a citação',
+                window.OziEditorMd.mdToHtml('Texto\n> cita').indexOf('<blockquote>') > -1) && todos;
+
+            todos = check('html→md: <s> vira ~~texto~~',
+                window.OziEditorMd.htmlToMd('<s>texto</s>').indexOf('~~texto~~') > -1,
+                window.OziEditorMd.htmlToMd('<s>texto</s>')) && todos;
+            todos = check('html→md: <blockquote> vira "> "',
+                window.OziEditorMd.htmlToMd('<blockquote>cita</blockquote>').indexOf('> cita') > -1,
+                window.OziEditorMd.htmlToMd('<blockquote>cita</blockquote>')) && todos;
+            todos = check('html→md: <hr> vira "---"',
+                window.OziEditorMd.htmlToMd('<p>a</p><hr><p>b</p>').indexOf('---') > -1,
+                window.OziEditorMd.htmlToMd('<p>a</p><hr><p>b</p>')) && todos;
+
+            // ---- regressão rápida: ferramentas antigas continuam ok (bold) ----
+            // idem strike: <b> bruto é esperado antes do próximo sanitize (não é
+            // regressão — mesmo comportamento em qualquer versão do componente).
+            inst.setValue('<p>x</p>');
+            var p5 = content.querySelector('p');
+            selectAll(inst, p5);
+            click(wrap.querySelector('[data-ozi-editor-tool="bold"]'));
+            todos = check('regressão: bold continua funcionando', /<(b|strong)>/i.test(inst.getValue()), inst.getValue()) && todos;
+
+            await wait(300);
+            todos = check('zero erros JS reais (opacos filtrados: ' + errosOpacos + ')', erros.length === 0, erros.join(' | ') || null) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ ACEITE ozi-editor Fase 1: PASSOU' : '✗ ACEITE ozi-editor Fase 1: FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+        })().catch(function (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+            vered.textContent = '✗ ACEITE ozi-editor Fase 1: FALHOU (exceção)';
+            vered.className = 'fail';
+        });
+    });
+</script>
+</body>
+</html>

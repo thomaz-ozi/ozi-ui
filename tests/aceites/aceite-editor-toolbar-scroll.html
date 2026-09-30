@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite ozi-editor Toolbar Responsiva (modo Scroll)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .3rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+    .fixtures { border-top: 1px dashed #ddd; margin-top: 1rem; padding-top: 1rem; opacity: .5; }
+    textarea { width: 100%; }
+    .narrow { max-width: 220px; }
+    .wide   { max-width: 700px; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite ozi-editor Toolbar Responsiva <small>(modo Scroll, retomado 2026-08-31)</small></h1>
+<p>Critério: <code>data-ozi-editor-tools-scroll[-{sm,md,lg,xl,xxl}]</code> é combinável com os
+breakpoints normais (cada nível escolhe wrap ou scroll independentemente); conflito no mesmo nível
+resolve com scroll vencendo; <code>;</code> no valor é <em>flattened</em> numa única linha/track
+(nunca múltiplos scrollers empilhados); setas ◀/▶ sempre presentes, desabilitadas via
+<code>disabled</code> nativo no fim de curso; instância sem nenhum atributo <code>-scroll</code> não
+gera <code>.ozi-editor-toolbar-scroll</code> em lugar nenhum (zero regressão).</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<div class="fixtures">
+    <textarea id="ta-compat" data-ozi-editor-html="compat"
+              data-ozi-editor-tools="[bold,italic]; heading"></textarea>
+
+    <div class="narrow">
+        <textarea id="ta-base" data-ozi-editor-html="base"
+                  data-ozi-editor-tools-scroll="bold, italic, underline, strike, ul, ol, left, center, right, justify, quote, hr, table, clear, codeblock"></textarea>
+    </div>
+
+    <textarea id="ta-conflict" data-ozi-editor-html="conflict"
+              data-ozi-editor-tools="bold, italic"
+              data-ozi-editor-tools-scroll="bold, italic, underline"></textarea>
+
+    <textarea id="ta-bpcombo" data-ozi-editor-html="bpcombo"
+              data-ozi-editor-tools="[bold,italic]; heading"
+              data-ozi-editor-tools-scroll-sm="bold, italic, underline"></textarea>
+
+    <textarea id="ta-onlyscrollbp" data-ozi-editor-html="onlyscrollbp"
+              data-ozi-editor-tools-scroll-md="bold, italic"></textarea>
+
+    <textarea id="ta-semi" data-ozi-editor-html="semi"
+              data-ozi-editor-tools-scroll="bold, italic; underline, strike"></textarea>
+
+    <div class="wide">
+        <textarea id="ta-nooverflow" data-ozi-editor-html="nooverflow"
+                  data-ozi-editor-tools-scroll="bold, italic"></textarea>
+    </div>
+
+    <textarea id="ta-collapse" data-ozi-editor-html="collapsescroll"
+              data-ozi-editor-tools-scroll="bold, {-,italic,underline}, ul"></textarea>
+
+    <textarea id="ta-disabled" data-ozi-editor-html="disabledscroll"
+              data-ozi-editor-disabled="true"
+              data-ozi-editor-tools-scroll="bold, italic, underline, strike, ul, ol, left, center, right, justify, quote, hr, table, clear, codeblock"></textarea>
+</div>
+
+<!-- ÚNICO script externo — SEM jQuery: -->
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ core: { log: true } });
+
+    var erros = [];
+    var errosOpacos = 0;
+    window.addEventListener('error', function (ev) {
+        var isOpaco = (ev.message === 'Script error.' && !ev.filename && !ev.lineno);
+        if (isOpaco) { errosOpacos++; return; }
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    function click(btn) { btn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true })); }
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 9s';
+        vered.className = 'fail';
+    }, 9000);
+
+    OZI.ready(function () {
+        (async function () {
+            var todos = true;
+            await wait(200);
+
+            /* ---- backward-compat: sem nenhum atributo -scroll ---- */
+            var wrapCompat = document.querySelector('#ta-compat + .ozi-editor-wrap');
+            todos = check('compat: instância sem -scroll não gera .ozi-editor-toolbar-scroll',
+                wrapCompat.querySelectorAll('.ozi-editor-toolbar-scroll').length === 0) && todos;
+            todos = check('compat: toolbar.row continua filho direto de .ozi-editor-toolbar (DOM idêntico a antes)',
+                wrapCompat.querySelector('.ozi-editor-toolbar').children[0].classList.contains('ozi-editor-toolbar-row')) && todos;
+
+            /* ---- base sozinho: bypassa o atalho de 1-variante ---- */
+            var wrapBase = document.querySelector('#ta-base + .ozi-editor-wrap');
+            var scrollBase = wrapBase.querySelector('.ozi-editor-toolbar-scroll');
+            todos = check('base: .ozi-editor-toolbar-scroll existe mesmo sendo a única variante', !!scrollBase) && todos;
+            var trackBase = scrollBase && scrollBase.querySelector('.ozi-editor-toolbar-scroll-track');
+            todos = check('base: track existe com os tools declarados', !!trackBase && trackBase.children.length === 15,
+                trackBase && trackBase.children.length) && todos;
+            var firstTool = trackBase && trackBase.children[0].getAttribute('data-ozi-editor-tool');
+            todos = check('base: ordem preservada (1º item = bold)', firstTool === 'bold', firstTool) && todos;
+            var prevBase = scrollBase.querySelector('.ozi-editor-btn--scroll-prev');
+            var nextBase = scrollBase.querySelector('.ozi-editor-btn--scroll-next');
+            todos = check('base: seta prev é o 1º filho do wrapper (antes da track)', scrollBase.children[0] === prevBase) && todos;
+            todos = check('base: seta next é o último filho do wrapper (depois da track)',
+                scrollBase.children[scrollBase.children.length - 1] === nextBase) && todos;
+
+            /* ---- conflito wrap+scroll no mesmo nível: scroll vence ---- */
+            var wrapConflict = document.querySelector('#ta-conflict + .ozi-editor-wrap');
+            todos = check('conflict: zero .ozi-editor-toolbar-row na instância (scroll venceu, não é wrap)',
+                wrapConflict.querySelectorAll('.ozi-editor-toolbar-row').length === 0) && todos;
+            todos = check('conflict: .ozi-editor-toolbar-scroll presente', !!wrapConflict.querySelector('.ozi-editor-toolbar-scroll')) && todos;
+            var trackConflict = wrapConflict.querySelector('.ozi-editor-toolbar-scroll-track');
+            todos = check('conflict: track usa o VALOR do -scroll (3 tools), não o do -tools (2 tools)',
+                trackConflict.children.length === 3, trackConflict.children.length) && todos;
+
+            /* ---- combinação com breakpoint: base wrap, sm scroll ---- */
+            var wrapCombo = document.querySelector('#ta-bpcombo + .ozi-editor-wrap');
+            var variantsCombo = wrapCombo.querySelectorAll('.ozi-editor-toolbar-variant');
+            todos = check('bpcombo: 2 variantes (base + sm)', variantsCombo.length === 2, variantsCombo.length) && todos;
+            var baseCombo = variantsCombo[0], smCombo = variantsCombo[1];
+            todos = check('bpcombo: variante base é modo wrap (.ozi-editor-toolbar-row presente)',
+                !!baseCombo.querySelector('.ozi-editor-toolbar-row') && !baseCombo.querySelector('.ozi-editor-toolbar-scroll')) && todos;
+            todos = check('bpcombo: variante sm é modo scroll (.ozi-editor-toolbar-scroll presente)',
+                smCombo.getAttribute('data-ozi-editor-toolbar-bp') === 'sm' && !!smCombo.querySelector('.ozi-editor-toolbar-scroll')) && todos;
+
+            /* ---- filtro OR: -scroll-{bp} sozinho, sem o -{bp} wrap correspondente ---- */
+            var wrapOnlyScrollBp = document.querySelector('#ta-onlyscrollbp + .ozi-editor-wrap');
+            var mdVariant = wrapOnlyScrollBp.querySelector('.ozi-editor-toolbar-variant[data-ozi-editor-toolbar-bp="md"]');
+            todos = check('onlyscrollbp: variante "md" existe mesmo sem data-ozi-editor-tools-md declarado', !!mdVariant) && todos;
+            todos = check('onlyscrollbp: variante "md" é modo scroll', !!mdVariant && !!mdVariant.querySelector('.ozi-editor-toolbar-scroll')) && todos;
+
+            /* ---- `;` no valor é flattened: 1 única track, sem .ozi-editor-toolbar-row dentro ---- */
+            var wrapSemi = document.querySelector('#ta-semi + .ozi-editor-wrap');
+            var scrollsSemi = wrapSemi.querySelectorAll('.ozi-editor-toolbar-scroll');
+            todos = check('semi: exatamente 1 .ozi-editor-toolbar-scroll (não 2 empilhados)', scrollsSemi.length === 1, scrollsSemi.length) && todos;
+            var trackSemi = scrollsSemi[0].querySelector('.ozi-editor-toolbar-scroll-track');
+            todos = check('semi: zero .ozi-editor-toolbar-row dentro da track (flattened)',
+                trackSemi.querySelectorAll('.ozi-editor-toolbar-row').length === 0) && todos;
+            var toolsSemi = Array.prototype.map.call(trackSemi.children, function (el) { return el.getAttribute('data-ozi-editor-tool'); });
+            todos = check('semi: ordem preservada através do que seriam as 2 linhas (bold,italic,underline,strike)',
+                toolsSemi.join(',') === 'bold,italic,underline,strike', toolsSemi.join(',')) && todos;
+
+            /* ---- `{}` dentro de -scroll: painel fica FORA da track (senão cortaria no overflow) ---- */
+            var wrapCollapse = document.querySelector('#ta-collapse + .ozi-editor-wrap');
+            var scrollCollapse = wrapCollapse.querySelector('.ozi-editor-toolbar-scroll');
+            var trackCollapse = scrollCollapse.querySelector('.ozi-editor-toolbar-scroll-track');
+            var triggerCollapse = trackCollapse.querySelector('.ozi-editor-btn--collapse-toggle');
+            todos = check('collapse+scroll: trigger do {} fica DENTRO da track (rola junto com os outros botões)', !!triggerCollapse) && todos;
+            var idCollapse = triggerCollapse && triggerCollapse.getAttribute('data-ozi-editor-collapse-id');
+            var panelCollapse = wrapCollapse.querySelector('[data-ozi-editor-collapse-panel][data-ozi-editor-collapse-id="' + idCollapse + '"]');
+            todos = check('collapse+scroll: painel existe e NÃO é filho da track (senão ficaria cortado no overflow)',
+                !!panelCollapse && panelCollapse.parentNode !== trackCollapse) && todos;
+            todos = check('collapse+scroll: painel é irmão de .ozi-editor-toolbar-scroll (mesmo container pai)',
+                !!panelCollapse && panelCollapse.parentNode === scrollCollapse.parentNode) && todos;
+
+            /* ---- ícone das setas populado depois de _loadIcons() ---- */
+            var prevIcon = scrollBase.querySelector('.ozi-editor-btn--scroll-prev .ozi-editor-scroll-arrow-icon');
+            todos = check('icone: seta prev tem conteúdo (svg ou fallback textual)',
+                !!prevIcon && prevIcon.innerHTML.trim().length > 0) && todos;
+
+            /* ---- estado disabled das setas: sem overflow real, as 2 nascem disabled ---- */
+            await wait(150); // da tempo pro _updateScrollArrows() do init rodar
+            var wrapNoOverflow = document.querySelector('#ta-nooverflow + .ozi-editor-wrap');
+            var scrollNoOverflow = wrapNoOverflow.querySelector('.ozi-editor-toolbar-scroll');
+            var prevNo = scrollNoOverflow.querySelector('.ozi-editor-btn--scroll-prev');
+            var nextNo = scrollNoOverflow.querySelector('.ozi-editor-btn--scroll-next');
+            todos = check('disabled: sem overflow real, prev nasce disabled', prevNo.disabled === true) && todos;
+            todos = check('disabled: sem overflow real, next TAMBÉM nasce disabled (não só prev)', nextNo.disabled === true) && todos;
+
+            /* ---- com overflow real (fixture estreita): prev disabled no início, next não ---- */
+            todos = check('disabled: com overflow, prev nasce disabled (scrollLeft=0)', prevBase.disabled === true) && todos;
+            todos = check('disabled: com overflow, next NÃO nasce disabled (há pra onde rolar)', nextBase.disabled === false) && todos;
+
+            /* ---- clique na seta realmente rola a track ---- */
+            var scrollLeftAntes = trackBase.scrollLeft;
+            click(nextBase);
+            await wait(50);
+            todos = check('clique: seta "next" aumenta o scrollLeft da track',
+                trackBase.scrollLeft > scrollLeftAntes, 'antes=' + scrollLeftAntes + ' depois=' + trackBase.scrollLeft) && todos;
+
+            /* o scrollLeft muda SÍNCRONO (scroll instantâneo, sem behavior:
+               'smooth' — ver ozi-editor.js), mas o evento NATIVO 'scroll' que
+               reabilita a seta "prev" via _updateScrollArrows só dispara num
+               passo de compositor/rAF — sob headless com virtual-time isso é
+               flaky mesmo com waits generosos (achado empírico: nem 500ms
+               resolveu de forma confiável, rodando o aceite várias vezes).
+               Mesma técnica já usada no teste de "fim de curso" abaixo:
+               dispara o 'scroll' manualmente pra exercitar
+               _updateScrollArrows de forma determinística — não é bypass do
+               componente, é a mesma reação que o browser real dispara
+               sozinho fora deste ambiente headless específico. */
+            trackBase.dispatchEvent(new Event('scroll', { bubbles: true }));
+            await wait(50);
+            todos = check('clique: seta "prev" reabilita depois do scroll (scrollLeft > 0)', prevBase.disabled === false) && todos;
+
+            var scrollLeftMeio = trackBase.scrollLeft;
+            click(prevBase);
+            await wait(50);
+            todos = check('clique: seta "prev" diminui o scrollLeft da track',
+                trackBase.scrollLeft < scrollLeftMeio, 'meio=' + scrollLeftMeio + ' depois=' + trackBase.scrollLeft) && todos;
+
+            /* ---- fim de curso: forçar scrollLeft no máximo desabilita "next" ---- */
+            var maxScroll = trackBase.scrollWidth - trackBase.clientWidth;
+            todos = check('setup: fixture realmente tem overflow (max > 0)', maxScroll > 0, maxScroll) && todos;
+            trackBase.scrollLeft = maxScroll;
+            trackBase.dispatchEvent(new Event('scroll', { bubbles: true }));
+            await wait(50);
+            todos = check('fim de curso: seta "next" fica disabled ao chegar no fim', nextBase.disabled === true) && todos;
+            todos = check('fim de curso: seta "prev" fica habilitada (não está mais no início)', prevBase.disabled === false) && todos;
+            trackBase.scrollLeft = 0;
+            trackBase.dispatchEvent(new Event('scroll', { bubbles: true }));
+            await wait(50);
+            todos = check('volta ao início: seta "prev" volta a ficar disabled', prevBase.disabled === true) && todos;
+
+            /* ---- editor desabilitado + modo scroll: _setDisabled() marca TODO
+               .ozi-editor-btn como disabled=true (inclusive as setas, mesma
+               varredura que já desabilitava o collapse-toggle) — clique não
+               deve rolar nada, uniforme com o resto da toolbar ---- */
+            var wrapDisabled = document.querySelector('#ta-disabled + .ozi-editor-wrap');
+            var scrollDisabled = wrapDisabled.querySelector('.ozi-editor-toolbar-scroll');
+            var trackDisabled = scrollDisabled.querySelector('.ozi-editor-toolbar-scroll-track');
+            var nextDisabledBtn = scrollDisabled.querySelector('.ozi-editor-btn--scroll-next');
+            todos = check('editor desabilitado: seta next nasce com disabled=true (varredura do _setDisabled)',
+                nextDisabledBtn.disabled === true) && todos;
+            var scrollLeftDisabledAntes = trackDisabled.scrollLeft;
+            click(nextDisabledBtn);
+            await wait(100);
+            todos = check('editor desabilitado: clique na seta NÃO rola a track (guard de btn.disabled no handler)',
+                trackDisabled.scrollLeft === scrollLeftDisabledAntes) && todos;
+
+            await wait(150);
+            todos = check('zero erros JS reais (opacos filtrados: ' + errosOpacos + ')', erros.length === 0, erros.join(' | ') || null) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ ACEITE ozi-editor Toolbar Scroll: PASSOU' : '✗ ACEITE ozi-editor Toolbar Scroll: FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+        })().catch(function (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+            vered.textContent = '✗ ACEITE ozi-editor Toolbar Scroll: FALHOU (exceção)';
+            vered.className = 'fail';
+        });
+    });
+</script>
+</body>
+</html>

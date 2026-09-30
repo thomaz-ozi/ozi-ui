@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite v6.3.0 (ozi-select creatable)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .35rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+    .ozi-select-dropdown { display: none; }
+    .ozi-select-ui.is-open .ozi-select-dropdown { display: block; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite v6.3.0 <small>(modo creatable do ozi-select)</small></h1>
+<p>Critério: busca sem match + texto não-vazio mostra "Adicionar «texto»" (só quando
+<code>data-ozi-select-creatable</code> está ligado); selecionar cria a opção e segue o fluxo
+normal (single fecha, multiple adiciona tag); emite <code>ozi:change</code> +
+<code>ozi:select-create</code>; não oferece de novo se já selecionado; texto digitado é
+escapado no template; busca remota vazia não fica travada em "Carregando...".</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<!-- Fixture A — SEM creatable (baseline/regressão: mensagem de vazio normal) -->
+<div data-ozi-select="baseline"></div>
+<script type="application/json" data-ozi-select-options="baseline">
+[{"value":"1","label":"Único"}]
+</script>
+
+<!-- Fixture B — creatable, single, label default -->
+<div data-ozi-select="single-c" data-ozi-select-creatable></div>
+<script type="application/json" data-ozi-select-options="single-c">
+[{"value":"1","label":"Existente"}]
+</script>
+
+<!-- Fixture C — creatable, multiple, label/sublabel customizados -->
+<div data-ozi-select="multi-c" data-ozi-select-multiple data-ozi-select-creatable
+     data-ozi-select-creatable-label="Criar «{query}»"
+     data-ozi-select-creatable-sublabel="novo item (fora da lista)"></div>
+<script type="application/json" data-ozi-select-options="multi-c">
+[{"value":"a","label":"A"}]
+</script>
+
+<!-- Fixture D — creatable + busca remota (fetch stubado, resposta vazia) -->
+<div data-ozi-select="remote-c" data-ozi-select-creatable
+     data-ozi-select-zld-url="/fake/remote-c" data-ozi-select-zld-min="1" data-ozi-select-zld-delay="0"></div>
+<script type="application/json" data-ozi-select-options="remote-c">
+[]
+</script>
+
+<script>
+    // ── fetch stubado só p/ a fixture D (resposta remota SEMPRE vazia) ──
+    var _origFetch = window.fetch;
+    window.fetch = function (url, opts) {
+        if (String(url).indexOf('/fake/remote-c') === 0) {
+            return Promise.resolve({ ok: true, json: function () { return Promise.resolve({ options: [] }); } });
+        }
+        return _origFetch.apply(window, arguments);
+    };
+</script>
+
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['select'], lang: 'pt-BR' });
+
+    var erros = [];
+    var errosOpacos = 0;
+    window.addEventListener('error', function (ev) {
+        var isOpaco = (ev.message === 'Script error.' && !ev.filename && !ev.lineno);
+        if (isOpaco) { errosOpacos++; return; }
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    function search(root, text) {
+        root.querySelector('.ozi-select-control').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        var input = root.querySelector('.ozi-select-search');
+        input.value = text;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        return input;
+    }
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 9s';
+        vered.className = 'fail';
+    }, 9000);
+
+    OZI.ready(function () {
+        (async function () {
+            var todos = true;
+
+            // ── Fixture A — baseline (sem creatable) ──
+            var baseRoot = document.querySelector('[data-ozi-select="baseline"]');
+            search(baseRoot, 'zzz-sem-match');
+            todos = check('baseline (sem creatable): mostra mensagem de vazio comum',
+                baseRoot.querySelector('.ozi-select-empty') !== null &&
+                baseRoot.querySelector('.ozi-select-option-creatable') === null) && todos;
+
+            // ── Fixture B — single, label default ──
+            var singleRoot = document.querySelector('[data-ozi-select="single-c"]');
+            var sInput = search(singleRoot, 'contato@novo.com');
+            var creatOpt = singleRoot.querySelector('.ozi-select-option-creatable');
+            todos = check('single: opção creatable aparece com label default',
+                !!creatOpt && creatOpt.textContent.indexOf('Adicionar') !== -1 &&
+                creatOpt.textContent.indexOf('contato@novo.com') !== -1) && todos;
+            todos = check('single: opção creatable já vem destacada (única visível)',
+                creatOpt && creatOpt.classList.contains('is-highlighted')) && todos;
+
+            var changeDetail = null, createDetail = null;
+            var order = [];
+            singleRoot.addEventListener('ozi:change', function (e) { changeDetail = e.detail; order.push('change'); });
+            singleRoot.addEventListener('ozi:select-create', function (e) { createDetail = e.detail; order.push('create'); });
+
+            creatOpt.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+            todos = check('single: dropdown fechou após criar (fluxo normal de seleção)',
+                !singleRoot.querySelector('.ozi-select-ui').classList.contains('is-open')) && todos;
+            todos = check('single: valor criado tornou-se o valor atual',
+                OZI.components.select.value('single-c') === 'contato@novo.com') && todos;
+            todos = check('single: ozi:change emitido com o novo valor',
+                !!changeDetail && changeDetail.value === 'contato@novo.com' && changeDetail.source === 'user') && todos;
+            todos = check('single: ozi:select-create emitido DEPOIS do ozi:change',
+                order.length === 2 && order[0] === 'change' && order[1] === 'create') && todos;
+            todos = check('single: ozi:select-create com detail do contrato',
+                !!createDetail && createDetail.component === 'ozi-select' && createDetail.name === 'single-c' &&
+                createDetail.source === 'user') && todos;
+
+            // ── Fixture C — multiple, label/sublabel customizados, via Enter ──
+            var multiRoot = document.querySelector('[data-ozi-select="multi-c"]');
+            var mInput = search(multiRoot, 'novo-item');
+            var creatOptC = multiRoot.querySelector('.ozi-select-option-creatable');
+            todos = check('multi: label customizado (template {query})',
+                !!creatOptC && creatOptC.textContent.indexOf('Criar «novo-item»') !== -1) && todos;
+            todos = check('multi: sublabel customizado renderizado',
+                !!creatOptC && creatOptC.querySelector('.ozi-select-option-sublabel') !== null &&
+                creatOptC.querySelector('.ozi-select-option-sublabel').textContent.indexOf('novo item (fora da lista)') !== -1) && todos;
+
+            mInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+            todos = check('multi: Enter na opção destacada cria e adiciona tag',
+                multiRoot.querySelectorAll('.ozi-select-tag').length === 1) && todos; // só "novo-item" ("A" não estava selecionado
+            todos = check('multi: dropdown continua aberto após criar (fluxo multiple)',
+                multiRoot.querySelector('.ozi-select-ui').classList.contains('is-open')) && todos;
+
+            // item criado ainda está SELECIONADO mas some de `this.options` (setOptions troca a
+            // lista) — reconcileSelectedItems mantém o item antigo em selectedItems; buscar o
+            // mesmo texto não deve reoferecer "Adicionar" pra algo que já está selecionado.
+            OZI.components.select.setOptions('multi-c', [{ value: 'a', label: 'A' }]);
+            mInput.value = 'novo-item';
+            mInput.dispatchEvent(new Event('input', { bubbles: true }));
+            todos = check('multi: texto de item já selecionado (removido das opções) NÃO reoferece creatable',
+                multiRoot.querySelector('.ozi-select-option-creatable') === null &&
+                multiRoot.querySelector('.ozi-select-empty') !== null) && todos;
+
+            // ── Escaping do texto digitado no template ──
+            var singleRoot2 = document.querySelector('[data-ozi-select="single-c"]');
+            var xssInput = search(singleRoot2, '<b>x</b>');
+            var creatOptX = singleRoot2.querySelector('.ozi-select-option-creatable');
+            todos = check('escaping: texto digitado com HTML não injeta tag real na opção',
+                !!creatOptX && creatOptX.querySelector('b') === null &&
+                creatOptX.querySelector('.ozi-select-option-label').textContent.indexOf('<b>x</b>') !== -1) && todos;
+            singleRoot2.querySelector('.ozi-select-toggle').dispatchEvent(new MouseEvent('click', { bubbles: true })); // fecha
+
+            // ── Fixture D — creatable + remoto (fetch stubado, resposta vazia) ──
+            var remoteRoot = document.querySelector('[data-ozi-select="remote-c"]');
+            search(remoteRoot, 'qualquer-coisa');
+            await wait(80); // debounce=0 + microtasks do fetch stubado
+            todos = check('remoto: is-loading removido após resposta (não trava em "Carregando...")',
+                !remoteRoot.querySelector('.ozi-select-ui').classList.contains('is-loading')) && todos;
+            todos = check('remoto: resposta vazia + creatable → mostra "Adicionar", não "Carregando..."',
+                remoteRoot.querySelector('.ozi-select-option-creatable') !== null) && todos;
+
+            await wait(150);
+            todos = check('zero erros JS reais (opacos filtrados: ' + errosOpacos + ')', erros.length === 0, erros.join(' | ') || null) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ ACEITE v6.3.0 (creatable): PASSOU' : '✗ ACEITE v6.3.0 (creatable): FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+            document.title = (todos ? 'DONE:PASS' : 'DONE:FAIL');
+        })().catch(function (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+            vered.textContent = '✗ ACEITE v6.3.0 (creatable): FALHOU (exceção)';
+            vered.className = 'fail';
+            document.title = 'DONE:FAIL';
+        });
+    });
+</script>
+</body>
+</html>

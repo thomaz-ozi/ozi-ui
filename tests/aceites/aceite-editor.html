@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite F2 #9b (ozi-editor)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .3rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+    .fixtures { border-top: 1px dashed #ddd; margin-top: 1rem; padding-top: 1rem; opacity: .5; }
+    textarea { width: 100%; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite F2 #9b <small>(ozi-editor)</small></h1>
+<p>Critério: editor <b>zero-jQuery</b> (plugins:['editor-md'], sem incluir jQuery) —
+build de UI, source mode, sanitização, validação, disabled, integração md↔html e
+eventos <code>ozi:init/change/destroy</code> do contrato.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<div class="fixtures">
+    <textarea id="ta-html" data-ozi-editor-html="descricao"
+              data-ozi-editor-tools="[bold,italic]; heading; source">Conteúdo inicial</textarea>
+
+    <textarea id="ta-req" data-ozi-editor-html="bio"
+              data-ozi-editor-required="true" data-ozi-editor-tools="[bold]"></textarea>
+
+    <textarea id="ta-dis" data-ozi-editor-html="dis"
+              data-ozi-editor-disabled="true" data-ozi-editor-tools="[bold]">x</textarea>
+
+    <textarea id="ta-md" data-ozi-editor-md="notas"
+              data-ozi-editor-tools="[bold]; left; source"># Título
+texto **forte**</textarea>
+</div>
+
+<!-- ÚNICO script externo — SEM jQuery: -->
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['editor-md'], core: { log: true } });
+
+    var erros = [];
+    var errosOpacos = 0;
+    window.addEventListener('error', function (ev) {
+        var isOpaco = (ev.message === 'Script error.' && !ev.filename && !ev.lineno);
+        if (isOpaco) { errosOpacos++; return; }
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    function waitFor(fn, ms) {
+        var t0 = Date.now();
+        return new Promise(function (res) {
+            (function loop() {
+                if (fn() || Date.now() - t0 > ms) return res(fn());
+                setTimeout(loop, 30);
+            })();
+        });
+    }
+    function shown(el) { return el && el.style.display !== 'none'; }
+
+    var lastChange = null, lastInit = [], lastDestroy = [];
+    document.addEventListener('ozi:change',  function (e) { if (e.detail && e.detail.component === 'ozi-editor') lastChange = e.detail; });
+    document.addEventListener('ozi:init',    function (e) { if (e.detail && e.detail.component === 'ozi-editor') lastInit.push(e.detail); });
+    document.addEventListener('ozi:destroy', function (e) { if (e.detail && e.detail.component === 'ozi-editor') lastDestroy.push(e.detail); });
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 9s';
+        vered.className = 'fail';
+    }, 9000);
+
+    OZI.ready(function () {
+        (async function () {
+            var todos = true;
+            var api = OZI.components.editor;
+
+            // ---- infra / camadas ----
+            todos = check('OZI.components.editor carregado', !!api) && todos;
+            todos = check('window.OziEditor presente', !!window.OziEditor) && todos;
+            todos = check('jQuery ausente (window.jQuery === undefined)', typeof window.jQuery === 'undefined') && todos;
+            var reqJq = performance.getEntriesByType('resource').filter(function (r) { return /jquery/i.test(r.name); });
+            todos = check('zero requests a jQuery (editor roda vanilla!)', reqJq.length === 0) && todos;
+
+            // ---- HTML editor: build ----
+            var wrapH = document.querySelector('#ta-html + .ozi-editor-wrap');
+            todos = check('build: wrap criado após o textarea, type=html',
+                wrapH && wrapH.getAttribute('data-ozi-editor-type') === 'html') && todos;
+            todos = check('build: textarea original ocultado', document.getElementById('ta-html').style.display === 'none') && todos;
+            todos = check('build: toolbar com botões (bold/italic/heading/source)',
+                wrapH.querySelectorAll('.ozi-editor-btn').length >= 4) && todos;
+            todos = check('build: conteúdo inicial sincronizado do textarea',
+                (wrapH.querySelector('.ozi-editor-content').textContent || '').indexOf('Conteúdo inicial') > -1) && todos;
+            todos = check('ozi:init emitido (contrato: component/name/source=api)',
+                lastInit.some(function (d) { return d.name === 'descricao' && d.type === 'html' && d.source === 'api'; })) && todos;
+
+            var inst = api.get('descricao');
+            todos = check('api.get(key) retorna a instância', !!inst) && todos;
+
+            // ---- setValue + sanitização + ozi:change(api) ----
+            lastChange = null;
+            inst.setValue('<div>x</div><script>alert(1)<\/script><b>y</b>');
+            var got = inst.getValue();
+            todos = check('sanitização: div→p, b→strong, script removido',
+                got.indexOf('<p>x</p>') > -1 && got.indexOf('<strong>y</strong>') > -1 && got.toLowerCase().indexOf('script') === -1,
+                got) && todos;
+            todos = check('setValue emite ozi:change com source="api" e type="html"',
+                lastChange && lastChange.name === 'descricao' && lastChange.type === 'html' && lastChange.source === 'api') && todos;
+
+            // ---- input do usuário → sync + ozi:change(user) ----
+            var contentH = wrapH.querySelector('.ozi-editor-content');
+            contentH.innerHTML = '<p>editado pelo usuário</p>';
+            lastChange = null;
+            contentH.dispatchEvent(new Event('input', { bubbles: true }));
+            todos = check('input do usuário: sincroniza textarea e emite ozi:change(source=user)',
+                document.getElementById('ta-html').value.indexOf('editado pelo usuário') > -1 &&
+                lastChange && lastChange.source === 'user') && todos;
+
+            // ---- source mode (display) ----
+            var srcBtn = wrapH.querySelector('[data-ozi-editor-tool="source"]');
+            var sourceEl = wrapH.querySelector('.ozi-editor-source');
+            srcBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+            todos = check('source mode: exibe textarea de source e oculta o content',
+                shown(sourceEl) && !shown(contentH)) && todos;
+            srcBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+            todos = check('source mode: volta ao content (toggle)', !shown(sourceEl) && shown(contentH)) && todos;
+
+            // ---- heading dropdown (mecânica de abrir/fechar) ----
+            var headBtn = wrapH.querySelector('.ozi-editor-btn--heading');
+            var headDd = wrapH.querySelector('.ozi-editor-heading-dropdown');
+            headBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+            todos = check('heading: dropdown abre no mousedown do botão', shown(headDd)) && todos;
+            headBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+            todos = check('heading: dropdown fecha no segundo mousedown', !shown(headDd)) && todos;
+
+            // ---- validação required ----
+            var instReq = api.get('bio');
+            todos = check('required vazio: isValid() === false', instReq.isValid() === false) && todos;
+            instReq.setValue('agora tem conteúdo');
+            todos = check('required preenchido: isValid() === true', instReq.isValid() === true) && todos;
+            instReq.setValue('');
+            todos = check('validate(): marca inválido (classe + feedback visível)',
+                instReq.validate() === false &&
+                document.querySelector('#ta-req + .ozi-editor-wrap').classList.contains('ozi-invalid') &&
+                shown(document.querySelector('#ta-req + .ozi-editor-wrap .ozi-editor-feedback'))) && todos;
+
+            // ---- adapter registrado no ozi-validate (nativeElement) ----
+            var vmod = OZI.modules && OZI.modules.validate;
+            todos = check('adapter ozi-editor registrado no ozi-validate',
+                !!(vmod && (vmod.getAdapter ? vmod.getAdapter('ta-req') : true))) && todos;
+
+            // ---- disabled ----
+            var wrapD = document.querySelector('#ta-dis + .ozi-editor-wrap');
+            var contentD = wrapD.querySelector('.ozi-editor-content');
+            todos = check('disabled: content contenteditable=false + botões disabled + classe',
+                contentD.getAttribute('contenteditable') === 'false' &&
+                wrapD.querySelector('.ozi-editor-btn').disabled === true &&
+                wrapD.classList.contains('ozi-editor--disabled')) && todos;
+
+            // ---- MD: aguarda registerConverters → init('md') ----
+            await waitFor(function () { return document.querySelector('#ta-md + .ozi-editor-wrap[data-ozi-editor-type="md"]'); }, 3000);
+            var wrapMd = document.querySelector('#ta-md + .ozi-editor-wrap[data-ozi-editor-type="md"]');
+            todos = check('md: editor inicializado após registerConverters', !!wrapMd) && todos;
+            if (wrapMd) {
+                var contentMd = wrapMd.querySelector('.ozi-editor-content');
+                todos = check('md: valor markdown convertido para HTML no content (# → <h1>, ** → <strong>)',
+                    /<h1>\s*Título\s*<\/h1>/i.test(contentMd.innerHTML) && contentMd.innerHTML.indexOf('<strong>forte</strong>') > -1,
+                    contentMd.innerHTML) && todos;
+
+                var instMd = api.get('notas');
+                var mdOut = instMd.getValue();
+                todos = check('md: getValue() retorna markdown (htmlToMd: # Título, **forte**)',
+                    mdOut.indexOf('# Título') > -1 && mdOut.indexOf('**forte**') > -1, JSON.stringify(mdOut)) && todos;
+
+                todos = check('md: ferramenta bloqueada (left) vira botão "?" incompatível',
+                    !!wrapMd.querySelector('.ozi-editor-btn--incompatible')) && todos;
+
+                lastChange = null;
+                instMd.setValue('## Sub');
+                todos = check('md: setValue converte e emite ozi:change type="md"',
+                    /<h2>\s*Sub\s*<\/h2>/i.test(contentMd.innerHTML) &&
+                    lastChange && lastChange.type === 'md' && lastChange.source === 'api') && todos;
+            }
+
+            // ---- destroy ----
+            api.destroy('descricao');
+            todos = check('destroy(): wrap removido + textarea reexibido + ozi:destroy emitido',
+                !document.querySelector('#ta-html + .ozi-editor-wrap') &&
+                document.getElementById('ta-html').style.display === '' &&
+                lastDestroy.some(function (d) { return d.name === 'descricao'; })) && todos;
+
+            await wait(300);
+            todos = check('zero erros JS reais (opacos filtrados: ' + errosOpacos + ')', erros.length === 0, erros.join(' | ') || null) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ ACEITE F2 #9b (ozi-editor): PASSOU' : '✗ ACEITE F2 #9b (ozi-editor): FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+        })().catch(function (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+            vered.textContent = '✗ ACEITE F2 #9b (ozi-editor): FALHOU (exceção)';
+            vered.className = 'fail';
+        });
+    });
+</script>
+</body>
+</html>

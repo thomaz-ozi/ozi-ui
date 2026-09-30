@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite F2 #4 (ozi-select)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .35rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+    .ozi-select-dropdown { display: none; }
+    .ozi-select-ui.is-open .ozi-select-dropdown { display: block; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite F2 #4 <small>(ozi-select)</small></h1>
+<p>Critério: motor 100% JS puro (DOM/eventos), fim do dual-dispatch, adapter nativo
+no ozi-validate, comportamento idêntico (single/multiple/group/busca/teclado).</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<div data-ozi-select="pais" data-ozi-select-required></div>
+<script type="application/json" data-ozi-select-options="pais">
+[{"value":"br","label":"Brasil"},{"value":"us","label":"EUA"},{"value":"ar","label":"Argentina"}]
+</script>
+
+<div data-ozi-select="tags" data-ozi-select-multiple></div>
+<script type="application/json" data-ozi-select-options="tags">
+[{"value":"a","label":"A"},{"value":"b","label":"B"},{"value":"c","label":"C"}]
+</script>
+
+<div data-ozi-select="grupos" data-ozi-select-multiple-group></div>
+<script type="application/json" data-ozi-select-options="grupos">
+[{"value":"x","label":"X","group":"GA"},{"value":"y","label":"Y","group":"GA"},{"value":"z","label":"Z","group":"GB"}]
+</script>
+
+<form id="form-teste">
+    <div id="requerido" data-ozi-select="requerido" data-ozi-select-required data-ozi-required="true"></div>
+    <script type="application/json" data-ozi-select-options="requerido">
+    [{"value":"1","label":"Um"}]
+    </script>
+</form>
+
+<!-- ÚNICO script externo da página: -->
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['select', 'validate'], core: { log: true } });
+
+    var erros = [];
+    var errosOpacos = 0;
+    window.addEventListener('error', function (ev) {
+        var isOpaco = (ev.message === 'Script error.' && !ev.filename && !ev.lineno);
+        if (isOpaco) { errosOpacos++; return; }
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 9s';
+        vered.className = 'fail';
+    }, 9000);
+
+    OZI.ready(function () {
+        (async function () {
+            var todos = true;
+            var select = OZI.components.select;
+
+            todos = check('OZI.components.select carregado', !!select) && todos;
+            todos = check('window.OziSelect === OZI.components.select', window.OziSelect === select) && todos;
+            todos = check('jQuery ausente (window.jQuery === undefined)', typeof window.jQuery === 'undefined') && todos;
+            var reqJq = performance.getEntriesByType('resource').filter(function (r) { return /jquery/i.test(r.name); });
+            todos = check('zero requests a jQuery', reqJq.length === 0) && todos;
+
+            var paisRoot = document.querySelector('[data-ozi-select="pais"]');
+            var paisControl = paisRoot.querySelector('.ozi-select-control');
+
+            // --- single: estado inicial (placeholder) ---
+            todos = check('single: placeholder exibido sem seleção',
+                paisRoot.querySelector('.ozi-select-value').classList.contains('is-placeholder')) && todos;
+            todos = check('single: nenhum hidden input com valor', select.value('pais') === null) && todos;
+
+            // --- single: abrir dropdown via clique ---
+            paisControl.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+            todos = check('open(): dropdown fica visível (.is-open)',
+                paisRoot.querySelector('.ozi-select-ui').classList.contains('is-open')) && todos;
+
+            // --- single: captura ozi:change e seleciona opção "br" ---
+            var changeDetail = null;
+            document.addEventListener('ozi:change', function handler(e) {
+                if (e.detail.name === 'pais') { changeDetail = e.detail; document.removeEventListener('ozi:change', handler); }
+            });
+            var optionBr = paisRoot.querySelector('.ozi-select-option[data-value="br"]');
+            optionBr.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+            todos = check('toggleItem(): valor selecionado via API', select.value('pais') === 'br') && todos;
+            todos = check('toggleItem(): dropdown fecha automaticamente (modo single)',
+                !paisRoot.querySelector('.ozi-select-ui').classList.contains('is-open')) && todos;
+            todos = check('toggleItem(): hidden input criado com o valor',
+                paisRoot.nextElementSibling.querySelector('input[type="hidden"][value="br"]') !== null) && todos;
+            todos = check('emit(): ozi:change com contrato completo',
+                changeDetail && changeDetail.component === 'ozi-select' && changeDetail.name === 'pais' &&
+                changeDetail.value === 'br' && changeDetail.source === 'user' &&
+                Array.isArray(changeDetail.items) && changeDetail.items[0].value === 'br') && todos;
+
+            // --- single: busca filtra opções ---
+            paisControl.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+            var search = paisRoot.querySelector('.ozi-select-search');
+            search.value = 'arg';
+            search.dispatchEvent(new Event('input', { bubbles: true }));
+            var visiveis = Array.prototype.filter.call(paisRoot.querySelectorAll('.ozi-select-option'), function (o) {
+                return o.offsetWidth || o.offsetHeight || o.getClientRects().length;
+            });
+            todos = check('busca: filtra para 1 opção ("Argentina")', visiveis.length === 1 && visiveis[0].getAttribute('data-value') === 'ar') && todos;
+            paisRoot.querySelector('.ozi-select-toggle').dispatchEvent(new MouseEvent('click', { bubbles: true })); // fecha
+
+            // --- multiple: seleciona 2 tags, remove 1 ---
+            var tagsRoot = document.querySelector('[data-ozi-select="tags"]');
+            tagsRoot.querySelector('.ozi-select-control').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+            tagsRoot.querySelector('.ozi-select-option[data-value="a"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+            tagsRoot.querySelector('.ozi-select-option[data-value="b"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+            todos = check('multiple: 2 tags renderizadas', tagsRoot.querySelectorAll('.ozi-select-tag').length === 2) && todos;
+            todos = check('multiple: getValue() retorna array com 2 itens',
+                Array.isArray(select.value('tags')) && select.value('tags').length === 2) && todos;
+
+            var removeBtn = tagsRoot.querySelector('.ozi-select-tag-remove[data-value="a"]');
+            removeBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+            todos = check('multiple: remove tag via botão (tag-remove)',
+                select.value('tags').length === 1 && select.value('tags')[0] === 'b') && todos;
+
+            // --- multiple-group: toggle de grupo inteiro ---
+            var gruposRoot = document.querySelector('[data-ozi-select="grupos"]');
+            gruposRoot.querySelector('.ozi-select-control').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+            var groupLabel = gruposRoot.querySelector('.ozi-select-group-label[data-ozi-group-toggle="GA"]');
+            todos = check('group: label de grupo renderizado com data-ozi-group-toggle', !!groupLabel) && todos;
+            groupLabel.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+            todos = check('toggleGroup(): seleciona todos os itens do grupo GA',
+                select.value('grupos').length === 2 &&
+                select.value('grupos').indexOf('x') !== -1 && select.value('grupos').indexOf('y') !== -1) && todos;
+            // renderOptions() recria o DOM do grupo a cada toggle — reconsulta o label
+            groupLabel = gruposRoot.querySelector('.ozi-select-group-label[data-ozi-group-toggle="GA"]');
+            groupLabel.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+            todos = check('toggleGroup(): desmarca todos ao clicar de novo', select.value('grupos').length === 0) && todos;
+
+            // --- teclado: ArrowDown abre, ArrowDown+Enter seleciona ---
+            select.clear('pais');
+            paisControl.focus();
+            paisControl.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+            todos = check('teclado: ArrowDown abre o dropdown quando fechado',
+                paisRoot.querySelector('.ozi-select-ui').classList.contains('is-open')) && todos;
+            paisControl.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+            var highlighted = paisRoot.querySelector('.ozi-select-option.is-highlighted');
+            todos = check('teclado: ArrowDown destaca uma opção', !!highlighted) && todos;
+            paisControl.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+            todos = check('teclado: Enter seleciona a opção destacada', select.value('pais') !== null) && todos;
+
+            // --- validação: adapter nativo registrado no ozi-validate ---
+            select.clear('requerido');
+            var form = document.getElementById('form-teste');
+            var validate = OZI.modules.validate;
+            todos = check('validate.getAdapters() inclui "ozi-select"', validate.getAdapters().indexOf('ozi-select') !== -1) && todos;
+
+            var r1 = validate.container({ container: form });
+            var requeridoControl = document.querySelector('[data-ozi-select="requerido"] .ozi-select-control');
+            todos = check('adapter: container() marca select requerido vazio como inválido',
+                r1.isValid === false && requeridoControl.classList.contains('ozi-invalid')) && todos;
+
+            select.value('requerido', '1');
+            var r2 = validate.container({ container: form });
+            todos = check('adapter: container() aceita select requerido preenchido',
+                r2.isValid === true && !requeridoControl.classList.contains('ozi-invalid')) && todos;
+            todos = check('adapter: getValue() via validate.container() retorna o valor do select',
+                r2.data.requerido === '1') && todos;
+
+            // --- setValue() via API programática emite source:'api' ---
+            var apiDetail = null;
+            document.addEventListener('ozi:change', function handler(e) {
+                if (e.detail.name === 'pais') { apiDetail = e.detail; document.removeEventListener('ozi:change', handler); }
+            });
+            select.value('pais', 'us');
+            todos = check('setValue(): API programática emite source:"api"',
+                apiDetail && apiDetail.source === 'api' && apiDetail.value === 'us') && todos;
+
+            // --- destroy/reload ---
+            select.destroy('tags');
+            todos = check('destroy(): remove a instância do registro', select.get('tags') === null) && todos;
+            todos = check('destroy(): limpa o DOM do root', tagsRoot.querySelector('.ozi-select-ui') === null) && todos;
+
+            await wait(300);
+            todos = check('zero erros JS reais (opacos filtrados: ' + errosOpacos + ')', erros.length === 0, erros.join(' | ') || null) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ ACEITE F2 #4 (ozi-select): PASSOU' : '✗ ACEITE F2 #4 (ozi-select): FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+        })().catch(function (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+            vered.textContent = '✗ ACEITE F2 #4 (ozi-select): FALHOU (exceção)';
+            vered.className = 'fail';
+        });
+    });
+</script>
+</body>
+</html>

@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite ozi-editor-sanitize (módulo isolado)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .3rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite <code>ozi-editor-sanitize</code> <small>(módulo isolado, sem UI de editor)</small></h1>
+<p>Critério: extração do sanitizador HTML do <code>ozi-editor</code> (Fase 3 da nova leva de
+ferramentas) preserva o comportamento existente (tags/href/cor) e adiciona suporte a
+<code>&lt;img&gt;</code> (remoção total quando <code>src</code> ausente/inseguro, sem base64 inline).
+Este aceite testa <code>window.OziEditorSanitize</code> diretamente — sem carregar o componente
+<code>ozi-editor</code>.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<!-- ÚNICO script externo — SEM jQuery: -->
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['editor-sanitize'], core: { log: true } });
+
+    var erros = [];
+    window.addEventListener('error', function (ev) {
+        var isOpaco = (ev.message === 'Script error.' && !ev.filename && !ev.lineno);
+        if (isOpaco) return;
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 5s';
+        vered.className = 'fail';
+    }, 5000);
+
+    OZI.ready(function () {
+        try {
+            var todos = true;
+            var mod = window.OziEditorSanitize;
+
+            todos = check('módulo carregado (window.OziEditorSanitize)', !!mod) && todos;
+            todos = check('registrado também em OZI.modules.editorSanitize',
+                OZI.modules.editorSanitize === mod) && todos;
+
+            // ---- regressão: comportamento já existente antes da extração ----
+            todos = check('script/tag perigosa removida, conteúdo de texto preservado',
+                mod.sanitizeHtml('<script>alert(1)<\/script><p>ok<\/p>') === '<p>ok</p>',
+                mod.sanitizeHtml('<script>alert(1)<\/script><p>ok<\/p>')) && todos;
+
+            todos = check('<a href="javascript:..."> perde o href (unwrap pra texto simples)',
+                mod.sanitizeHtml('<p><a href="javascript:alert(1)">clique</a></p>') === '<p>clique</p>',
+                mod.sanitizeHtml('<p><a href="javascript:alert(1)">clique</a></p>')) && todos;
+
+            todos = check('<a href="https://..."> sobrevive, onclick removido',
+                mod.sanitizeHtml('<p><a href="https://ok.com" onclick="x()">ok</a></p>') === '<p><a href="https://ok.com">ok</a></p>',
+                mod.sanitizeHtml('<p><a href="https://ok.com" onclick="x()">ok</a></p>')) && todos;
+
+            todos = check('isSafeColorValue: hex/rgb válidos passam, url(...) não',
+                mod.isSafeColorValue('#fff') && mod.isSafeColorValue('rgb(1,2,3)') && !mod.isSafeColorValue('url(x)')) && todos;
+
+            // ---- novo: suporte a <img> ----
+            todos = check('<img src="javascript:..."> é removido por completo',
+                mod.sanitizeHtml('<p><img src="javascript:alert(1)"></p>') === '<p></p>',
+                mod.sanitizeHtml('<p><img src="javascript:alert(1)"></p>')) && todos;
+
+            todos = check('<img src="data:image/png;base64,..."> é removido (bloqueio de base64, fora de escopo)',
+                mod.sanitizeHtml('<p><img src="data:image/png;base64,AAAA"></p>') === '<p></p>',
+                mod.sanitizeHtml('<p><img src="data:image/png;base64,AAAA"></p>')) && todos;
+
+            todos = check('<img> sem src é removido',
+                mod.sanitizeHtml('<p><img></p>') === '<p></p>',
+                mod.sanitizeHtml('<p><img></p>')) && todos;
+
+            // class sobrevive (comportamento uniforme pra qualquer tag permitida,
+            // mesmo caminho de <p class="...">) — só onerror (não está na lista de
+            // atributos salvos) é removido
+            todos = check('<img src="https://..." alt="foto" class="y"> sobrevive com src/alt/class intactos, onerror removido',
+                mod.sanitizeHtml('<p><img src="https://x.com/a.png" alt="foto" onerror="x()" class="y"></p>') === '<p><img class="y" src="https://x.com/a.png" alt="foto"></p>',
+                mod.sanitizeHtml('<p><img src="https://x.com/a.png" alt="foto" onerror="x()" class="y"></p>')) && todos;
+
+            todos = check('<img src="/relativo.png"> sobrevive (URL relativa é segura)',
+                mod.sanitizeHtml('<p><img src="/relativo.png"></p>') === '<p><img src="/relativo.png"></p>',
+                mod.sanitizeHtml('<p><img src="/relativo.png"></p>')) && todos;
+
+            todos = check('isSafeUrl(\'\') retorna true (documentado — ausência de esquema perigoso, não "src válido")',
+                mod.isSafeUrl('') === true) && todos;
+
+            // ---- novo (ajuste pós-revisão): width/height do <img> ----
+            todos = check('<img src="..." width="300" height="200"> sobrevive com width/height intactos',
+                mod.sanitizeHtml('<p><img src="https://x.com/a.png" width="300" height="200"></p>') === '<p><img src="https://x.com/a.png" width="300" height="200"></p>',
+                mod.sanitizeHtml('<p><img src="https://x.com/a.png" width="300" height="200"></p>')) && todos;
+
+            todos = check('<img width="50%"> width com % (não é forma unitless) é descartado',
+                mod.sanitizeHtml('<p><img src="https://x.com/a.png" width="50%"></p>') === '<p><img src="https://x.com/a.png"></p>',
+                mod.sanitizeHtml('<p><img src="https://x.com/a.png" width="50%"></p>')) && todos;
+
+            todos = check('<img width="9999px"> width com unidade CSS (px explícito) é descartado — atributo é sempre unitless',
+                mod.sanitizeHtml('<p><img src="https://x.com/a.png" width="300px"></p>') === '<p><img src="https://x.com/a.png"></p>',
+                mod.sanitizeHtml('<p><img src="https://x.com/a.png" width="300px"></p>')) && todos;
+
+            todos = check('isSafeDimension: inteiro puro passa, com unidade/percentual não',
+                mod.isSafeDimension('300') && !mod.isSafeDimension('300px') && !mod.isSafeDimension('50%') && !mod.isSafeDimension(''),
+                JSON.stringify([mod.isSafeDimension('300'), mod.isSafeDimension('300px'), mod.isSafeDimension('50%')])) && todos;
+
+            // ---- v1.1.0: whitelist de estilo inline de <img> (alinhamento) ----
+            function st(html) {
+                var m = /style="([^"]*)"/.exec(mod.sanitizeHtml('<p><img src="https://x.com/a.png" style="' + html + '"></p>'));
+                return m ? m[1] : '';
+            }
+
+            todos = check('estilo de alinhamento válido sobrevive (float + margens + max-width)',
+                st('float:left;margin:0 10px 10px 0;max-width:100%').indexOf('float: left') > -1 &&
+                st('float:left;margin:0 10px 10px 0;max-width:100%').indexOf('max-width: 100%') > -1,
+                st('float:left;margin:0 10px 10px 0;max-width:100%')) && todos;
+
+            todos = check('modo centralizado: margin auto sobrevive (não é comprimento, mas é válido aqui)',
+                st('display:block;margin:0 auto 10px').indexOf('auto') > -1,
+                st('display:block;margin:0 auto 10px')) && todos;
+
+            todos = check('modo livre: position:absolute + left% + top px sobrevivem',
+                st('position:absolute;left:40%;top:120px').indexOf('absolute') > -1 &&
+                st('position:absolute;left:40%;top:120px').indexOf('40%') > -1,
+                st('position:absolute;left:40%;top:120px')) && todos;
+
+            todos = check('position:fixed e sticky são rejeitados (escapam do container do host)',
+                st('position:fixed;top:0;left:0') === '' && st('position:sticky;top:0') === '',
+                '[' + st('position:fixed;top:0;left:0') + '][' + st('position:sticky;top:0') + ']') && todos;
+
+            todos = check('offset negativo, viewport e calc() rejeitados por forma',
+                st('position:absolute;left:-500px').indexOf('-500') === -1 &&
+                st('position:absolute;top:100vh').indexOf('vh') === -1 &&
+                st('position:absolute;left:calc(100% - 5px)').indexOf('calc') === -1) && todos;
+
+            todos = check('left/top órfãos (sem position) são descartados — regra cruzada',
+                st('left:300px;top:80px') === '', st('left:300px;top:80px')) && todos;
+
+            todos = check('z-index não entra na whitelist (empilhamento é por ordem de DOM)',
+                st('position:absolute;left:10px;z-index:99999').indexOf('z-index') === -1,
+                st('position:absolute;left:10px;z-index:99999')) && todos;
+
+            todos = check('a whitelist de estilo é só de <img>: <span> posicionado é rejeitado',
+                mod.sanitizeHtml('<p><span style="position:absolute;left:0;top:0">x</span></p>').indexOf('absolute') === -1,
+                mod.sanitizeHtml('<p><span style="position:absolute;left:0;top:0">x</span></p>')) && todos;
+
+            todos = check('isSafeOffset: px/% válidos passam; negativo, vw e calc não',
+                mod.isSafeOffset('40px') && mod.isSafeOffset('99.5%') && !mod.isSafeOffset('120%') &&
+                !mod.isSafeOffset('-4px') && !mod.isSafeOffset('10vw') && !mod.isSafeOffset('calc(1px)'),
+                JSON.stringify([mod.isSafeOffset('40px'), mod.isSafeOffset('99.5%'), mod.isSafeOffset('120%')])) && todos;
+
+            todos = check('isSafeMarginValue: auto e px passam, % e em não',
+                mod.isSafeMarginValue('auto') && mod.isSafeMarginValue('10px') &&
+                !mod.isSafeMarginValue('5%') && !mod.isSafeMarginValue('1em')) && todos;
+
+            // ---- idempotência: sanitizar 2x seguidas dá o mesmo resultado ----
+            var complexo = '<div>texto <b>negrito</b> <i>itálico</i></div>' +
+                '<p style="text-align:center" class="foo"><a href="https://ok.com">link</a></p>' +
+                '<p><img src="https://x.com/a.png" alt="foto"></p>' +
+                '<p><img src="https://x.com/b.png" style="position:absolute;left:12.5%;top:40px;max-width:100%"></p>' +
+                '<blockquote>citação</blockquote><hr>';
+            var uma = mod.sanitizeHtml(complexo);
+            var duas = mod.sanitizeHtml(uma);
+            todos = check('idempotência: sanitizar 2x seguidas produz o mesmo resultado',
+                uma === duas, uma) && todos;
+
+            todos = check('zero erros JS', erros.length === 0, erros.join(' | ') || null) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ ACEITE ozi-editor-sanitize: PASSOU' : '✗ ACEITE ozi-editor-sanitize: FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+        } catch (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+            vered.textContent = '✗ ACEITE ozi-editor-sanitize: FALHOU (exceção)';
+            vered.className = 'fail';
+        }
+    });
+</script>
+</body>
+</html>

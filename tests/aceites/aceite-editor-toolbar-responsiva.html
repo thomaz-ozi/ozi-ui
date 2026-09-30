@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite ozi-editor Toolbar Responsiva (modo Colapso)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .3rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+    .fixtures { border-top: 1px dashed #ddd; margin-top: 1rem; padding-top: 1rem; opacity: .5; }
+    textarea { width: 100%; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite ozi-editor Toolbar Responsiva <small>(modo Colapso, 2026-08-31)</small></h1>
+<p>Critério: atributos <code>data-ozi-editor-tools-{sm,md,lg,xl,xxl}</code> geram uma
+<code>.ozi-editor-toolbar-variant</code> independente por breakpoint declarado (nunca uma lista
+plana), instância sem nenhum desses atributos não gera DOM novo (zero regressão); grupo
+<code>{-,...}</code>/<code>{+,...}</code> vira chevron + painel inline que abre/fecha por clique;
+duas instâncias do mesmo popover (heading/classes) simultâneas no DOM (uma por variante de
+breakpoint) não colidem — corrigido no passo 0 (id único por popover, ver changelog 4.5.0).
+Headless não controla resize real de viewport (limitação conhecida, documentada no roadmap) — os
+testes de visibilidade por breakpoint usam <code>matchMedia</code> lido no momento, não uma largura
+assumida.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<div class="fixtures">
+    <textarea id="ta-compat" data-ozi-editor-html="compat"
+              data-ozi-editor-tools="[bold,italic]; heading"></textarea>
+
+    <textarea id="ta-bp" data-ozi-editor-html="bp"
+              data-ozi-editor-tools="[bold,italic,underline], [ul,ol], [left,center,right]; { - ,[heading,classes], table, clear, codeblock, source }"
+              data-ozi-editor-tools-sm="[bold,italic,underline], [ul,ol], [left,center,right]; { - ,[heading,classes], table, clear, codeblock, source }"
+              data-ozi-editor-class="text-success:Sucesso, text-danger:Erro"></textarea>
+
+    <textarea id="ta-skip" data-ozi-editor-html="skip"
+              data-ozi-editor-tools="bold"
+              data-ozi-editor-tools-sm="bold, italic"
+              data-ozi-editor-tools-lg="bold, italic, underline"></textarea>
+
+    <textarea id="ta-two" data-ozi-editor-html="two"
+              data-ozi-editor-tools="bold, {-,italic}, ul, {-,ol}"></textarea>
+
+    <textarea id="ta-open" data-ozi-editor-html="open"
+              data-ozi-editor-tools="bold; {+,italic,underline}"></textarea>
+</div>
+
+<!-- ÚNICO script externo — SEM jQuery: -->
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ core: { log: true } });
+
+    var erros = [];
+    var errosOpacos = 0;
+    window.addEventListener('error', function (ev) {
+        var isOpaco = (ev.message === 'Script error.' && !ev.filename && !ev.lineno);
+        if (isOpaco) { errosOpacos++; return; }
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    function click(btn) { btn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true })); }
+    function isShown(el) { return !!el && el.style.display !== 'none'; }
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 9s';
+        vered.className = 'fail';
+    }, 9000);
+
+    OZI.ready(function () {
+        (async function () {
+            var todos = true;
+            await wait(200);
+
+            /* ---- backward-compat: sem nenhum atributo -sm/-md/... ---- */
+            var wrapCompat = document.querySelector('#ta-compat + .ozi-editor-wrap');
+            todos = check('compat: instância sem breakpoints NÃO gera .ozi-editor-toolbar-variant no DOM',
+                wrapCompat.querySelectorAll('.ozi-editor-toolbar-variant').length === 0) && todos;
+            todos = check('compat: toolbar.row continua filho direto de .ozi-editor-toolbar (DOM idêntico a antes)',
+                wrapCompat.querySelector('.ozi-editor-toolbar').children[0].classList.contains('ozi-editor-toolbar-row')) && todos;
+
+            /* ---- estrutural: base + -sm, com {} em cada uma ---- */
+            var wrapBp = document.querySelector('#ta-bp + .ozi-editor-wrap');
+            var variants = wrapBp.querySelectorAll('.ozi-editor-toolbar-variant');
+            todos = check('bp: 2 variantes no DOM (base + sm)', variants.length === 2, variants.length) && todos;
+            var baseVariant = variants[0], smVariant = variants[1];
+            todos = check('bp: variante base sem data-ozi-editor-toolbar-bp (é o piso)',
+                !baseVariant.hasAttribute('data-ozi-editor-toolbar-bp')) && todos;
+            todos = check('bp: variante base com data-ozi-editor-toolbar-bp-until="sm"',
+                baseVariant.getAttribute('data-ozi-editor-toolbar-bp-until') === 'sm',
+                baseVariant.getAttribute('data-ozi-editor-toolbar-bp-until')) && todos;
+            todos = check('bp: variante sm com data-ozi-editor-toolbar-bp="sm"',
+                smVariant.getAttribute('data-ozi-editor-toolbar-bp') === 'sm') && todos;
+            todos = check('bp: variante sm sem data-ozi-editor-toolbar-bp-until (é a última declarada)',
+                !smVariant.hasAttribute('data-ozi-editor-toolbar-bp-until')) && todos;
+
+            /* ---- estrutural: pular breakpoint (base + sm + lg, sem md/xl/xxl) ---- */
+            var wrapSkip = document.querySelector('#ta-skip + .ozi-editor-wrap');
+            var vSkip = wrapSkip.querySelectorAll('.ozi-editor-toolbar-variant');
+            todos = check('skip: 3 variantes (base + sm + lg, md/xl/xxl ausentes)', vSkip.length === 3, vSkip.length) && todos;
+            todos = check('skip: variante base aponta "até sm" (próximo REALMENTE declarado, não "md" fixo)',
+                vSkip[0].getAttribute('data-ozi-editor-toolbar-bp-until') === 'sm') && todos;
+            todos = check('skip: variante sm aponta "até lg" (pula md)',
+                vSkip[1].getAttribute('data-ozi-editor-toolbar-bp') === 'sm' &&
+                vSkip[1].getAttribute('data-ozi-editor-toolbar-bp-until') === 'lg') && todos;
+            todos = check('skip: variante lg é a última (sem -until)',
+                vSkip[2].getAttribute('data-ozi-editor-toolbar-bp') === 'lg' &&
+                !vSkip[2].hasAttribute('data-ozi-editor-toolbar-bp-until')) && todos;
+
+            /* ---- grupo colapsável: estado padrão fechado ({-,...}) ---- */
+            var togglesBp = baseVariant.querySelectorAll('.ozi-editor-btn--collapse-toggle');
+            todos = check('collapse: chevron presente na variante base', togglesBp.length === 1, togglesBp.length) && todos;
+            var toggleBase = togglesBp[0];
+            var idBase = toggleBase.getAttribute('data-ozi-editor-collapse-id');
+            var panelBase = baseVariant.querySelector('[data-ozi-editor-collapse-panel][data-ozi-editor-collapse-id="' + idBase + '"]');
+            todos = check('collapse: painel existe e é IRMÃO da row (2ª linha inline, não popover)',
+                !!panelBase && panelBase.parentNode === baseVariant) && todos;
+            todos = check('collapse: {-,...} nasce FECHADO (display:none)', !isShown(panelBase)) && todos;
+            todos = check('collapse: chevron nasce com aria-expanded=false', toggleBase.getAttribute('aria-expanded') === 'false') && todos;
+
+            /* ---- grupo colapsável: estado padrão aberto ({+,...}) ---- */
+            var wrapOpen = document.querySelector('#ta-open + .ozi-editor-wrap');
+            var toggleOpen = wrapOpen.querySelector('.ozi-editor-btn--collapse-toggle');
+            var idOpen = toggleOpen.getAttribute('data-ozi-editor-collapse-id');
+            var panelOpen = wrapOpen.querySelector('[data-ozi-editor-collapse-panel][data-ozi-editor-collapse-id="' + idOpen + '"]');
+            todos = check('collapse: {+,...} nasce ABERTO (display normal)', isShown(panelOpen)) && todos;
+            todos = check('collapse: chevron de {+,...} nasce com aria-expanded=true e classe is-open',
+                toggleOpen.getAttribute('aria-expanded') === 'true' && toggleOpen.classList.contains('is-open')) && todos;
+
+            /* ---- funcional: clique no chevron alterna o painel ---- */
+            click(toggleBase);
+            todos = check('collapse: clique no chevron ABRE o painel fechado', isShown(panelBase)) && todos;
+            todos = check('collapse: chevron ganha classe is-open e aria-expanded=true ao abrir',
+                toggleBase.classList.contains('is-open') && toggleBase.getAttribute('aria-expanded') === 'true') && todos;
+            click(toggleBase);
+            todos = check('collapse: clique de novo FECHA o painel', !isShown(panelBase)) && todos;
+            todos = check('collapse: chevron perde is-open/aria-expanded ao fechar',
+                !toggleBase.classList.contains('is-open') && toggleBase.getAttribute('aria-expanded') === 'false') && todos;
+
+            /* ---- funcional: duas {} na mesma linha não se confundem ---- */
+            var wrapTwo = document.querySelector('#ta-two + .ozi-editor-wrap');
+            var togglesTwo = wrapTwo.querySelectorAll('.ozi-editor-btn--collapse-toggle');
+            todos = check('collapse: 2 chevrons distintos na mesma linha (bold,{-,italic},ul,{-,ol})',
+                togglesTwo.length === 2, togglesTwo.length) && todos;
+            var idA = togglesTwo[0].getAttribute('data-ozi-editor-collapse-id');
+            var idB = togglesTwo[1].getAttribute('data-ozi-editor-collapse-id');
+            todos = check('collapse: os 2 ids são diferentes (sem colisão)', idA !== idB, idA + ' / ' + idB) && todos;
+            var panelA = wrapTwo.querySelector('[data-ozi-editor-collapse-panel][data-ozi-editor-collapse-id="' + idA + '"]');
+            var panelB = wrapTwo.querySelector('[data-ozi-editor-collapse-panel][data-ozi-editor-collapse-id="' + idB + '"]');
+            click(togglesTwo[0]);
+            todos = check('collapse: abrir o 1º chevron NÃO abre o 2º painel (independentes)',
+                isShown(panelA) && !isShown(panelB)) && todos;
+            click(togglesTwo[0]);
+
+            /* ---- passo 0: heading/classes em 2 variantes simultâneas no DOM
+               não colidem (id único por popover, não nome bruto do tool) ----
+               ta-bp tem "heading"/"classes" tanto na base (dentro do {}) quanto
+               na variante -sm (mesma sintaxe) — exatamente o cenário real do
+               usuário. Abrir o heading da BASE não deve abrir/mexer no heading
+               do SM, e vice-versa. */
+            var headingBase = baseVariant.querySelector('.ozi-editor-btn--heading');
+            var headingSm   = smVariant.querySelector('.ozi-editor-btn--heading');
+            todos = check('passo0: 2 botões "heading" distintos no DOM (base + sm)',
+                !!headingBase && !!headingSm && headingBase !== headingSm) && todos;
+            var idHeadingBase = headingBase.getAttribute('data-ozi-editor-popover-id');
+            var idHeadingSm   = headingSm.getAttribute('data-ozi-editor-popover-id');
+            todos = check('passo0: os 2 ids de popover de heading são diferentes',
+                !!idHeadingBase && !!idHeadingSm && idHeadingBase !== idHeadingSm,
+                idHeadingBase + ' / ' + idHeadingSm) && todos;
+
+            var dropdownBase = wrapBp.querySelector('[data-ozi-editor-popover-wrap="' + idHeadingBase + '"] .ozi-editor-heading-dropdown');
+            var dropdownSm   = wrapBp.querySelector('[data-ozi-editor-popover-wrap="' + idHeadingSm   + '"] .ozi-editor-heading-dropdown');
+            todos = check('passo0: cada id resolve pro SEU PRÓPRIO dropdown (não o mesmo elemento)',
+                !!dropdownBase && !!dropdownSm && dropdownBase !== dropdownSm) && todos;
+
+            click(headingBase);
+            todos = check('passo0: clicar no heading da BASE abre SÓ o dropdown da base',
+                isShown(dropdownBase) && !isShown(dropdownSm)) && todos;
+            click(headingBase); // fecha
+
+            click(headingSm);
+            todos = check('passo0: clicar no heading do SM abre SÓ o dropdown do sm (não reabre o da base)',
+                isShown(dropdownSm) && !isShown(dropdownBase)) && todos;
+            click(headingSm); // fecha
+
+            /* mesmo teste para "classes" (também duplicado em base/sm) */
+            var classesBase = baseVariant.querySelector('.ozi-editor-btn--classes');
+            var classesSm   = smVariant.querySelector('.ozi-editor-btn--classes');
+            todos = check('passo0: 2 botões "classes" distintos no DOM (base + sm)',
+                !!classesBase && !!classesSm && classesBase !== classesSm) && todos;
+            click(classesBase);
+            var idClassesBase = classesBase.getAttribute('data-ozi-editor-popover-id');
+            var dropdownClassesBase = wrapBp.querySelector('[data-ozi-editor-popover-wrap="' + idClassesBase + '"] .ozi-editor-classes-dropdown');
+            var idClassesSm = classesSm.getAttribute('data-ozi-editor-popover-id');
+            var dropdownClassesSm = wrapBp.querySelector('[data-ozi-editor-popover-wrap="' + idClassesSm + '"] .ozi-editor-classes-dropdown');
+            todos = check('passo0: clicar no classes da BASE abre só o dropdown da base',
+                isShown(dropdownClassesBase) && !isShown(dropdownClassesSm)) && todos;
+            click(classesBase); // fecha
+
+            /* ---- visibilidade real por CSS: le a largura ATUAL da janela via
+               matchMedia (headless nao controla resize de viewport — nao
+               assume nenhuma largura fixa). offsetParent é checado num
+               DESCENDENTE com caixa própria (um <button>), não na variante
+               em si — a variante é display:contents, que nunca gera caixa
+               (offsetParent sempre null nela, visível ou não) ---- */
+            /* usa o botao "bold" (solto na row, fora do {}) como sonda —
+               heading/classes deste fixture vivem DENTRO do grupo {-,...}
+               (fechado por padrao), entao offsetParent deles seria null por
+               causa do COLAPSO, nao do breakpoint; testar breakpoint precisa
+               de um botao que so a visibilidade da VARIANTE afeta. */
+            var isSmOrWider = window.matchMedia('(min-width: 576px)').matches;
+            var boldBase = baseVariant.querySelector('[data-ozi-editor-tool="bold"]');
+            var boldSm   = smVariant.querySelector('[data-ozi-editor-tool="bold"]');
+            var baseVisible = boldBase.offsetParent !== null;
+            var smVisible   = boldSm.offsetParent !== null;
+            todos = check('css: exatamente 1 variante visível para a largura atual da janela (' + window.innerWidth + 'px, sm-ou-maior=' + isSmOrWider + ')',
+                baseVisible !== smVisible, 'base=' + baseVisible + ' sm=' + smVisible) && todos;
+            todos = check('css: a variante visível bate com o breakpoint atual (min-width:576px)',
+                isSmOrWider ? smVisible : baseVisible) && todos;
+
+            await wait(150);
+            todos = check('zero erros JS reais (opacos filtrados: ' + errosOpacos + ')', erros.length === 0, erros.join(' | ') || null) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ ACEITE ozi-editor Toolbar Responsiva: PASSOU' : '✗ ACEITE ozi-editor Toolbar Responsiva: FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+        })().catch(function (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+            vered.textContent = '✗ ACEITE ozi-editor Toolbar Responsiva: FALHOU (exceção)';
+            vered.className = 'fail';
+        });
+    });
+</script>
+</body>
+</html>

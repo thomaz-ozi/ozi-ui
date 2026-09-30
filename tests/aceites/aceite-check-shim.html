@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>OZI-UI v2 — Aceite shim jQuery (oziCheck:initFetched)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; }
+    .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .35rem 0; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite shim <small>ozi-check-v1-events.shim.js</small></h1>
+<p>Critério: hosts legados que disparam <code>$(document).trigger('oziCheck:initFetched', [root])</code>
+continuam funcionando via shim opcional em <code>integrations/</code>.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<input type="checkbox" data-ozi-check-switch="g" checked>
+<input type="checkbox" data-ozi-check-group="g">
+<input type="checkbox" id="item1" data-ozi-check-item="g" value="1" checked>
+
+<!-- jQuery + shim: SÓ nesta página de teste, para validar o formato legado -->
+<script src="../plugins/ozi-ui/core/jquery-3.7.1.min.js"></script>
+<script src="../plugins/ozi-ui/integrations/adapters/ozi-check-v1-events.shim.js"></script>
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['check'], core: { log: true } });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+
+    OZI.ready(function () {
+        var todos = true;
+        todos = check('jQuery está presente nesta página (cenário do shim)', typeof window.jQuery !== 'undefined') && todos;
+
+        // marca item2 manualmente sem disparar 'change' (simula conteudo recem-injetado
+        // por fetch, sem os listeners de change do ozi-check terem rodado ainda)
+        var group = document.querySelector('[data-ozi-check-group="g"]');
+        var item1 = document.getElementById('item1');
+        item1.checked = false; // desmarca sem emitir 'change' -- group deveria ficar dessincronizado
+
+        var refreshCalledWith = null;
+        var origRefresh = OZI.components.check.refresh;
+        OZI.components.check.refresh = function (scope) { refreshCalledWith = scope; return origRefresh.call(this, scope); };
+
+        jQuery(document).trigger('oziCheck:initFetched', [document]);
+
+        todos = check('shim: dispara refresh() ao receber o evento jQuery legado', refreshCalledWith === document) && todos;
+        todos = check('shim: refresh() recalculou o tristate do group (item1 desmarcado)',
+            group.checked === false && group.indeterminate === false) && todos;
+
+        var vered = document.getElementById('veredito');
+        vered.textContent = todos ? '✓ ACEITE shim: PASSOU' : '✗ ACEITE shim: FALHOU';
+        vered.className = todos ? 'pass' : 'fail';
+    });
+</script>
+</body>
+</html>

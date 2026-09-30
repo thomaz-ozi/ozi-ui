@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite v6.3.1 (ozi-select escaping de label/subLabel)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .35rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+    .ozi-select-dropdown { display: none; }
+    .ozi-select-ui.is-open .ozi-select-dropdown { display: block; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite v6.3.1 <small>(escaping padrão de label/subLabel do ozi-select)</small></h1>
+<p>Critério: <code>label</code>/<code>subLabel</code> de uma opção com <code>&lt;script&gt;</code>/
+<code>&lt;img onerror&gt;</code> renderizam como texto literal (nenhum nó <code>script</code>/<code>img</code>
+gerado a partir do dado), tanto na lista quanto nas tags (multiple) e no preview (single). Fora de
+escopo: <code>optionHtml</code> (custom, confiável por design) e o template do modo creatable.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<!-- Fixture A — single, label/subLabel com payload malicioso -->
+<div data-ozi-select="single-xss"></div>
+<script type="application/json" data-ozi-select-options="single-xss">
+[
+  {"value":"1","label":"<script>window.__xss1=true<\/script>Item 1","subLabel":"<img src=x onerror=\"window.__xss2=true\">Sub 1"},
+  {"value":"2","label":"Item 2"}
+]
+</script>
+
+<!-- Fixture B — multiple, label malicioso (testa a tag do modo multiple) -->
+<div data-ozi-select="multi-xss" data-ozi-select-multiple></div>
+<script type="application/json" data-ozi-select-options="multi-xss">
+[{"value":"1","label":"<img src=x onerror=\"window.__xss3=true\">Tag 1"}]
+</script>
+
+<!-- Fixture C — optionHtml (fora de escopo, deve continuar renderizando HTML normalmente) -->
+<div data-ozi-select="option-html"></div>
+<script type="application/json" data-ozi-select-options="option-html">
+[{"value":"1","optionHtml":"<strong class=\"custom-mark\">Custom</strong>"}]
+</script>
+
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['select'], lang: 'pt-BR' });
+
+    var erros = [];
+    var errosOpacos = 0;
+    window.addEventListener('error', function (ev) {
+        var isOpaco = (ev.message === 'Script error.' && !ev.filename && !ev.lineno);
+        if (isOpaco) { errosOpacos++; return; }
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    function openDropdown(root) {
+        root.querySelector('.ozi-select-control').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    }
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 9s';
+        vered.className = 'fail';
+    }, 9000);
+
+    OZI.ready(function () {
+        (async function () {
+            var todos = true;
+
+            // ── Fixture A — lista (buildOption) + preview single (buildSelectedPreview) ──
+            var singleRoot = document.querySelector('[data-ozi-select="single-xss"]');
+            openDropdown(singleRoot);
+            var opt1 = singleRoot.querySelector('.ozi-select-option[data-value="1"]');
+            todos = check('lista: label malicioso não gera elemento <script> real',
+                !!opt1 && opt1.querySelector('script') === null) && todos;
+            todos = check('lista: label malicioso aparece como texto literal',
+                !!opt1 && opt1.querySelector('.ozi-select-option-label').textContent.indexOf('<script>') !== -1) && todos;
+            todos = check('lista: subLabel malicioso não gera elemento <img> real',
+                !!opt1 && opt1.querySelector('.ozi-select-option-sublabel').querySelector('img') === null) && todos;
+            todos = check('lista: script/onerror NÃO executou ao renderizar a lista',
+                window.__xss1 !== true && window.__xss2 !== true) && todos;
+
+            opt1.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+            var preview = singleRoot.querySelector('.ozi-select-value-label');
+            todos = check('preview (single): label malicioso não gera elemento <script> real',
+                singleRoot.querySelector('.ozi-select-value-content').querySelector('script') === null) && todos;
+            todos = check('preview (single): label malicioso aparece como texto literal',
+                !!preview && preview.textContent.indexOf('<script>') !== -1) && todos;
+
+            // ── Fixture B — tags do modo multiple (updateUI) ──
+            var multiRoot = document.querySelector('[data-ozi-select="multi-xss"]');
+            openDropdown(multiRoot);
+            var mOpt = multiRoot.querySelector('.ozi-select-option[data-value="1"]');
+            mOpt.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+            var tagLabel = multiRoot.querySelector('.ozi-select-tag-label');
+            todos = check('tag (multiple): label malicioso não gera elemento <img> real',
+                multiRoot.querySelector('.ozi-select-tag').querySelector('img') === null) && todos;
+            todos = check('tag (multiple): label malicioso aparece como texto literal',
+                !!tagLabel && tagLabel.textContent.indexOf('<img') !== -1) && todos;
+            todos = check('tag (multiple): onerror NÃO executou',
+                window.__xss3 !== true) && todos;
+
+            // ── Fixture C — optionHtml continua fora de escopo (renderiza HTML normalmente) ──
+            var htmlRoot = document.querySelector('[data-ozi-select="option-html"]');
+            openDropdown(htmlRoot);
+            var customOpt = htmlRoot.querySelector('.ozi-select-option-custom');
+            todos = check('optionHtml: fora de escopo — continua renderizando HTML confiável normalmente',
+                !!customOpt && customOpt.querySelector('.custom-mark') !== null) && todos;
+
+            await wait(80);
+            todos = check('zero erros JS reais (opacos filtrados: ' + errosOpacos + ')', erros.length === 0, erros.join(' | ') || null) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ ACEITE v6.3.1 (xss-fix): PASSOU' : '✗ ACEITE v6.3.1 (xss-fix): FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+            document.title = (todos ? 'DONE:PASS' : 'DONE:FAIL');
+        })().catch(function (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+            vered.textContent = '✗ ACEITE v6.3.1 (xss-fix): FALHOU (exceção)';
+            vered.className = 'fail';
+            document.title = 'DONE:FAIL';
+        });
+    });
+</script>
+</body>
+</html>

@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite F4 (adapter Livewire)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .35rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite F4 <small>(ozi-livewire.adapter)</small></h1>
+<p>Critério: modo B (<code>component.set</code>), modo A (dispatch nativo em <code>wire:model</code>),
+guard por <code>e.detail.source==='api'</code> (não repropaga mudança programática) e guard de loop por valor.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<div wire:id="cmp1">
+    <!-- modo B: component.set('uf', value) -->
+    <div id="b1" data-fake="uf" data-ozi-livewire-model="uf"></div>
+    <!-- modo A: dispatch nativo no input wire:model -->
+    <div id="a1" data-fake="cidade" data-ozi-livewire-native="#a1-hidden"></div>
+    <input id="a1-hidden" type="hidden" wire:model="cidade">
+</div>
+
+<script>
+    // ── Livewire simulado ANTES do ozi.js ──
+    window.__lwCalls = [];
+    window.Livewire = {
+        find: function (id) {
+            return { set: function (prop, value) { window.__lwCalls.push({ id: id, prop: prop, value: value }); } };
+        },
+        on:   function () {},
+        hook: function () {}
+    };
+</script>
+
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script src="../plugins/ozi-ui/integrations/adapters/ozi-livewire.adapter.js"></script>
+<script>
+    oziConf({ plugins: [], core: { log: false } });
+
+    var erros = [];
+    window.onerror = function (msg) { erros.push(String(msg)); return false; };
+    var total = 0, ok = 0;
+    function check(nome, cond, extra) {
+        total++; var pass = !!cond; if (pass) ok++;
+        var li = document.createElement('li');
+        li.className = pass ? 'pass' : 'fail';
+        li.textContent = (pass ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return pass;
+    }
+    function finish() {
+        var v = document.getElementById('veredito');
+        var allPass = (ok === total) && erros.length === 0;
+        v.textContent = (allPass ? '✓ PASSOU ' : '✗ FALHOU ') + ok + '/' + total + (erros.length ? ' — ' + erros.join(' | ') : '');
+        v.className = allPass ? 'pass' : 'fail';
+        document.title = (allPass ? 'DONE:PASS ' : 'DONE:FAIL ') + ok + '/' + total;
+    }
+    var watchdog = setTimeout(function () {
+        document.getElementById('veredito').textContent = '✗ FALHOU — não terminou em 10s';
+        document.title = 'DONE:TIMEOUT ' + ok + '/' + total;
+    }, 10000);
+
+    function fire(el, detail) {
+        el.dispatchEvent(new CustomEvent('ozi:change', { bubbles: true, detail: detail }));
+    }
+
+    function run() {
+        var integ = window.OZI && OZI.integrations;
+        check('OZI.integrations presente', !!integ);
+        check('adapter livewire registrado', !!(integ && integ.getAdapter && integ.getAdapter('livewire')));
+
+        // plugin fake — registrar dispara adapter.scan → liga b1 e a1
+        var b1 = document.getElementById('b1');
+        var a1 = document.getElementById('a1');
+        var hidden = document.getElementById('a1-hidden');
+
+        integ.registerPlugin({
+            name: 'faketest',
+            selector: '[data-fake]',
+            keyAttribute: 'data-fake',
+            changeEvent: 'ozi:change',
+            getInstance: function (el) { return { el: el }; },
+            getValue: function (inst) { return inst.el.__v; },
+            setValue: function () {}, setOptions: function () {}
+        });
+
+        var n0 = window.__lwCalls.length;
+
+        // — MODO B: component.set —
+        b1.__v = 'SP';
+        fire(b1, { component: 'faketest', name: 'uf', value: 'SP', source: 'user' });
+        var last = window.__lwCalls[window.__lwCalls.length - 1] || {};
+        check('modo B: component.set(uf, SP) no wire:id cmp1',
+            window.__lwCalls.length === n0 + 1 && last.id === 'cmp1' && last.prop === 'uf' && last.value === 'SP',
+            JSON.stringify(last));
+
+        // — GUARD source:'api' — não propaga —
+        var n1 = window.__lwCalls.length;
+        b1.__v = 'RJ';
+        fire(b1, { component: 'faketest', name: 'uf', value: 'RJ', source: 'api' });
+        check('guard source=api: NÃO propaga (component.set não chamado)', window.__lwCalls.length === n1);
+
+        // — GUARD de loop: mesmo valor não propaga —
+        // (após modo B, lastValue='SP'; api foi ignorado antes do lastValue) —
+        var n2 = window.__lwCalls.length;
+        b1.__v = 'SP';
+        fire(b1, { component: 'faketest', name: 'uf', value: 'SP', source: 'user' });
+        check('guard de loop: valor igual (SP) não repropaga', window.__lwCalls.length === n2);
+
+        // — MODO A: dispatch nativo em wire:model —
+        var inputFired = false, changeFired = false;
+        hidden.addEventListener('input',  function () { inputFired = true; });
+        hidden.addEventListener('change', function () { changeFired = true; });
+        var n3 = window.__lwCalls.length;
+        a1.__v = '30';
+        fire(a1, { component: 'faketest', name: 'cidade', value: '30', source: 'user' });
+        check('modo A: input+change nativos no target wire:model', inputFired && changeFired, 'input=' + inputFired + ' change=' + changeFired);
+        check('modo A: target.value setado (30)', hidden.value === '30', hidden.value);
+        check('modo A: NÃO usa component.set (fallback só sem wire:model)', window.__lwCalls.length === n3);
+
+        check('sem erros de runtime', erros.length === 0, erros.join(' | '));
+        clearTimeout(watchdog);
+        finish();
+    }
+
+    if (window.OZI && OZI.ready) OZI.ready(function () { setTimeout(run, 200); });
+    else window.addEventListener('load', function () { setTimeout(run, 600); });
+</script>
+</body>
+</html>

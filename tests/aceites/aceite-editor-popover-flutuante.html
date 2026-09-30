@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite ozi-editor: popover flutuante (não cortado)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .3rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+    .fixtures { border-top: 1px dashed #ddd; margin-top: 1rem; padding-top: 1rem; opacity: .5; }
+    textarea { width: 100%; }
+    /* editores compactos via data-ozi-editor-height="100px" nas fixtures —
+       o plugin escreve `min-height` INLINE no content, entao uma regra de
+       CSS aqui nao venceria. E o caso do bug (popover mais alto que a
+       moldura) e mantem as 4 fixtures cabendo numa viewport headless. */
+    /* editor estreito: força o modo Scroll da toolbar a valer a pena */
+    #box-scroll { width: 320px; }
+    /* fixture do 3o cenario: editor colado no RODAPE da viewport (testa o
+       flip). `fixed` + `bottom` torna a posicao independente do scroll da
+       pagina — com `absolute` o resultado dependeria de onde a pagina estava.
+       Nasce oculto pra nao flutuar por cima das outras fixtures e envenenar
+       os elementFromPoint delas; o teste 7 o revela. */
+    #box-rodape { position: fixed; left: 8px; bottom: 8px; width: 420px; display: none; }
+    /* fixture do 4o cenario: container do HOST com overflow proprio —
+       exatamente o que o absolute nunca conseguiu escapar */
+    #box-host { width: 420px; height: 150px; overflow: hidden; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite ozi-editor <small>(popover flutuante — v4.7.1)</small></h1>
+<p>Critério: popover/dropdown deixa de ser cortado pelo <code>overflow</code> de qualquer
+ancestral. Cobre os <strong>dois cortes reais medidos</strong> — o
+<code>overflow:hidden</code> do <code>.ozi-editor-wrap</code> (o que o usuário reportou: o
+popover de imagem tem ~260px num editor de ~257px, e o <em>Aplicar</em>/<em>Remover</em>
+ficava não-clicável) e o <code>overflow-x:auto</code> da track do modo Scroll (corte de
+~236px + scroll vertical parasita na barra de ferramentas) — mais o container do host, o
+flip para cima quando não cabe embaixo, o clamp lateral, o reposicionamento no scroll e o
+fechamento quando o trigger sai da tela. O teste mede <strong>clicabilidade</strong> por
+<code>elementFromPoint</code>, não só geometria: era esse o sintoma.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<div class="fixtures">
+    <textarea id="ta-base" data-ozi-editor-html="base" data-ozi-editor-height="100px"
+              data-ozi-editor-tools="[bold,heading], [link,unlink,image]"></textarea>
+
+    <div id="box-scroll">
+        <textarea id="ta-scroll" data-ozi-editor-html="scroll" data-ozi-editor-height="100px"
+                  data-ozi-editor-tools-scroll="[bold,italic,underline,link,unlink,image,color,highlight]"></textarea>
+    </div>
+
+    <div id="box-rodape">
+        <textarea id="ta-rodape" data-ozi-editor-html="rodape" data-ozi-editor-height="100px"
+                  data-ozi-editor-tools="[bold], [image]"></textarea>
+    </div>
+
+    <div id="box-host">
+        <textarea id="ta-host" data-ozi-editor-html="host" data-ozi-editor-height="100px"
+                  data-ozi-editor-tools="[bold], [image]"></textarea>
+    </div>
+</div>
+
+<!-- ÚNICO script externo — SEM jQuery: -->
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ core: { log: true } });
+
+    var erros = [];
+    var errosOpacos = 0;
+    window.addEventListener('error', function (ev) {
+        var isOpaco = (ev.message === 'Script error.' && !ev.filename && !ev.lineno);
+        if (isOpaco) { errosOpacos++; return; }
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    var ok = 0, total = 0;
+    function check(nome, cond, extra) {
+        total++; if (cond) ok++;
+        var li = document.createElement('li');
+        li.className = cond ? 'pass' : 'fail';
+        li.textContent = (cond ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return cond;
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    function click(btn) { btn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true })); }
+    function isShown(el) { return !!el && el.style.display !== 'none'; }
+
+    /* o popover e `fixed`: ele so pode ser clicado se o TRIGGER estiver na
+       viewport. A viewport do headless e curta (~490px) e as 4 fixtures nao
+       cabem juntas, entao cada bloco traz o seu editor pra tela antes de
+       medir — sem isso o teste mediria o comportamento correto de
+       "trigger fora da tela" e leria como falha.
+       `block:'start'` (topo da viewport) e nao 'center': o popover de imagem
+       tem ~270px e precisa de espaco ABAIXO do trigger pra abrir no sentido
+       padrao — centralizado, ele viraria pra cima e o teste do sentido
+       padrao mediria o do flip. */
+    async function focar(el) {
+        el.scrollIntoView({ block: 'start' });
+        await wait(30);
+    }
+
+    /* clicabilidade real: o ponto (x,y) entrega o clique a ESTE elemento (ou a
+       um descendente dele)? Era exatamente isto que falhava — o botao existia
+       no DOM, tinha rect, e mesmo assim o clique batia no <html> porque o
+       ancestral clipado nao pintava aquele pedaco. */
+    function recebeClique(el) {
+        var r = el.getBoundingClientRect();
+        var alvo = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        return !!alvo && (alvo === el || el.contains(alvo));
+    }
+    function alvoEm(el) {
+        var r = el.getBoundingClientRect();
+        var a = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        return a ? (a.tagName + (a.className ? '.' + a.className : '')) : 'null';
+    }
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 9s';
+        vered.className = 'fail';
+        document.title = 'DONE:TIMEOUT ' + ok + '/' + total;
+    }, 9000);
+
+    OZI.ready(function () {
+        (async function () {
+            await wait(200);
+
+            var wrapBase   = document.querySelector('#ta-base + .ozi-editor-wrap');
+            var wrapScroll = document.querySelector('#ta-scroll + .ozi-editor-wrap');
+            var wrapRodape = document.querySelector('#ta-rodape + .ozi-editor-wrap');
+            var wrapHost   = document.querySelector('#ta-host + .ozi-editor-wrap');
+
+            function imgBtnDe(w)  { return w.querySelector('[data-ozi-editor-tool="image"]'); }
+            function popoverDe(w) { return w.querySelector('[data-ozi-editor-popover-wrap^="image-"] .ozi-editor-popover'); }
+            function removeBtnDe(w) { return w.querySelector('[data-ozi-editor-image-remove]'); }
+            function applyBtnDe(w)  { return w.querySelector('[data-ozi-editor-image-apply]'); }
+
+            // ─── 1. contrato de posicionamento ───────────────────────────
+            await focar(wrapBase);
+            var pop = popoverDe(wrapBase);
+            check('popover fechado nasce com display:none', !isShown(pop));
+
+            click(imgBtnDe(wrapBase));
+            check('popover abre no clique do botão de imagem', isShown(pop));
+
+            var cs = getComputedStyle(pop);
+            check('popover aberto é position:fixed (escapa de overflow de ancestral)',
+                cs.position === 'fixed', 'position = ' + cs.position);
+            check('popover tem overflow-y:auto (scroll próprio quando a altura é limitada)',
+                cs.overflowY === 'auto', 'overflow-y = ' + cs.overflowY);
+            check('o JS escreveu top/left inline (não ficou no 0,0 do CSS)',
+                pop.style.top !== '' && pop.style.left !== '',
+                'top=' + pop.style.top + ' left=' + pop.style.left);
+
+            // ─── 2. ancoragem: abaixo do trigger e alinhado à esquerda dele ─
+            var rBtn = imgBtnDe(wrapBase).getBoundingClientRect();
+            var rPop = pop.getBoundingClientRect();
+            check('popover abre ABAIXO do trigger (comportamento histórico preservado)',
+                rPop.top >= rBtn.bottom - 0.5 && rPop.top <= rBtn.bottom + 8,
+                'trigger.bottom=' + Math.round(rBtn.bottom) + ' popover.top=' + Math.round(rPop.top));
+            check('popover alinhado à esquerda do trigger',
+                Math.abs(rPop.left - rBtn.left) <= 1,
+                'trigger.left=' + Math.round(rBtn.left) + ' popover.left=' + Math.round(rPop.left));
+
+            // ─── 3. O BUG REPORTADO: wrap com overflow:hidden ────────────
+            check('o .ozi-editor-wrap continua com overflow:hidden (o fix NÃO é abrir a moldura)',
+                getComputedStyle(wrapBase).overflow === 'hidden');
+
+            /* a condicao real do bug nao e "popover maior que o editor" e sim
+               "popover nao cabe entre o botao e o fim da moldura" — e o que
+               o overflow:hidden cortava */
+            var rWrap = wrapBase.getBoundingClientRect();
+            var espacoNaMoldura = rWrap.bottom - rBtn.bottom;
+            check('o popover não cabe dentro da moldura abaixo do trigger (a condição do bug existe)',
+                rPop.height > espacoNaMoldura,
+                'popover=' + Math.round(rPop.height) + 'px vs espaço na moldura=' + Math.round(espacoNaMoldura) + 'px');
+
+            check('botão "Aplicar" recebe clique mesmo fora da moldura do editor',
+                recebeClique(applyBtnDe(wrapBase)), alvoEm(applyBtnDe(wrapBase)));
+            check('botão "Remover" recebe clique mesmo fora da moldura do editor',
+                recebeClique(removeBtnDe(wrapBase)), alvoEm(removeBtnDe(wrapBase)));
+
+            click(imgBtnDe(wrapBase));   /* fecha */
+            check('popover fecha no 2o clique do trigger', !isShown(pop));
+
+            // ─── 4. dropdown de heading (mesma mecânica) ─────────────────
+            var headBtn  = wrapBase.querySelector('.ozi-editor-btn[data-ozi-editor-tool="heading"]');
+            var headDrop = wrapBase.querySelector('.ozi-editor-heading-dropdown');
+            if (headBtn && headDrop) {
+                click(headBtn);
+                check('dropdown de heading também é fixed (mesma mecânica dos popovers)',
+                    isShown(headDrop) && getComputedStyle(headDrop).position === 'fixed',
+                    'position = ' + getComputedStyle(headDrop).position);
+                var rDrop = headDrop.getBoundingClientRect();
+                check('dropdown de heading cabe na viewport (não vaza pra fora da tela)',
+                    rDrop.top >= -0.5 && rDrop.bottom <= document.documentElement.clientHeight + 0.5,
+                    'top=' + Math.round(rDrop.top) + ' bottom=' + Math.round(rDrop.bottom));
+                var itens = headDrop.querySelectorAll('button, [data-ozi-editor-heading]');
+                check('1o item do dropdown de heading recebe clique',
+                    itens.length > 0 && recebeClique(itens[0]), itens[0] ? alvoEm(itens[0]) : 'sem itens');
+                click(headBtn);
+            } else {
+                check('dropdown de heading presente na fixture', false, 'não encontrado');
+            }
+
+            // ─── 5. modo Scroll da toolbar (o 2o corte, pior que o 1o) ───
+            await focar(wrapScroll);
+            var track = wrapScroll.querySelector('.ozi-editor-toolbar-scroll-track');
+            check('fixture do modo Scroll montou a track', !!track);
+            check('o botão de imagem está DENTRO da track com overflow-x (a condição do 2o bug)',
+                !!track && track.contains(imgBtnDe(wrapScroll)));
+
+            var altura0 = track ? track.scrollHeight : 0;
+            click(imgBtnDe(wrapScroll));
+            var popS = popoverDe(wrapScroll);
+            check('popover do editor em modo Scroll abre', isShown(popS));
+            check('abrir o popover NÃO cria scroll vertical na barra de ferramentas',
+                !!track && track.scrollHeight <= track.clientHeight + 1,
+                'scrollHeight=' + (track && track.scrollHeight) + ' clientHeight=' + (track && track.clientHeight));
+            check('altura rolável da track não mudou ao abrir o popover',
+                !!track && track.scrollHeight === altura0,
+                'antes=' + altura0 + ' depois=' + (track && track.scrollHeight));
+            check('botão "Aplicar" do editor em modo Scroll recebe clique',
+                recebeClique(applyBtnDe(wrapScroll)), alvoEm(applyBtnDe(wrapScroll)));
+            click(imgBtnDe(wrapScroll));
+
+            // ─── 6. container do HOST com overflow (o que absolute nunca escapou) ─
+            var boxHost = document.getElementById('box-host');
+            await focar(boxHost);
+            click(imgBtnDe(wrapHost));
+            var popH = popoverDe(wrapHost);
+            var rHostBox = boxHost.getBoundingClientRect();
+            var rPopH = popH.getBoundingClientRect();
+            /* "escapou" = nao esta contido na caixa do host — pode ser por
+               baixo (sentido padrao) ou por cima (flip); o que importa e que
+               o overflow:hidden do host nao o confina mais */
+            check('popover escapa do container do host (150px de altura, overflow:hidden)',
+                rPopH.bottom > rHostBox.bottom || rPopH.top < rHostBox.top,
+                'popover=' + Math.round(rPopH.top) + '..' + Math.round(rPopH.bottom) +
+                ' host=' + Math.round(rHostBox.top) + '..' + Math.round(rHostBox.bottom));
+            check('e mesmo assim o "Aplicar" recebe clique (escapou do overflow do host)',
+                recebeClique(applyBtnDe(wrapHost)), alvoEm(applyBtnDe(wrapHost)));
+            click(imgBtnDe(wrapHost));
+
+            // ─── 7. flip: editor no rodapé da viewport ───────────────────
+            var boxRodape = document.getElementById('box-rodape');
+            var vh = document.documentElement.clientHeight;
+            /* `position:fixed; bottom:8px` no CSS — ao revelar, o editor fica
+               colado no rodapé da viewport, sobrando menos espaço abaixo do
+               botão do que a altura do popover */
+            boxRodape.style.display = 'block';
+            await wait(30);
+
+            var btnR = imgBtnDe(wrapRodape);
+            click(btnR);
+            var popR = popoverDe(wrapRodape);
+            var rBtnR = btnR.getBoundingClientRect();
+            var rPopR = popR.getBoundingClientRect();
+
+            check('sem espaço embaixo: o popover VIRA PRA CIMA do trigger',
+                rPopR.bottom <= rBtnR.top + 0.5,
+                'popover.bottom=' + Math.round(rPopR.bottom) + ' trigger.top=' + Math.round(rBtnR.top));
+            check('popover virado cabe na viewport (topo)', rPopR.top >= -0.5,
+                'popover.top=' + Math.round(rPopR.top));
+            check('popover virado cabe na viewport (base)', rPopR.bottom <= vh + 0.5,
+                'popover.bottom=' + Math.round(rPopR.bottom) + ' vh=' + vh);
+            /* quando nem em cima cabe inteiro, o popover ganha max-height +
+               scroll proprio: o rodape do formulario passa a exigir rolagem,
+               e e isso que se testa aqui (antes do fix nao havia rolagem
+               possivel — o conteudo simplesmente nao existia na tela) */
+            if (popR.scrollHeight > popR.clientHeight + 1) {
+                popR.scrollTop = popR.scrollHeight;
+                await wait(20);
+                check('popover limitado pela viewport ganha scroll interno (rodapé alcançável)',
+                    popR.scrollTop > 0, 'scrollHeight=' + popR.scrollHeight + ' clientHeight=' + popR.clientHeight);
+            } else {
+                check('popover virado coube inteiro (sem necessidade de scroll interno)', true);
+            }
+            check('botão "Aplicar" do popover virado recebe clique',
+                recebeClique(applyBtnDe(wrapRodape)), alvoEm(applyBtnDe(wrapRodape)));
+
+            // ─── 8. reposicionamento no scroll ───────────────────────────
+            var inst = OZI.components.editor.get('base');
+            click(imgBtnDe(wrapRodape));           /* fecha o do rodapé */
+            boxRodape.style.display = 'none';      /* some da tela de novo  */
+            await focar(wrapBase);
+            click(imgBtnDe(wrapBase));             /* reabre o de cima   */
+            var topoAntes = popoverDe(wrapBase).getBoundingClientRect().top;
+            var btnTopoAntes = imgBtnDe(wrapBase).getBoundingClientRect().top;
+
+            /* o evento `scroll` não dispara de forma confiável sob
+               --virtual-time-budget (lessons-learned 2026-08-31), então o
+               teste chama o reposicionamento pelo mesmo caminho do listener */
+            wrapBase.style.marginTop = '40px';
+            inst._repositionOpenPopovers();
+            await wait(20);
+
+            var topoDepois = popoverDe(wrapBase).getBoundingClientRect().top;
+            var btnTopoDepois = imgBtnDe(wrapBase).getBoundingClientRect().top;
+            check('o popover acompanha o trigger quando ele se move',
+                Math.abs((topoDepois - topoAntes) - (btnTopoDepois - btnTopoAntes)) <= 1.5,
+                'Δpopover=' + Math.round(topoDepois - topoAntes) + ' Δtrigger=' + Math.round(btnTopoDepois - btnTopoAntes));
+            wrapBase.style.marginTop = '';
+
+            // ─── 9. trigger fora da tela → fecha ─────────────────────────
+            if (!isShown(popoverDe(wrapBase))) click(imgBtnDe(wrapBase));
+            check('popover aberto antes do teste de saída de tela', isShown(popoverDe(wrapBase)));
+            /* tira o editor inteiro da viewport pelo lado de cima */
+            wrapBase.style.position = 'relative';
+            wrapBase.style.top = '-9999px';
+            inst._repositionOpenPopovers();
+            check('trigger totalmente fora da viewport fecha o popover (não fica órfão na tela)',
+                !isShown(popoverDe(wrapBase)));
+            wrapBase.style.position = '';
+            wrapBase.style.top = '';
+
+            // ─── 10. destroy remove os listeners de reposicionamento ─────
+            var instHost = OZI.components.editor.get('host');
+            var antesL = instHost._listeners.length;
+            var temScroll = instHost._listeners.some(function (l) {
+                return l.target === window && l.type === 'scroll' && l.opts === true;
+            });
+            check('listener de scroll registrado no window em CAPTURE (scroll não borbulha)', temScroll);
+            instHost.destroy();
+            check('destroy() zera os listeners rastreados (inclusive os do window)',
+                instHost._listeners.length === 0, 'antes=' + antesL);
+
+            // ─── 11. erros JS ────────────────────────────────────────────
+            check('zero erros JS reais (opacos filtrados: ' + errosOpacos + ')',
+                erros.length === 0, erros.join(' | ') || null);
+
+            clearTimeout(watchdog);
+            var allPass = (ok === total);
+            vered.textContent = (allPass ? '✓ ACEITE POPOVER FLUTUANTE: PASSOU' : '✗ ACEITE POPOVER FLUTUANTE: FALHOU') + ' (' + ok + '/' + total + ')';
+            vered.className = allPass ? 'pass' : 'fail';
+            document.title = (allPass ? 'DONE:PASS ' : 'DONE:FAIL ') + ok + '/' + total;
+        })().catch(function (err) {
+            check('exceção não tratada no teste', false, String(err) + ' | ' + err.stack);
+            clearTimeout(watchdog);
+            vered.textContent = '✗ ACEITE POPOVER FLUTUANTE: FALHOU (' + ok + '/' + total + ')';
+            vered.className = 'fail';
+            document.title = 'DONE:FAIL ' + ok + '/' + total;
+        });
+    });
+</script>
+</body>
+</html>

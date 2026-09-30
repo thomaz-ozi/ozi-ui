@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite F2 #10 (ozi-audio)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .35rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite F2 #10 <small>(ozi-audio)</small></h1>
+<p>Critério: motor 100% JS puro (zero jQuery), fim do dual-dispatch
+(<code>ozi:audio-*</code>/<code>ozi:init</code>/<code>ozi:change</code>/<code>ozi:destroy</code> só via
+<code>OZI.helpers.emit</code>), adapter <code>nativeElement</code>, mesma API pública.
+Gravação testada com <code>MediaRecorder</code>/<code>getUserMedia</code> stubados (determinístico).</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<!-- player (data URI wav silencioso) -->
+<div id="ap" data-ozi-audio="player"
+     data-ozi-audio-url="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAgD4AAAB9AAACABAAZGF0YQAAAAA="></div>
+
+<!-- recorder -->
+<div id="ar" data-ozi-audio="recorder" data-ozi-audio-save-url="/nao-usado"></div>
+
+<!-- full -->
+<div id="af" data-ozi-audio="full"></div>
+
+<!-- container para exercitar o adapter de validação (required p/ validate coletar) -->
+<form id="form-val"><div id="ar2" data-ozi-audio="recorder" data-ozi-required="true"></div></form>
+
+<script>
+    /* ── stubs determinísticos ANTES do ozi.js (sem hardware/timing real) ── */
+    window.MediaRecorder = function (stream, opts) {
+        this.stream = stream;
+        this.mimeType = (opts && opts.mimeType) || 'audio/webm';
+        this._l = {};
+    };
+    window.MediaRecorder.isTypeSupported = function () { return true; };
+    window.MediaRecorder.prototype.addEventListener = function (t, f) { (this._l[t] = this._l[t] || []).push(f); };
+    window.MediaRecorder.prototype._fire = function (t, e) { (this._l[t] || []).forEach(function (f) { f(e); }); };
+    window.MediaRecorder.prototype.start = function () {
+        var self = this;
+        setTimeout(function () {
+            self._fire('dataavailable', { data: new Blob([new Uint8Array([1, 2, 3, 4])], { type: self.mimeType }) });
+        }, 0);
+    };
+    window.MediaRecorder.prototype.stop = function () {
+        var self = this;
+        setTimeout(function () { self._fire('stop', {}); }, 0);
+    };
+    if (!navigator.mediaDevices) navigator.mediaDevices = {};
+    navigator.mediaDevices.getUserMedia = function () {
+        return Promise.resolve({ getTracks: function () { return [{ stop: function () {} }]; } });
+    };
+</script>
+
+<!-- ÚNICO script externo da página: -->
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['audio'], core: { log: true } });
+
+    var erros = [];
+    window.onerror = function (msg) { erros.push(String(msg)); return false; };
+
+    var total = 0, ok = 0;
+    function check(nome, cond, extra) {
+        total++;
+        var pass = !!cond;
+        if (pass) ok++;
+        var li = document.createElement('li');
+        li.className = pass ? 'pass' : 'fail';
+        li.textContent = (pass ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return pass;
+    }
+
+    function onceEvent(name, filter) {
+        return new Promise(function (resolve) {
+            document.addEventListener(name, function handler(e) {
+                if (filter && !filter(e)) return;
+                document.removeEventListener(name, handler);
+                resolve(e.detail);
+            });
+        });
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+    function finish() {
+        var vered = document.getElementById('veredito');
+        var allPass = (ok === total) && erros.length === 0;
+        vered.textContent = (allPass ? '✓ PASSOU ' : '✗ FALHOU ') + ok + '/' + total +
+            (erros.length ? ' — erros: ' + erros.join(' | ') : '');
+        vered.className = allPass ? 'pass' : 'fail';
+        document.title = (allPass ? 'DONE:PASS ' : 'DONE:FAIL ') + ok + '/' + total;
+    }
+
+    var watchdog = setTimeout(function () {
+        document.getElementById('veredito').textContent = '✗ FALHOU — testes não terminaram em 12s';
+        document.getElementById('veredito').className = 'fail';
+        document.title = 'DONE:TIMEOUT ' + ok + '/' + total;
+    }, 12000);
+
+    // ozi:init do player precisa ser capturado cedo
+    var initPlayerP = onceEvent('ozi:init', function (e) {
+        return e.detail && e.detail.component === 'ozi-audio' && e.target && e.target.id === 'ap';
+    });
+
+    function run() {
+        var A = window.OZI && OZI.components && OZI.components.audio;
+
+        check('zero jQuery (window.jQuery undefined)', typeof window.jQuery === 'undefined');
+        check('OZI.isReady', !!(window.OZI && OZI.isReady));
+        check('OZI.components.audio presente', !!A);
+        check('window.OziAudio presente', !!window.OziAudio);
+
+        var api = A || {};
+        var methods = ['init', 'get', 'getAll', 'destroy', 'play', 'pause', 'record', 'stopRecord', 'save', 'setIconBase'];
+        var missing = methods.filter(function (m) { return typeof api[m] !== 'function'; });
+        check('API pública completa', missing.length === 0, missing.length ? 'faltam: ' + missing.join(',') : '');
+
+        // player
+        var ip = api.get && api.get('ap');
+        check('player: instância criada', !!ip);
+        check('player: mode === "player"', ip && ip.mode === 'player');
+        var apEl = document.getElementById('ap');
+        check('player: DOM montado (.ozi-audio-player)', apEl && apEl.classList.contains('ozi-audio') && apEl.classList.contains('ozi-audio-player'));
+        check('player: botão play + timeline', apEl && !!apEl.querySelector('.ozi-audio__play') && !!apEl.querySelector('.ozi-audio__timeline'));
+        check('player: get(Element) resolve mesma instância', api.get(apEl) === ip);
+
+        // recorder
+        var ir = api.get('ar');
+        check('recorder: instância + botão record', ir && ir.mode === 'recorder' && !!document.getElementById('ar').querySelector('.ozi-audio__record'));
+        check('recorder: isValid=false sem gravação (getValue null)', ir && ir.recordedFile === null && ir.getValue() === null);
+
+        // full
+        var iff = api.get('af');
+        check('full: player + recorder juntos', iff && iff.mode === 'full' &&
+            !!document.getElementById('af').querySelector('.ozi-audio__play') &&
+            !!document.getElementById('af').querySelector('.ozi-audio__record'));
+
+        // idempotência do init
+        api.init();
+        check('init idempotente (mesma instância)', api.get('ap') === ip);
+
+        // módulo validate presente (adapter depende dele)
+        var validate = window.OZI && OZI.modules && OZI.modules.validate;
+        check('OZI.modules.validate carregado (dep)', !!validate);
+
+        // --- caminho do gravador (determinístico) ---
+        var recordedP = onceEvent('ozi:audio-recorded', function (e) { return e.target && e.target.id === 'ar'; });
+        var changeP   = onceEvent('ozi:change',         function (e) { return e.target && e.target.id === 'ar'; });
+
+        api.record('ar');           // getUserMedia stub → start → dataavailable
+        wait(30).then(function () {
+            api.stopRecord('ar');   // stop → _handleRecorderStop → emite recorded + change
+            return Promise.all([recordedP, changeP]);
+        }).then(function (res) {
+            var recDetail = res[0], chDetail = res[1];
+            check('ozi:audio-recorded emitido com file', recDetail && recDetail.file && (recDetail.file.size > 0), recDetail ? 'size=' + (recDetail.file && recDetail.file.size) : '');
+            check('ozi:audio-recorded detail no contrato', recDetail && recDetail.component === 'ozi-audio' && 'value' in recDetail && 'source' in recDetail);
+            check('ozi:change emitido com value serializável', chDetail && chDetail.component === 'ozi-audio' && typeof chDetail.value === 'string' && chDetail.value.length > 0, chDetail ? 'value=' + chDetail.value : '');
+            check('ozi:change source presente', chDetail && (chDetail.source === 'user' || chDetail.source === 'api'));
+
+            var ir2 = api.get('ar');
+            check('após gravar: recordedFile é File/Blob', ir2 && ir2.recordedFile && typeof ir2.recordedFile.size === 'number');
+            check('após gravar: getValue() serializável (nome)', ir2 && typeof ir2.getValue() === 'string');
+
+            // adapter via validate: recorder sem gravação = inválido; com gravação = válido
+            var okAdapter = true, why = '';
+            if (validate && typeof validate.container === 'function') {
+                var r2 = validate.container(document.getElementById('form-val'));
+                // ar2 (form-val) não gravou → deve ser inválido pelo adapter
+                okAdapter = r2 && r2.isValid === false;
+                why = 'container isValid=' + (r2 && r2.isValid);
+            }
+            check('adapter validate: recorder vazio = inválido', okAdapter, why);
+
+            // destroy + ozi:destroy
+            var destroyP = onceEvent('ozi:destroy', function (e) { return e.target && e.target.id === 'ar'; });
+            api.destroy('ar');
+            return destroyP;
+        }).then(function () {
+            check('ozi:destroy emitido', true);
+            check('destroy: instância removida do registry', api.get('ar') === null);
+            check('destroy: root esvaziado', document.getElementById('ar').children.length === 0);
+            check('sem erros de runtime', erros.length === 0, erros.join(' | '));
+
+            clearTimeout(watchdog);
+            finish();
+        }).catch(function (err) {
+            check('fluxo de gravação sem exceção', false, String(err));
+            clearTimeout(watchdog);
+            finish();
+        });
+    }
+
+    if (window.OZI && OZI.ready) OZI.ready(function () { initPlayerP.then(function () {}); run(); });
+    else window.addEventListener('load', function () { setTimeout(run, 400); });
+</script>
+</body>
+</html>

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>OZI-UI v2 — Aceite shim jQuery (ozi:change)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; }
+    .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .35rem 0; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite shim <small>ozi-change-v1-compat.shim.js</small></h1>
+<p>Critério: os 2 consumidores jQuery posicionais do Central RH
+(<code>candidate-list.blade.php:754</code>, <code>profile/edit.blade.php:388</code>)
+continuam funcionando via shim em <code>integrations/</code>, sem o componente
+precisar conhecer jQuery.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<div id="pais" data-ozi-select="pais"></div>
+<script type="application/json" data-ozi-select-options="pais">
+[{"value":"br","label":"Brasil"}]
+</script>
+
+<!-- jQuery + shim: SÓ nesta página de teste, para validar o formato legado -->
+<script src="../plugins/ozi-ui/core/jquery-3.7.1.min.js"></script>
+<script src="../plugins/ozi-ui/integrations/adapters/ozi-change-v1-compat.shim.js"></script>
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['select'], core: { log: true } });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+
+    OZI.ready(function () {
+        var todos = true;
+        todos = check('jQuery está presente nesta página (cenário do shim)', typeof window.jQuery !== 'undefined') && todos;
+
+        // formato legado: function (event, items, instance, detail)
+        var captured = null;
+        jQuery(document).on('ozi:change', function (event, items, instance, detail) {
+            if (detail && detail.name === 'pais') captured = { items: items, instance: instance, detail: detail };
+        });
+
+        var select = OZI.components.select;
+        select.value('pais', 'br');
+
+        todos = check('shim: handler jQuery posicional recebeu o evento', !!captured) && todos;
+        todos = check('shim: "items" posicional === detail.items', captured && captured.items === captured.detail.items) && todos;
+        todos = check('shim: "instance" posicional resolvida via OZI.components.select.get()',
+            captured && captured.instance === select.get('pais')) && todos;
+        todos = check('shim: detail contém o contrato v2 completo',
+            captured && captured.detail.component === 'ozi-select' && captured.detail.value === 'br') && todos;
+
+        var vered = document.getElementById('veredito');
+        vered.textContent = todos ? '✓ ACEITE shim: PASSOU' : '✗ ACEITE shim: FALHOU';
+        vered.className = todos ? 'pass' : 'fail';
+    });
+</script>
+</body>
+</html>

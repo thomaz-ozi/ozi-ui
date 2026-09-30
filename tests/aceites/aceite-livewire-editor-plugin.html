@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite: plugin do editor + seletor multi-grupo</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 860px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } h2 { font-size: .95rem; margin-top: 1.4rem; color: #374151; }
+    .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .35rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite <small>(ozi-editor.plugin 2.1.0 + ozi-livewire.adapter 2.2.0)</small></h1>
+<p>Critério: (a) o plugin do editor registra o seletor que o <strong>componente de fato lê</strong>
+(<code>data-ozi-editor-html</code> / <code>-md</code>); (b) seletor com mais de um grupo é composto
+corretamente — o 1º grupo não pode escapar do filtro de atributo; (c) a busca por chave acha o
+elemento em qualquer dos <code>keyAttributes</code>; (d) o contrato antigo
+(<code>keyAttribute</code> string, seletor de grupo único) continua valendo.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<div wire:id="cmp1">
+    <!-- editores reais: um html, um md -->
+    <textarea id="ed-html" data-ozi-editor-html="descricao" data-ozi-livewire-model="descricao"></textarea>
+    <textarea id="ed-md"   data-ozi-editor-md="notas"      data-ozi-livewire-model="notas"></textarea>
+
+    <!-- fake multi-grupo: SÓ o segundo tem data-ozi-livewire-model.
+         Com a composição errada ('[a], [b][model]'), o 1º grupo casava sozinho
+         e o m1 era ligado indevidamente. -->
+    <div id="m1" data-fake-a="alfa"></div>
+    <div id="m2" data-fake-b="beta" data-ozi-livewire-model="beta"></div>
+
+    <!-- fake de grupo único: contrato antigo (keyAttribute string) -->
+    <div id="s1" data-fake-solo="solo" data-ozi-livewire-model="solo"></div>
+</div>
+
+<script>
+    // ── Livewire simulado ANTES do ozi.js ──
+    window.__lwCalls = [];
+    window.Livewire = {
+        find: function (id) {
+            return { set: function (prop, value) { window.__lwCalls.push({ id: id, prop: prop, value: value }); } };
+        },
+        on:   function () {},
+        hook: function () {}
+    };
+</script>
+
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script src="../plugins/ozi-ui/integrations/adapters/ozi-livewire.adapter.js"></script>
+<script>
+    oziConf({ plugins: [], core: { log: false } });
+
+    var erros = [];
+    window.onerror = function (msg) { erros.push(String(msg)); return false; };
+    var total = 0, ok = 0;
+    function check(nome, cond, extra) {
+        total++; var pass = !!cond; if (pass) ok++;
+        var li = document.createElement('li');
+        li.className = pass ? 'pass' : 'fail';
+        li.textContent = (pass ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return pass;
+    }
+    function titulo(t) {
+        var li = document.createElement('h2');
+        li.textContent = t;
+        document.getElementById('resultados').appendChild(li);
+    }
+    function finish() {
+        var v = document.getElementById('veredito');
+        var allPass = (ok === total) && erros.length === 0;
+        v.textContent = (allPass ? '✓ PASSOU ' : '✗ FALHOU ') + ok + '/' + total + (erros.length ? ' — ' + erros.join(' | ') : '');
+        v.className = allPass ? 'pass' : 'fail';
+        document.title = (allPass ? 'DONE:PASS ' : 'DONE:FAIL ') + ok + '/' + total;
+    }
+    var watchdog = setTimeout(function () {
+        document.getElementById('veredito').textContent = '✗ FALHOU — não terminou em 10s';
+        document.title = 'DONE:TIMEOUT ' + ok + '/' + total;
+    }, 10000);
+
+    var BOUND = 'data-ozi-livewire-bound';
+
+    function fire(el, detail) {
+        el.dispatchEvent(new CustomEvent('ozi:change', { bubbles: true, detail: detail }));
+    }
+
+    function run() {
+        var integ = window.OZI && OZI.integrations;
+        check('OZI.integrations presente', !!integ);
+        check('adapter livewire registrado', !!(integ && integ.getAdapter && integ.getAdapter('livewire')));
+
+        /* ─────────────────────────────────────────────
+         * [A] O PLUGIN REAL DO EDITOR
+         * O componente não é carregado aqui (plugins: []), então registramos
+         * o mesmo descritor que o ozi-editor.plugin.js registra. O que está
+         * sob teste é o CASAMENTO seletor × atributo do componente, não o editor.
+         * ───────────────────────────────────────────── */
+        titulo('[A] plugin do editor — seletor bate com o que o componente lê');
+
+        var SELECTOR_COMPONENTE = '[data-ozi-editor-html], [data-ozi-editor-md]';
+
+        integ.registerPlugin({
+            name: 'editor',
+            selector: SELECTOR_COMPONENTE,
+            keyAttribute: 'data-ozi-editor-html',
+            keyAttributes: ['data-ozi-editor-html', 'data-ozi-editor-md'],
+            changeEvent: 'ozi:change',
+            getInstance: function (el) { return { el: el }; },
+            getValue: function (inst) { return inst.el.__v; },
+            setValue: function (el, v) { el.__set = v; },
+            setOptions: function () {}
+        });
+
+        var edHtml = document.getElementById('ed-html');
+        var edMd   = document.getElementById('ed-md');
+
+        check('editor HTML foi ligado pelo adapter (bound)', edHtml.getAttribute(BOUND) === '1');
+        check('editor MD foi ligado pelo adapter (bound)',   edMd.getAttribute(BOUND) === '1');
+
+        // o atributo antigo da v1 não deve casar com nada
+        check('[data-ozi-editor] (v1) não existe mais no DOM do exemplo',
+            document.querySelectorAll('[data-ozi-editor]').length === 0);
+
+        var n0 = window.__lwCalls.length;
+        edHtml.__v = '<p>oi</p>';
+        fire(edHtml, { component: 'editor', name: 'descricao', value: '<p>oi</p>', source: 'user' });
+        var last = window.__lwCalls[window.__lwCalls.length - 1] || {};
+        check('ozi:change do editor html propaga p/ Livewire',
+            window.__lwCalls.length === n0 + 1 && last.prop === 'descricao' && last.value === '<p>oi</p>',
+            JSON.stringify(last));
+
+        var n1 = window.__lwCalls.length;
+        edMd.__v = '# t';
+        fire(edMd, { component: 'editor', name: 'notas', value: '# t', source: 'user' });
+        var lastMd = window.__lwCalls[window.__lwCalls.length - 1] || {};
+        check('ozi:change do editor md propaga p/ Livewire',
+            window.__lwCalls.length === n1 + 1 && lastMd.prop === 'notas' && lastMd.value === '# t',
+            JSON.stringify(lastMd));
+
+        /* ─────────────────────────────────────────────
+         * [B] BUSCA POR CHAVE NOS DOIS keyAttributes (ozi:set-value)
+         * ───────────────────────────────────────────── */
+        titulo('[B] ozi:set-value acha o elemento pela chave em qualquer keyAttribute');
+
+        document.dispatchEvent(new CustomEvent('ozi:set-value', {
+            detail: { plugin: 'editor', key: 'descricao', value: 'VIA-EVENTO-HTML' }
+        }));
+        check('chave no 1º keyAttribute (-html) resolvida', edHtml.__set === 'VIA-EVENTO-HTML', String(edHtml.__set));
+
+        document.dispatchEvent(new CustomEvent('ozi:set-value', {
+            detail: { plugin: 'editor', key: 'notas', value: 'VIA-EVENTO-MD' }
+        }));
+        check('chave no 2º keyAttribute (-md) resolvida — o caso que a concatenação antiga errava',
+            edMd.__set === 'VIA-EVENTO-MD', String(edMd.__set));
+
+        document.dispatchEvent(new CustomEvent('ozi:set-value', {
+            detail: { plugin: 'editor', key: 'inexistente', value: 'X' }
+        }));
+        check('chave inexistente não escreve em ninguém',
+            edHtml.__set === 'VIA-EVENTO-HTML' && edMd.__set === 'VIA-EVENTO-MD');
+
+        /* ─────────────────────────────────────────────
+         * [C] COMPOSIÇÃO DO SELETOR MULTI-GRUPO (regressão do bug)
+         * ───────────────────────────────────────────── */
+        titulo('[C] seletor multi-grupo: o 1º grupo não escapa do filtro de atributo');
+
+        integ.registerPlugin({
+            name: 'multi',
+            selector: '[data-fake-a], [data-fake-b]',
+            keyAttributes: ['data-fake-a', 'data-fake-b'],
+            changeEvent: 'ozi:change',
+            getInstance: function (el) { return { el: el }; },
+            getValue: function (inst) { return inst.el.__v; },
+            setValue: function (el, v) { el.__set = v; },
+            setOptions: function () {}
+        });
+
+        var m1 = document.getElementById('m1');
+        var m2 = document.getElementById('m2');
+
+        check('elemento do 1º grupo SEM data-ozi-livewire-model NÃO foi ligado',
+            m1.getAttribute(BOUND) === null, 'bound=' + m1.getAttribute(BOUND));
+        check('elemento do 2º grupo COM data-ozi-livewire-model foi ligado',
+            m2.getAttribute(BOUND) === '1');
+
+        var n2 = window.__lwCalls.length;
+        m1.__v = 'ignorar';
+        fire(m1, { component: 'multi', name: 'alfa', value: 'ignorar', source: 'user' });
+        check('ozi:change no elemento não-ligado não propaga', window.__lwCalls.length === n2);
+
+        /* ─────────────────────────────────────────────
+         * [D] CONTRATO ANTIGO (keyAttribute string, grupo único)
+         * ───────────────────────────────────────────── */
+        titulo('[D] contrato antigo segue válido');
+
+        integ.registerPlugin({
+            name: 'solo',
+            selector: '[data-fake-solo]',
+            keyAttribute: 'data-fake-solo',
+            changeEvent: 'ozi:change',
+            getInstance: function (el) { return { el: el }; },
+            getValue: function (inst) { return inst.el.__v; },
+            setValue: function (el, v) { el.__set = v; },
+            setOptions: function () {}
+        });
+
+        var s1 = document.getElementById('s1');
+        check('plugin de grupo único foi ligado', s1.getAttribute(BOUND) === '1');
+
+        document.dispatchEvent(new CustomEvent('ozi:set-value', {
+            detail: { plugin: 'solo', key: 'solo', value: 'OK-SOLO' }
+        }));
+        check('ozi:set-value com keyAttribute string (sem keyAttributes) resolve',
+            s1.__set === 'OK-SOLO', String(s1.__set));
+
+        var n3 = window.__lwCalls.length;
+        s1.__v = 'v1';
+        fire(s1, { component: 'solo', name: 'solo', value: 'v1', source: 'user' });
+        check('ozi:change do plugin de grupo único propaga', window.__lwCalls.length === n3 + 1);
+
+        check('sem erros de runtime', erros.length === 0, erros.join(' | '));
+        clearTimeout(watchdog);
+        finish();
+    }
+
+    if (window.OZI && OZI.ready) OZI.ready(function () { setTimeout(run, 200); });
+    else window.addEventListener('load', function () { setTimeout(run, 600); });
+</script>
+</body>
+</html>

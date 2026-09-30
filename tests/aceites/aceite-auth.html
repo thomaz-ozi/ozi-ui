@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite F2 #8 (ozi-auth)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 860px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .3rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+    /* fixtures visíveis (opacity) — nunca sob display:none */
+    .fixtures { border-top: 1px dashed #ddd; margin-top: 1rem; padding-top: 1rem; opacity: .4; }
+    .fixtures input { display: block; margin: .25rem 0; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite F2 #8 <small>(ozi-auth)</small></h1>
+<p>Critério: motor 100% JS puro, delegação nativa, list/dropdown/toggle/badge idênticos,
+estados via classMap, e a lacuna corrigida — eventos <code>ozi:*</code> como
+<code>CustomEvent</code> do contrato (fim do <code>$form.trigger</code> jQuery-only).</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<div class="fixtures">
+    <!-- Form A: modo LIST -->
+    <form id="formA">
+        <input id="A-user" type="text" data-ozi-auth-user data-ozi-auth-user-caracter="3" placeholder="usuário">
+        <input id="A-mail" type="email" data-ozi-auth-mail placeholder="email">
+        <input id="A-pass" type="password" data-ozi-auth-pass data-ozi-auth-pass-min="8" data-ozi-auth-pass-max="64" placeholder="senha">
+        <input id="A-confirm" type="password" data-ozi-auth-confirm placeholder="confirmar">
+        <div id="regras-A"></div>
+        <button id="A-submit" type="submit" data-ozi-auth-submit data-ozi-auth-list-id="regras-A">Cadastrar A</button>
+    </form>
+
+    <!-- Form B: modo DROPDOWN + toggle + check icons (usa defaults do pluginConf.auth: passMin 12, userCaracter 4) -->
+    <form id="formB">
+        <input id="B-user" type="text" data-ozi-auth-user data-ozi-auth-user-caracter="4" placeholder="usuário">
+        <input id="B-mail" type="email" data-ozi-auth-mail placeholder="email">
+        <input id="B-pass" type="password" data-ozi-auth-pass="bi bi-eye-slash,bi bi-eye" placeholder="senha">
+        <input id="B-confirm" type="password" data-ozi-auth-confirm="bi bi-eye-slash,bi bi-eye" placeholder="confirmar">
+        <button id="B-submit" type="submit" data-ozi-auth-submit data-ozi-auth-check="ozi-auth-icon-invalid,ozi-auth-icon-valid">Cadastrar B</button>
+    </form>
+
+    <!-- Form C: modo LIST + data-ozi-auth-disable (v4.1.0) — senha unica, sem special/number -->
+    <form id="formC">
+        <input id="C-mail" type="email" data-ozi-auth-mail placeholder="email">
+        <input id="C-pass" type="password" data-ozi-auth-pass data-ozi-auth-pass-min="8" data-ozi-auth-pass-max="64" placeholder="senha">
+        <div id="regras-C"></div>
+        <button id="C-submit" type="submit" data-ozi-auth-submit data-ozi-auth-list-id="regras-C"
+                data-ozi-auth-disable="confirm, special, number, user">Salvar C</button>
+    </form>
+</div>
+
+<!-- ÚNICO script externo da página: -->
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['auth'], core: { log: true } });
+
+    var erros = [];
+    var errosOpacos = 0;
+    window.addEventListener('error', function (ev) {
+        var isOpaco = (ev.message === 'Script error.' && !ev.filename && !ev.lineno);
+        if (isOpaco) { errosOpacos++; return; }
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    function setVal(sel, v) { var el = document.querySelector(sel); el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); }
+    function ruleItem(containerSel, key) { return document.querySelector(containerSel + ' [data-rule="' + key + '"]'); }
+
+    // captura de eventos (contrato v2)
+    var evInit = [], evChange = [], evReady = [], evBroken = [], evDestroy = [];
+    var lastChange = null;
+    document.addEventListener('ozi:init',         function (e) { if (e.detail.component === 'ozi-auth') evInit.push(e.detail); });
+    document.addEventListener('ozi:auth-change',  function (e) { evChange.push(e.detail); lastChange = e.detail; });
+    document.addEventListener('ozi:auth-ready',   function (e) { evReady.push(e.detail); });
+    document.addEventListener('ozi:auth-broken',  function (e) { evBroken.push(e.detail); });
+    document.addEventListener('ozi:destroy',      function (e) { if (e.detail.component === 'ozi-auth') evDestroy.push(e.detail); });
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 9s';
+        vered.className = 'fail';
+    }, 9000);
+
+    OZI.ready(function () {
+        (async function () {
+            var todos = true;
+            var api = OZI.components.auth;
+
+            // ---- infra / camadas ----
+            todos = check('OZI.components.auth carregado', !!api) && todos;
+            todos = check('window.OziAuth presente (init/evaluate/destroy)',
+                window.OziAuth && typeof window.OziAuth.init === 'function' && typeof window.OziAuth.destroy === 'function') && todos;
+            todos = check('window.oziAuth (motor puro) é função', typeof window.oziAuth === 'function') && todos;
+            todos = check('jQuery ausente (window.jQuery === undefined)', typeof window.jQuery === 'undefined') && todos;
+            var reqJq = performance.getEntriesByType('resource').filter(function (r) { return /jquery/i.test(r.name); });
+            todos = check('zero requests a jQuery', reqJq.length === 0) && todos;
+
+            // ---- ozi:init emitido no boot (lacuna corrigida: CustomEvent) ----
+            todos = check('ozi:init emitido como CustomEvent para os forms (>=2)', evInit.length >= 2) && todos;
+            todos = check('ozi:init detail adere ao contrato (component/name/source)',
+                evInit.some(function (d) { return d.component === 'ozi-auth' && d.name === 'formA' && d.source === 'api'; })) && todos;
+
+            // ---- Form A (list) render inicial ----
+            var rulesA = document.querySelectorAll('#regras-A [data-rule]');
+            todos = check('list: 9 regras renderizadas no container', rulesA.length === 9) && todos;
+            todos = check('list: summary inicia inválido', !!document.querySelector('#regras-A .ozi-auth-summary--invalid')) && todos;
+            todos = check('submit inicia desabilitado', document.getElementById('A-submit').disabled === true) && todos;
+
+            // ---- Form A: preencher válido ----
+            setVal('#A-user', 'joaozinho');
+            setVal('#A-mail', 'fulano@teste.com');
+            setVal('#A-pass', 'Abcdef1!');
+            lastChange = null;
+            setVal('#A-confirm', 'Abcdef1!');
+
+            todos = check('ozi:auth-change: contrato completo + source="user"',
+                lastChange && lastChange.component === 'ozi-auth' && lastChange.name === 'formA' &&
+                lastChange.value === true && lastChange.access === true && lastChange.source === 'user' &&
+                lastChange.result && lastChange.result.access === true) && todos;
+            todos = check('acesso liberado: submit habilitado', document.getElementById('A-submit').disabled === false) && todos;
+            todos = check('list: summary vira válido', !!document.querySelector('#regras-A .ozi-auth-summary--valid')) && todos;
+            todos = check('list: regra passLength fica --valid',
+                ruleItem('#regras-A', 'passLength').classList.contains('ozi-auth-list-item--valid')) && todos;
+            todos = check('ozi:auth-ready emitido quando access (source user)',
+                evReady.length > 0 && evReady[evReady.length - 1].source === 'user') && todos;
+
+            // ---- badge de comprimento ----
+            var badgeA = ruleItem('#regras-A', 'passLength').querySelector('.ozi-badge-count');
+            todos = check('badge de comprimento correto (8/64)', badgeA && badgeA.textContent === '8/64', badgeA && badgeA.textContent) && todos;
+
+            // ---- estado de campo via classMap (default => ozi-valid) ----
+            todos = check('campo senha recebe classe classMap valid (ozi-valid)',
+                document.getElementById('A-pass').classList.contains('ozi-valid')) && todos;
+
+            // ---- confirmação divergente invalida ----
+            setVal('#A-confirm', 'errado');
+            todos = check('confirm divergente: passConfirm=false e submit desabilita',
+                lastChange.result.passConfirm === false && document.getElementById('A-submit').disabled === true) && todos;
+            setVal('#A-confirm', 'Abcdef1!'); // restaura
+
+            // ---- passNoEmailParts: senha contendo parte do email ----
+            setVal('#A-pass', 'Teste123!');   // contém 'teste' (de fulano@teste.com)
+            todos = check('passNoEmailParts: senha com parte do email é rejeitada',
+                lastChange.result.passNoEmailParts === false) && todos;
+            setVal('#A-pass', 'Abcdef1!'); setVal('#A-confirm', 'Abcdef1!'); // restaura
+
+            // ---- submit inválido: preventDefault + ozi:auth-broken ----
+            setVal('#A-confirm', ''); // invalida
+            var subEv = new Event('submit', { bubbles: true, cancelable: true });
+            var brokenBefore = evBroken.length;
+            document.getElementById('formA').dispatchEvent(subEv);
+            todos = check('submit inválido: preventDefault aplicado', subEv.defaultPrevented === true) && todos;
+            todos = check('submit inválido: ozi:auth-broken emitido', evBroken.length === brokenBefore + 1) && todos;
+            setVal('#A-confirm', 'Abcdef1!'); // restaura
+
+            // ---- evaluate() via API: source="api" ----
+            lastChange = null;
+            api.evaluate('#formA');
+            todos = check('evaluate() via API: emite ozi:auth-change com source="api"',
+                lastChange && lastChange.source === 'api') && todos;
+
+            // ---- Form B (dropdown): toggle show/hide senha ----
+            var toggleB = document.querySelector('#formB .ozi-auth-btn-toggle');
+            todos = check('toggle: botão show/hide criado no campo senha', !!toggleB) && todos;
+            var passB = document.getElementById('B-pass');
+            toggleB.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+            var afterFirst = passB.getAttribute('type');
+            toggleB.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+            todos = check('toggle: alterna type password<->text e volta',
+                afterFirst === 'text' && passB.getAttribute('type') === 'password') && todos;
+
+            // ---- Form B: dropdown aparece no focus ----
+            var ddPass = document.querySelector('#formB .ozi-auth-dropdown-pass');
+            todos = check('dropdown: menu de regras criado sobre o campo senha', !!ddPass) && todos;
+            passB.dispatchEvent(new Event('focus'));
+            todos = check('dropdown: focus exibe o menu (display:block)', ddPass.style.display === 'block') && todos;
+
+            // ---- Form B: check icon no submit quando válido (exercita defaults pluginConf) ----
+            setVal('#B-user', 'usuariob');
+            setVal('#B-mail', 'ana@site.com');
+            setVal('#B-pass', 'Xyzabcde9@!k');   // 12 chars — satisfaz passMin=12 do pluginConf
+            setVal('#B-confirm', 'Xyzabcde9@!k');
+            var checkIcon = document.querySelector('#B-submit .ozi-auth-btn-check-icon');
+            todos = check('check icon: ícone de estado no submit fica válido (pluginConf passMin=12)',
+                checkIcon && checkIcon.classList.contains('ozi-auth-icon-valid')) && todos;
+
+            // ---- Form C (v4.1.0 disable): list menor + access sem special/number/confirm ----
+            var rulesC = document.querySelectorAll('#regras-C [data-rule]');
+            todos = check('disable: Form C renderiza 6 regras (special/number/confirm fora)',
+                rulesC.length === 6, 'tem ' + rulesC.length) && todos;
+            todos = check('disable: regra passSpecial ausente do DOM', !ruleItem('#regras-C', 'passSpecial')) && todos;
+            todos = check('disable: regra passNumber ausente do DOM', !ruleItem('#regras-C', 'passNumber')) && todos;
+            todos = check('disable: regra passConfirm ausente do DOM', !ruleItem('#regras-C', 'passConfirm')) && todos;
+            todos = check('disable: mailValid PERMANECE (email nunca desabilita)', !!ruleItem('#regras-C', 'mailValid')) && todos;
+            todos = check('disable: submit C inicia desabilitado', document.getElementById('C-submit').disabled === true) && todos;
+
+            setVal('#C-mail', 'ana@site.com');
+            setVal('#C-pass', 'Abcdefgh');   // sem dígito/especial e sem confirm — regras desligadas
+            todos = check('disable: access liberado sem special/number/confirm',
+                document.getElementById('C-submit').disabled === false) && todos;
+            todos = check('disable: summary C vira válido',
+                !!document.querySelector('#regras-C .ozi-auth-summary--valid')) && todos;
+
+            // email inválido ainda barra (mail é sempre obrigatório)
+            setVal('#C-mail', 'invalido');
+            todos = check('disable: email inválido volta a barrar o submit C',
+                document.getElementById('C-submit').disabled === true) && todos;
+            setVal('#C-mail', 'ana@site.com'); // restaura
+
+            // ---- destroy(): emite ozi:destroy e desregistra o form ----
+            var changeBeforeDestroy = evChange.length;
+            api.destroy('#formA');
+            todos = check('destroy(): emite ozi:destroy para o form', evDestroy.length >= 1) && todos;
+            setVal('#A-pass', 'NovaSenha1!'); // após destroy não deve mais avaliar
+            todos = check('destroy(): form desregistrado não reavalia em input',
+                evChange.length === changeBeforeDestroy) && todos;
+
+            await wait(300);
+            todos = check('zero erros JS reais (opacos filtrados: ' + errosOpacos + ')', erros.length === 0, erros.join(' | ') || null) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ ACEITE F2 #8 (ozi-auth): PASSOU' : '✗ ACEITE F2 #8 (ozi-auth): FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+        })().catch(function (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+            vered.textContent = '✗ ACEITE F2 #8 (ozi-auth): FALHOU (exceção)';
+            vered.className = 'fail';
+        });
+    });
+</script>
+</body>
+</html>

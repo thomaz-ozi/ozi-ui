@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite ozi-editor: indent/outdent (v4.9.0)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .3rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+    .fixtures { border-top: 1px dashed #ddd; margin-top: 1rem; padding-top: 1rem; opacity: .5; }
+    textarea { width: 100%; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite ozi-editor <small>(indent/outdent — v4.9.0)</small></h1>
+<p>Critério: sublista por botão e por <code>Tab</code>/<code>Shift+Tab</code>, nas
+<strong>três camadas</strong>. Cobre (1) o markup: o <code>indent</code> nativo do Chromium põe o
+<code>&lt;ul&gt;</code> aninhado como <strong>irmão</strong> do <code>&lt;li&gt;</code>, forma
+inválida que <strong>apaga o item</strong> na conversão para MD — o aceite exige a forma correta,
+aninhada <em>dentro</em> do <code>&lt;li&gt;</code>; (2) o <strong>undo nativo</strong>, que a
+normalização não pode quebrar; (3) o <strong>round-trip Markdown</strong> com recuo por nível;
+(4) o guard de <strong>fora de lista</strong>, onde o <code>indent</code> nativo viraria
+<code>&lt;blockquote&gt;</code> e o <code>Tab</code> deve continuar levando o foco para fora.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<div class="fixtures">
+    <textarea id="ta-html" data-ozi-editor-html="ind" data-ozi-editor-height="100px"
+              data-ozi-editor-tools="[ul,ol], [indent,outdent], quote"></textarea>
+
+    <textarea id="ta-md" data-ozi-editor-md="indmd" data-ozi-editor-height="100px"
+              data-ozi-editor-tools="[ul,ol], [indent,outdent]"></textarea>
+</div>
+
+<!-- ÚNICO script externo — SEM jQuery: -->
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ core: { log: true } });
+
+    var erros = [];
+    var errosOpacos = 0;
+    window.addEventListener('error', function (ev) {
+        var isOpaco = (ev.message === 'Script error.' && !ev.filename && !ev.lineno);
+        if (isOpaco) { errosOpacos++; return; }
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    var ok = 0, total = 0;
+    function check(nome, cond, extra) {
+        total++; if (cond) ok++;
+        var li = document.createElement('li');
+        li.className = cond ? 'pass' : 'fail';
+        li.textContent = (cond ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return cond;
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    function click(el) { el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true })); }
+
+    /* devolve o evento para o teste poder ler defaultPrevented — é assim que
+       se verifica "o Tab saiu do editor" sem depender de foco real */
+    function tab(el, shift) {
+        var ev = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: !!shift, bubbles: true, cancelable: true });
+        el.dispatchEvent(ev);
+        return ev;
+    }
+
+    function caretEm(inst, node) {
+        var r = document.createRange();
+        r.selectNodeContents(node);
+        r.collapse(false);
+        var s = window.getSelection();
+        s.removeAllRanges(); s.addRange(r);
+        inst.content.focus();
+        inst._saveSelection();
+    }
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 12s';
+        vered.className = 'fail';
+        document.title = 'DONE:TIMEOUT ' + ok + '/' + total;
+    }, 12000);
+
+    OZI.ready(function () {
+        (async function () {
+            await wait(200);
+
+            var wrapH = document.querySelector('#ta-html + .ozi-editor-wrap');
+            var wrapM = document.querySelector('#ta-md + .ozi-editor-wrap');
+            var instH = OZI.components.editor.get('ind');
+            var instM = OZI.components.editor.get('indmd');
+            var M     = window.OziEditorMd;
+
+            function btn(w, t) { return w.querySelector('.ozi-editor-btn[data-ozi-editor-tool="' + t + '"]'); }
+            function html(i)   { return i.content.innerHTML; }
+
+            // ─── 1. botões existem e têm ícone ───────────────────────────
+            check('botões indent/outdent existem na toolbar',
+                !!btn(wrapH, 'indent') && !!btn(wrapH, 'outdent'));
+            check('os dois resolvem um SVG (não caem no texto do fallback)',
+                !!btn(wrapH, 'indent').querySelector('svg') &&
+                !!btn(wrapH, 'outdent').querySelector('svg'));
+
+            // ─── 2. desabilitados FORA de lista ──────────────────────────
+            instH.setValue('<p>solto</p>');
+            caretEm(instH, instH.content.querySelector('p'));
+            instH._updateToolbarState();
+            check('fora de lista: os dois nascem DESABILITADOS',
+                btn(wrapH, 'indent').disabled === true && btn(wrapH, 'outdent').disabled === true);
+
+            // ─── 3. clicar fora de lista NÃO vira <blockquote> ───────────
+            /* o `indent` nativo num <p> produz <blockquote style="margin-left:40px">,
+               e o sanitizador apaga o style — viraria uma citação de verdade */
+            instH._runTool('indent');
+            await wait(30);
+            check('fora de lista o indent é no-op (não cria <blockquote>)',
+                html(instH).indexOf('blockquote') === -1, html(instH));
+
+            // ─── 4. habilitam DENTRO de lista ────────────────────────────
+            instH.setValue('<ul><li>um</li><li>dois</li></ul>');
+            caretEm(instH, instH.content.querySelectorAll('li')[1]);
+            instH._updateToolbarState();
+            check('dentro de lista: os dois ficam habilitados',
+                btn(wrapH, 'indent').disabled === false && btn(wrapH, 'outdent').disabled === false);
+
+            // ─── 5. indent produz markup VÁLIDO ──────────────────────────
+            instH._runTool('indent');
+            await wait(30);
+            var lista = instH.content.querySelector('ul');
+            var soltas = instH.content.querySelectorAll('ul > ul, ul > ol, ol > ul, ol > ol');
+            check('indent aninha DENTRO do <li> anterior (markup válido)',
+                lista.children.length === 1 &&
+                lista.children[0].tagName === 'LI' &&
+                !!lista.children[0].querySelector('ul'),
+                html(instH));
+            check('nenhuma lista solta como irmã do <li> (o bug do indent nativo)',
+                soltas.length === 0, soltas.length + ' soltas');
+
+            // ─── 6. o item indentado sobrevive à conversão MD ────────────
+            /* era exatamente isto que o markup inválido quebrava: o item
+               sumia porque _listToMd ignora filho que não é <li> */
+            var md = M.htmlToMd(html(instH));
+            check('o item indentado NÃO se perde na conversão para MD',
+                md.indexOf('dois') > -1, JSON.stringify(md));
+            check('MD recebe recuo de 2 espaços no nível 2',
+                /\n\s{2}[-*]\s+dois/.test(md), JSON.stringify(md));
+
+            // ─── 7. undo nativo desfaz em UM passo ───────────────────────
+            /* a normalização roda depois do execCommand — se ela quebrasse a
+               pilha, seria preciso undo próprio (caro). Medido que não quebra. */
+            document.execCommand('undo');
+            await wait(30);
+            check('um único Ctrl+Z desfaz indent + normalização',
+                instH.content.querySelectorAll('ul').length === 1 &&
+                instH.content.querySelectorAll('li').length === 2 &&
+                instH.content.querySelectorAll('ul ul').length === 0,
+                html(instH));
+
+            // ─── 8. outdent desfaz o nível ───────────────────────────────
+            instH.setValue('<ul><li>um<ul><li>dois</li></ul></li></ul>');
+            caretEm(instH, instH.content.querySelector('ul ul li'));
+            instH._runTool('outdent');
+            await wait(30);
+            check('outdent devolve o item ao nível de cima',
+                instH.content.querySelectorAll('ul ul').length === 0 &&
+                instH.content.querySelectorAll('li').length === 2,
+                html(instH));
+
+            // ─── 9. Tab dentro de lista indenta ──────────────────────────
+            instH.setValue('<ul><li>um</li><li>dois</li></ul>');
+            caretEm(instH, instH.content.querySelectorAll('li')[1]);
+            var evIn = tab(instH.content, false);
+            await wait(30);
+            check('Tab dentro de lista indenta e consome o evento',
+                evIn.defaultPrevented === true &&
+                instH.content.querySelectorAll('ul ul li').length === 1,
+                html(instH));
+
+            // ─── 10. Shift+Tab desindenta ────────────────────────────────
+            caretEm(instH, instH.content.querySelector('ul ul li'));
+            var evOut = tab(instH.content, true);
+            await wait(30);
+            check('Shift+Tab desindenta',
+                evOut.defaultPrevented === true &&
+                instH.content.querySelectorAll('ul ul').length === 0,
+                html(instH));
+
+            // ─── 11. Tab FORA de lista deixa o foco sair ─────────────────
+            /* decisão de acessibilidade: capturar o Tab sempre prenderia
+               quem navega por teclado dentro do editor */
+            instH.setValue('<p>solto</p>');
+            caretEm(instH, instH.content.querySelector('p'));
+            var evFora = tab(instH.content, false);
+            await wait(30);
+            check('Tab FORA de lista NÃO é consumido (foco pode sair do editor)',
+                evFora.defaultPrevented === false);
+            check('Tab fora de lista não alterou o conteúdo',
+                html(instH).indexOf('<p>solto</p>') > -1, html(instH));
+
+            // ─── 12. round-trip MD dos dois sentidos ─────────────────────
+            var casos = [
+                ['sublista simples', '<ul><li>um<ul><li>filho</li></ul></li><li>dois</li></ul>'],
+                ['dois níveis',      '<ul><li>um<ul><li>a<ul><li>b</li></ul></li></ul></li></ul>'],
+                ['ol dentro de ul',  '<ul><li>um<ol><li>primeiro</li></ol></li></ul>'],
+                ['lista simples',    '<ul><li>um</li><li>dois</li></ul>']
+            ];
+            casos.forEach(function (c) {
+                var m = M.htmlToMd(c[1]);
+                var volta = M.mdToHtml(m);
+                check('round-trip md — ' + c[0],
+                    M.htmlToMd(volta) === m, JSON.stringify(m));
+            });
+
+            check('md: dois níveis geram recuo de 2 e 4 espaços',
+                /\n\s{2}[-*]\s+a/.test(M.htmlToMd(casos[1][1])) &&
+                /\n\s{4}[-*]\s+b/.test(M.htmlToMd(casos[1][1])),
+                JSON.stringify(M.htmlToMd(casos[1][1])));
+
+            // ─── 13. markdown escrito à mão com 4 espaços ────────────────
+            var m4 = M.mdToHtml('- um\n    - filho\n- dois');
+            check('md à mão com recuo de 4 espaços também aninha',
+                m4.indexOf('<ul><li>um<ul><li>filho</li></ul></li>') === 0, m4);
+
+            // ─── 14. no editor md os botões funcionam igual ──────────────
+            instM.setValue('- um\n- dois');
+            await wait(30);
+            caretEm(instM, instM.content.querySelectorAll('li')[1]);
+            instM._updateToolbarState();
+            check('md: botões habilitados dentro de lista',
+                btn(wrapM, 'indent').disabled === false);
+            instM._runTool('indent');
+            await wait(30);
+            check('md: indent produz sublista e o getValue() traz o recuo',
+                /\n\s{2}[-*]\s+dois/.test(instM.getValue()),
+                JSON.stringify(instM.getValue()));
+
+            // ─── 15. ozi:change ──────────────────────────────────────────
+            instH.setValue('<ul><li>um</li><li>dois</li></ul>');
+            caretEm(instH, instH.content.querySelectorAll('li')[1]);
+            var mudou = 0;
+            var onCh = function () { mudou++; };
+            instH.textarea.addEventListener('ozi:change', onCh);
+            instH._runTool('indent');
+            await wait(30);
+            check('indent emite ozi:change (contrato v2)', mudou > 0, 'emitiu ' + mudou);
+
+            /* fora de lista não deve emitir: nada mudou */
+            instH.setValue('<p>solto</p>');
+            caretEm(instH, instH.content.querySelector('p'));
+            mudou = 0;
+            instH._runTool('indent');
+            await wait(30);
+            instH.textarea.removeEventListener('ozi:change', onCh);
+            check('indent no-op NÃO emite ozi:change', mudou === 0, 'emitiu ' + mudou);
+
+            // ─── 16. destroy ─────────────────────────────────────────────
+            var antesL = instH._listeners.length;
+            instH.destroy();
+            check('destroy() zera os listeners rastreados',
+                instH._listeners.length === 0, 'antes=' + antesL);
+
+            // ─── 17. erros JS ────────────────────────────────────────────
+            check('zero erros JS reais (opacos filtrados: ' + errosOpacos + ')',
+                erros.length === 0, erros.join(' | ') || null);
+
+            clearTimeout(watchdog);
+            var allPass = (ok === total);
+            vered.textContent = (allPass ? '✓ ACEITE INDENT: PASSOU' : '✗ ACEITE INDENT: FALHOU') + ' (' + ok + '/' + total + ')';
+            vered.className = allPass ? 'pass' : 'fail';
+            document.title = (allPass ? 'DONE:PASS ' : 'DONE:FAIL ') + ok + '/' + total;
+        })().catch(function (err) {
+            check('exceção não tratada no teste', false, String(err) + ' | ' + err.stack);
+            clearTimeout(watchdog);
+            vered.textContent = '✗ ACEITE INDENT: FALHOU (' + ok + '/' + total + ')';
+            vered.className = 'fail';
+            document.title = 'DONE:FAIL ' + ok + '/' + total;
+        });
+    });
+</script>
+</body>
+</html>

@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite ozi-editor Fase 3 (image: URL + upload)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .3rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+    .fixtures { border-top: 1px dashed #ddd; margin-top: 1rem; padding-top: 1rem; opacity: .5; }
+    textarea { width: 100%; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite ozi-editor Fase 3 <small>(image: URL + upload real)</small></h1>
+<p>Critério: ferramenta <code>image</code> — inserir/atualizar/remover via URL (com aviso visível em
+URL vazia/insegura, sem falha silenciosa), pré-preenchimento ao reabrir sobre imagem existente,
+upload real (<code>fetch</code> mockado, contrato <code>{status,url}</code>/<code>{status,message}</code>),
+seção de upload ausente do DOM sem <code>data-ozi-editor-upload-url</code>, sanitização de
+<code>&lt;img&gt;</code> perigosa e round-trip MD (<code>![alt](url)</code>).</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<div class="fixtures">
+    <textarea id="ta-upload" data-ozi-editor-html="conteudo"
+              data-ozi-editor-upload-url="/mock/upload"
+              data-ozi-editor-tools="[bold], [link,unlink,image]"></textarea>
+
+    <textarea id="ta-nouplaod" data-ozi-editor-html="semupload"
+              data-ozi-editor-tools="[bold], [link,unlink,image]"></textarea>
+
+    <textarea id="ta-md" data-ozi-editor-md="notas"
+              data-ozi-editor-tools="[bold]; [link,image]"></textarea>
+</div>
+
+<!-- ÚNICO script externo — SEM jQuery: -->
+<script>
+    /* ── mock deterministico de fetch ANTES do ozi.js (mesmo padrao do stub
+       de Clipboard API em aceite-editor-fase2.html) ── */
+    var _uploadMode = 'ok';           // 'ok' | 'error' | 'badjson' | 'networkerror'
+    var _uploadUrlResp = 'https://cdn.exemplo.com/foto-enviada.png';
+    var _lastFetchCall = null;
+
+    var _realFetch = window.fetch;
+    window.fetch = function (url, opts) {
+        if (String(url).indexOf('/mock/upload') === -1) {
+            return _realFetch ? _realFetch.apply(window, arguments) : Promise.reject(new Error('sem fetch real'));
+        }
+        _lastFetchCall = { url: url, opts: opts };
+
+        if (_uploadMode === 'networkerror') return Promise.reject(new TypeError('Failed to fetch'));
+
+        var body, ct;
+        if (_uploadMode === 'ok') {
+            body = JSON.stringify({ status: 'ok', url: _uploadUrlResp });
+            ct = 'application/json';
+        } else if (_uploadMode === 'error') {
+            body = JSON.stringify({ status: 'error', message: 'arquivo grande demais' });
+            ct = 'application/json';
+        } else { // badjson — resposta nao-JSON
+            body = '<html>erro 500</html>';
+            ct = 'text/html';
+        }
+
+        var ok = _uploadMode !== 'error'; // servidor: 'error' ainda responde 200 com status:'error' no corpo
+        return Promise.resolve({
+            ok: ok,
+            headers: { get: function (name) { return name.toLowerCase() === 'content-type' ? ct : null; } },
+            json: function () { return Promise.resolve(JSON.parse(body)); }
+        });
+    };
+</script>
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['editor-md'], core: { log: true } });
+
+    var erros = [];
+    var errosOpacos = 0;
+    window.addEventListener('error', function (ev) {
+        var isOpaco = (ev.message === 'Script error.' && !ev.filename && !ev.lineno);
+        if (isOpaco) { errosOpacos++; return; }
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+    function placeCursor(inst, el, atEnd) {
+        var range = document.createRange();
+        range.selectNodeContents(el);
+        range.collapse(!atEnd);
+        var sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        inst._saveSelection();
+    }
+    function selectImage(inst, imgEl) {
+        var range = document.createRange();
+        range.selectNode(imgEl);
+        var sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        inst._saveSelection();
+    }
+    function click(btn) { btn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true })); }
+    function isShown(el) { return !!el && el.style.display !== 'none'; }
+
+    function pickFile(input, name, type) {
+        var file = new File(['conteudo-fake'], name, { type: type || 'image/png' });
+        var dt = new DataTransfer();
+        dt.items.add(file);
+        input.files = dt.files;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 9s';
+        vered.className = 'fail';
+    }, 9000);
+
+    OZI.ready(function () {
+        (async function () {
+            var todos = true;
+            var api = OZI.components.editor;
+
+            var wrap = document.querySelector('#ta-upload + .ozi-editor-wrap');
+            var inst = api.get('conteudo');
+            var content = wrap.querySelector('.ozi-editor-content');
+
+            var wrapNo = document.querySelector('#ta-nouplaod + .ozi-editor-wrap');
+
+            await wait(200);
+
+            var imgBtn    = wrap.querySelector('[data-ozi-editor-tool="image"]');
+            // data-ozi-editor-popover-wrap agora carrega um ID ÚNICO por
+            // instância (ex. "image-5"), não mais o nome bruto do tool —
+            // toolbar responsiva (2026-08-31); ^= (prefixo) continua achando
+            // a única instância "image" que este fixture cria.
+            var imgPopover = wrap.querySelector('[data-ozi-editor-popover-wrap^="image-"] .ozi-editor-popover');
+
+            todos = check('toolbar: botão image presente', !!imgBtn) && todos;
+
+            // ---- seção de upload existe quando data-ozi-editor-upload-url está setado ----
+            click(imgBtn);
+            var fileInputYes = wrap.querySelector('[data-ozi-editor-image-file-input]');
+            todos = check('image: host COM data-ozi-editor-upload-url tem seção de upload no DOM', !!fileInputYes) && todos;
+            click(imgBtn); // fecha
+
+            // ---- seção de upload NÃO existe quando o atributo está ausente ----
+            var imgBtnNo = wrapNo.querySelector('[data-ozi-editor-tool="image"]');
+            click(imgBtnNo);
+            var fileInputNo = wrapNo.querySelector('[data-ozi-editor-image-file-input]');
+            todos = check('image: host SEM data-ozi-editor-upload-url não tem seção de upload no DOM (não só oculta)', !fileInputNo) && todos;
+            click(imgBtnNo); // fecha
+
+            // ---- inserir por URL válida ----
+            inst.setValue('<p>texto antes da imagem</p>');
+            placeCursor(inst, content.querySelector('p'), true);
+            click(imgBtn);
+            var urlInput    = wrap.querySelector('[data-ozi-editor-image-url-input]');
+            var altInput    = wrap.querySelector('[data-ozi-editor-image-alt-input]');
+            var widthInput  = wrap.querySelector('[data-ozi-editor-image-width-input]');
+            var heightInput = wrap.querySelector('[data-ozi-editor-image-height-input]');
+            var applyBtn    = wrap.querySelector('[data-ozi-editor-image-apply]');
+            urlInput.value = 'https://exemplo.com/foto.png';
+            altInput.value = 'minha foto';
+            click(applyBtn);
+            todos = check('image: insere <img src alt> a partir de URL válida',
+                /<img src="https:\/\/exemplo\.com\/foto\.png" alt="minha foto">/.test(inst.getValue()), inst.getValue()) && todos;
+
+            // ---- URL vazia mostra aviso visível, nada é inserido ----
+            inst.setValue('<p></p>');
+            placeCursor(inst, content.querySelector('p'), true);
+            click(imgBtn);
+            urlInput.value = '';
+            click(applyBtn);
+            var warningEl = wrap.querySelector('.ozi-editor-clipboard-warning');
+            todos = check('image: URL vazia mostra aviso visível (não falha em silêncio)',
+                !!warningEl && isShown(warningEl) && warningEl.textContent.length > 0, warningEl && warningEl.textContent) && todos;
+            todos = check('image: URL vazia não insere nada', content.querySelectorAll('img').length === 0, inst.getValue()) && todos;
+            // NÃO fecha aqui — o handler de apply já força o fechamento
+            // (_togglePopover('image', true)) mesmo em falha; um click extra
+            // reabriria o popover e desincronizaria o estado do próximo bloco.
+
+            // ---- URL com esquema perigoso mostra aviso, nada inserido ----
+            inst.setValue('<p></p>');
+            placeCursor(inst, content.querySelector('p'), true);
+            click(imgBtn);
+            urlInput.value = 'javascript:alert(1)';
+            click(applyBtn);
+            todos = check('image: URL com esquema javascript: mostra aviso e não insere',
+                isShown(warningEl) && content.querySelectorAll('img').length === 0, inst.getValue()) && todos;
+            // idem — apply já forçou o fechamento, sem click extra aqui
+
+            // ---- reabrir sobre imagem existente pré-popula URL/Alt e habilita Remover ----
+            inst.setValue('<p><img src="https://exemplo.com/existe.png" alt="já existe"></p>');
+            var imgEl = content.querySelector('img');
+            selectImage(inst, imgEl);
+            click(imgBtn);
+            todos = check('image: reabrir sobre imagem existente pré-popula a URL',
+                urlInput.value === 'https://exemplo.com/existe.png', urlInput.value) && todos;
+            todos = check('image: reabrir sobre imagem existente pré-popula o Alt',
+                altInput.value === 'já existe', altInput.value) && todos;
+            var removeBtn = wrap.querySelector('[data-ozi-editor-image-remove]');
+            todos = check('image: botão remover habilitado quando há imagem selecionada', !removeBtn.disabled) && todos;
+
+            // ---- aplicar sobre imagem selecionada atualiza in-place (não duplica) ----
+            urlInput.value = 'https://exemplo.com/atualizada.png';
+            altInput.value = 'atualizada';
+            click(applyBtn);
+            todos = check('image: aplicar sobre imagem selecionada atualiza src/alt in-place (sem duplicar)',
+                content.querySelectorAll('img').length === 1 &&
+                /<img src="https:\/\/exemplo\.com\/atualizada\.png" alt="atualizada">/.test(inst.getValue()),
+                inst.getValue()) && todos;
+
+            // ---- width/height: inserir com largura/altura ----
+            inst.setValue('<p></p>');
+            placeCursor(inst, content.querySelector('p'), true);
+            click(imgBtn);
+            urlInput.value = 'https://exemplo.com/dimensionada.png';
+            altInput.value = '';
+            widthInput.value = '300';
+            heightInput.value = '200';
+            click(applyBtn);
+            todos = check('image: aplica width/height como atributos HTML (px unitless)',
+                /<img src="https:\/\/exemplo\.com\/dimensionada\.png" width="300" height="200">/.test(inst.getValue()),
+                inst.getValue()) && todos;
+
+            // ---- width/height: reabrir pré-popula, e limpar remove os atributos ----
+            var imgDim = content.querySelector('img');
+            selectImage(inst, imgDim);
+            click(imgBtn);
+            todos = check('image: reabrir sobre imagem com dimensões pré-popula width/height',
+                widthInput.value === '300' && heightInput.value === '200',
+                widthInput.value + 'x' + heightInput.value) && todos;
+            widthInput.value = '';
+            heightInput.value = '';
+            click(applyBtn);
+            todos = check('image: limpar os campos width/height no Aplicar remove os atributos (volta a "auto")',
+                content.querySelector('img').getAttribute('width') === null &&
+                content.querySelector('img').getAttribute('height') === null,
+                inst.getValue()) && todos;
+
+            // ---- clicar diretamente na imagem abre o popover já preenchido,
+            // sem precisar clicar no botão da toolbar antes ----
+            inst.setValue('<p><img src="https://exemplo.com/clique-direto.png" alt="clique" width="150"></p>');
+            var imgClique = content.querySelector('img');
+            imgClique.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+            todos = check('image: clicar na <img> abre o popover automaticamente (sem clicar no botão da toolbar)',
+                isShown(imgPopover)) && todos;
+            todos = check('image: popover aberto por clique na imagem já vem com URL/Alt/Width pré-preenchidos',
+                urlInput.value === 'https://exemplo.com/clique-direto.png' &&
+                altInput.value === 'clique' && widthInput.value === '150',
+                urlInput.value + ' | ' + altInput.value + ' | ' + widthInput.value) && todos;
+            todos = check('image: botão remover habilitado após abrir via clique na imagem', !removeBtn.disabled) && todos;
+            click(imgBtn); // fecha (estado: aberto pelo clique, não por apply — este fecha de verdade)
+
+            // ---- remover ----
+            selectImage(inst, content.querySelector('img'));
+            click(imgBtn);
+            click(removeBtn);
+            todos = check('image: remover tira a <img>', content.querySelectorAll('img').length === 0, inst.getValue()) && todos;
+
+            // ---- remover sem seleção: botão desabilitado, no-op ----
+            inst.setValue('<p>sem imagem selecionada</p>');
+            placeCursor(inst, content.querySelector('p'), true);
+            click(imgBtn);
+            todos = check('image: sem imagem selecionada, botão remover fica desabilitado', removeBtn.disabled) && todos;
+            click(imgBtn);
+
+            // ---- upload: sucesso ----
+            _uploadMode = 'ok';
+            inst.setValue('<p></p>');
+            placeCursor(inst, content.querySelector('p'), true);
+            click(imgBtn);
+            altInput.value = 'via upload';
+            pickFile(fileInputYes, 'foto.png');
+            await wait(300);
+            todos = check('image upload: sucesso insere <img> com a URL devolvida pelo servidor e fecha o popover',
+                inst.getValue().indexOf(_uploadUrlResp) > -1 && !isShown(imgPopover), inst.getValue()) && todos;
+            todos = check('image upload: request sem Content-Type manual (FormData define o boundary sozinho)',
+                !_lastFetchCall.opts.headers['Content-Type']) && todos;
+            todos = check('image upload: body é FormData', _lastFetchCall.opts.body instanceof FormData) && todos;
+            todos = check('image upload: sem meta csrf-token no host, header X-CSRF-TOKEN ausente',
+                !_lastFetchCall.opts.headers['X-CSRF-TOKEN']) && todos;
+
+            // ---- upload: CSRF token presente quando meta existe ----
+            var metaCsrf = document.createElement('meta');
+            metaCsrf.name = 'csrf-token';
+            metaCsrf.content = 'token-teste-123';
+            document.head.appendChild(metaCsrf);
+
+            inst.setValue('<p></p>');
+            placeCursor(inst, content.querySelector('p'), true);
+            click(imgBtn);
+            pickFile(fileInputYes, 'foto2.png');
+            await wait(300);
+            todos = check('image upload: X-CSRF-TOKEN presente quando <meta name=csrf-token> existe',
+                _lastFetchCall.opts.headers['X-CSRF-TOKEN'] === 'token-teste-123') && todos;
+            document.head.removeChild(metaCsrf);
+
+            // ---- upload: erro do servidor ({status:'error',message}) ----
+            _uploadMode = 'error';
+            inst.setValue('<p></p>');
+            placeCursor(inst, content.querySelector('p'), true);
+            click(imgBtn);
+            pickFile(fileInputYes, 'foto3.png');
+            await wait(300);
+            todos = check('image upload: erro do servidor mostra a mensagem em aviso visível, nada inserido',
+                isShown(warningEl) && warningEl.textContent.indexOf('arquivo grande demais') > -1 &&
+                content.querySelectorAll('img').length === 0,
+                warningEl.textContent) && todos;
+            todos = check('image upload: popover permanece aberto após erro', isShown(imgPopover)) && todos;
+            click(imgBtn);
+
+            // ---- upload: resposta não-JSON / erro de rede ----
+            _uploadMode = 'badjson';
+            inst.setValue('<p></p>');
+            placeCursor(inst, content.querySelector('p'), true);
+            click(imgBtn);
+            pickFile(fileInputYes, 'foto4.png');
+            await wait(300);
+            todos = check('image upload: resposta não-JSON mostra aviso genérico',
+                isShown(warningEl) && content.querySelectorAll('img').length === 0, warningEl.textContent) && todos;
+            click(imgBtn);
+
+            _uploadMode = 'networkerror';
+            inst.setValue('<p></p>');
+            placeCursor(inst, content.querySelector('p'), true);
+            click(imgBtn);
+            pickFile(fileInputYes, 'foto5.png');
+            await wait(300);
+            todos = check('image upload: erro de rede (fetch rejeitado) mostra aviso genérico',
+                isShown(warningEl) && content.querySelectorAll('img').length === 0, warningEl.textContent) && todos;
+            click(imgBtn);
+            _uploadMode = 'ok';
+
+            // ---- sanitização: paste com <img src="javascript:..."> é removido ----
+            inst.setValue('<p><img src="javascript:alert(1)"><img src="https://exemplo.com/ok.png"></p>');
+            todos = check('sanitizer: <img src="javascript:..."> removido, <img src="https://..."> sobrevive',
+                content.querySelectorAll('img').length === 1 && content.querySelector('img').getAttribute('src') === 'https://exemplo.com/ok.png',
+                inst.getValue()) && todos;
+
+            // ---- MD: image (mdToHtml/htmlToMd direto) ----
+            todos = check('md→html: ![alt](url) vira <img src="url" alt="alt">',
+                /<img src="https:\/\/exemplo\.com\/a\.png" alt="alt">/.test(window.OziEditorMd.mdToHtml('![alt](https://exemplo.com/a.png)')),
+                window.OziEditorMd.mdToHtml('![alt](https://exemplo.com/a.png)')) && todos;
+            todos = check('html→md: <img src alt> vira ![alt](url)',
+                window.OziEditorMd.htmlToMd('<img src="https://exemplo.com/a.png" alt="alt">').indexOf('![alt](https://exemplo.com/a.png)') > -1,
+                window.OziEditorMd.htmlToMd('<img src="https://exemplo.com/a.png" alt="alt">')) && todos;
+            todos = check('md: alt vazio preservado — ![](url)',
+                window.OziEditorMd.htmlToMd('<img src="https://exemplo.com/a.png">').indexOf('![](https://exemplo.com/a.png)') > -1,
+                window.OziEditorMd.htmlToMd('<img src="https://exemplo.com/a.png">')) && todos;
+            todos = check('md: ordem da regex — ![alt](url) NÃO vira !<a href>alt</a> (imagem antes de link)',
+                window.OziEditorMd.mdToHtml('![alt](https://x.com/a.png)').indexOf('<a ') === -1,
+                window.OziEditorMd.mdToHtml('![alt](https://x.com/a.png)')) && todos;
+            // mdToHtml é parser de DOCUMENTO (sempre envolve linhas soltas em
+            // <p>), então a comparação é por conteúdo, não igualdade exata
+            todos = check('md round-trip: mdToHtml(htmlToMd(...)) idempotente para imagem',
+                window.OziEditorMd.mdToHtml(window.OziEditorMd.htmlToMd('<img src="https://exemplo.com/a.png" alt="x">')).indexOf(
+                    '<img src="https://exemplo.com/a.png" alt="x">') > -1,
+                window.OziEditorMd.mdToHtml(window.OziEditorMd.htmlToMd('<img src="https://exemplo.com/a.png" alt="x">'))) && todos;
+
+            await wait(200);
+            todos = check('zero erros JS reais (opacos filtrados: ' + errosOpacos + ')', erros.length === 0, erros.join(' | ') || null) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ ACEITE ozi-editor Fase 3: PASSOU' : '✗ ACEITE ozi-editor Fase 3: FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+        })().catch(function (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+            vered.textContent = '✗ ACEITE ozi-editor Fase 3: FALHOU (exceção)';
+            vered.className = 'fail';
+        });
+    });
+</script>
+</body>
+</html>

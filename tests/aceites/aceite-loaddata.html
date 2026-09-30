@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite F2 #3 (ozi-loaddata)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .35rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite F2 #3 <small>(ozi-loaddata + collector)</small></h1>
+<p>Critério: motor 100% JS puro (AJAX já era via <code>fetch</code>), validação interativa,
+progress bar, render no destino e limpeza pós-envio sem jQuery.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<div id="grupo" data-ozi-validate>
+    <input name="nome" required>
+</div>
+
+<button id="trigger1"
+        data-zld-url="data:text/html,%3Cp%20id%3D%22injected%22%3Econte%C3%BAdo%20carregado%3C%2Fp%3E"
+        data-zld-destiny-id="destino1"
+        data-zld-catch-group-id="grupo">
+    enviar
+</button>
+<div id="destino1"></div>
+
+<!-- ÚNICO script externo da página: -->
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['loaddata', 'validate'], core: { log: true } });
+
+    // Nota: sob file:// + carregamento dinamico de scripts (padrao usado pelo
+    // proprio loader de plugins do ozi.js), o headless as vezes reporta um
+    // "Script error." opaco (sem filename/lineno/stack) que NAO e uma falha
+    // real de codigo — reproduzido isoladamente carregando so o plugin
+    // 'select' (nunca tocado nesta migracao). Erros reais sob file:// vem com
+    // filename/lineno atribuidos normalmente; só os opacos são filtrados.
+    var erros = [];
+    var errosOpacos = 0;
+    var _step = 'boot';
+    window.addEventListener('error', function (ev) {
+        var isOpaco = (ev.message === 'Script error.' && !ev.filename && !ev.lineno);
+        if (isOpaco) { errosOpacos++; return; }
+        erros.push('[' + _step + '] ' + (ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno +
+            (ev.error && ev.error.stack ? ' | stack=' + ev.error.stack : ' | error=' + ev.error) +
+            ' | t=' + performance.now().toFixed(0));
+        return false;
+    });
+    var _origConsoleError = console.error;
+    console.error = function () {
+        erros.push('[' + _step + '] console.error: ' + Array.prototype.slice.call(arguments).join(' '));
+        _origConsoleError.apply(console, arguments);
+    };
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+    function waitFor(fn, timeoutMs) {
+        var start = Date.now();
+        return new Promise(function (resolve, reject) {
+            (function poll() {
+                if (fn()) { resolve(); return; }
+                if (Date.now() - start > timeoutMs) { reject(new Error('waitFor timeout')); return; }
+                setTimeout(poll, 20);
+            })();
+        });
+    }
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 9s';
+        vered.className = 'fail';
+    }, 9000);
+
+    OZI.ready(function () {
+        (async function () {
+            var todos = true;
+            var trigger1 = document.getElementById('trigger1');
+            var input    = document.querySelector('#grupo [name="nome"]');
+
+            todos = check('window.oziLoadData carregado', typeof window.oziLoadData === 'function') && todos;
+            todos = check('jQuery ausente (window.jQuery === undefined)',
+                typeof window.jQuery === 'undefined') && todos;
+
+            var reqJq = performance.getEntriesByType('resource').filter(function (r) { return /jquery/i.test(r.name); });
+            todos = check('zero requests a jQuery', reqJq.length === 0) && todos;
+
+            // --- aguarda auto-carregamento do collector ---
+            _step = 'aguardando-collector';
+            try {
+                await waitFor(function () { return !!window.OziCollector; }, 3000);
+                todos = check('OziCollector auto-carregado', true) && todos;
+            } catch (e) {
+                todos = check('OziCollector auto-carregado', false, 'timeout') && todos;
+            }
+
+            // --- estado inicial: trigger invalido (campo "nome" vazio required) ---
+            _step = 'aguardando-estado-inicial';
+            try {
+                await waitFor(function () { return trigger1.getAttribute('data-zld-valid') === 'false'; }, 3000);
+            } catch (e) { /* checado abaixo mesmo assim */ }
+
+            todos = check('boot: trigger marcado invalido (campo required vazio)',
+                trigger1.getAttribute('data-zld-valid') === 'false') && todos;
+            todos = check('boot: classe ozi-disabled aplicada no trigger',
+                trigger1.classList.contains('ozi-disabled')) && todos;
+            todos = check('boot: aria-disabled="true" no trigger',
+                trigger1.getAttribute('aria-disabled') === 'true') && todos;
+
+            // --- preenche o campo e aciona validação interativa (delegação nativa) ---
+            _step = 'preenchendo-campo';
+            input.value = 'Thomaz';
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+
+            _step = 'aguardando-validacao-interativa';
+            try {
+                await waitFor(function () { return trigger1.getAttribute('data-zld-valid') === 'true'; }, 2000);
+            } catch (e) { /* checado abaixo mesmo assim */ }
+
+            todos = check('interativo: trigger fica válido após preencher campo',
+                trigger1.getAttribute('data-zld-valid') === 'true') && todos;
+            todos = check('interativo: classe ozi-disabled removida',
+                !trigger1.classList.contains('ozi-disabled')) && todos;
+            todos = check('interativo: aria-disabled="false"',
+                trigger1.getAttribute('aria-disabled') === 'false') && todos;
+
+            // --- clique dispara oziLoadData → fetch → renderToDestiny ---
+            _step = 'clicando-trigger';
+            trigger1.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+
+            _step = 'aguardando-render-destino';
+            try {
+                await waitFor(function () { return !!document.getElementById('injected'); }, 3000);
+            } catch (e) { /* checado abaixo mesmo assim */ }
+
+            todos = check('renderToDestiny: HTML do fetch injetado em #destino1',
+                !!document.querySelector('#destino1 #injected')) && todos;
+            todos = check('progress bar: elemento .ozi-progress criado dinamicamente',
+                !!document.querySelector('.ozi-progress')) && todos;
+
+            // --- compat retroativa ---
+            todos = check('aliases zld* expostos (compat v0.x)',
+                typeof window.zldSafeById === 'function' &&
+                typeof window.zldGenerateId === 'function' &&
+                typeof window.zldParseList === 'function' &&
+                typeof window.zldNormalizeDomId === 'function') && todos;
+            todos = check('window.oziLoaddata (alias minúsculo) funcional',
+                typeof window.oziLoaddata === 'function') && todos;
+            todos = check('window.__zldConf / window.zldConf expostos',
+                !!window.__zldConf && !!window.zldConf) && todos;
+
+            // --- OziCollector direto ---
+            _step = 'collector-direto';
+            var collected = window.OziCollector.collect({ zldCatchGroupId: ['grupo'], silent: true });
+            todos = check('OziCollector.collect(): isValid true com campo preenchido', collected.isValid === true) && todos;
+            todos = check('OziCollector.collect(): data.nome === "Thomaz"', collected.data.nome === 'Thomaz') && todos;
+
+            // aguarda os setTimeouts internos (finishUi 400ms, progress bar 600ms)
+            // dispararem antes de fechar o veredito — evita erro tardio nao capturado
+            _step = 'aguardando-timers-internos';
+            await wait(1200);
+
+            todos = check('zero erros JS reais (opacos filtrados: ' + errosOpacos + ')', erros.length === 0, erros.join(' | ') || null) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ ACEITE F2 #3 (ozi-loaddata): PASSOU' : '✗ ACEITE F2 #3 (ozi-loaddata): FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+        })().catch(function (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err));
+            vered.textContent = '✗ ACEITE F2 #3 (ozi-loaddata): FALHOU (exceção)';
+            vered.className = 'fail';
+        });
+    });
+</script>
+</body>
+</html>

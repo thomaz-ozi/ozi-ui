@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite F2 módulo (ozi-suggest)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 820px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .3rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite módulo <small>(ozi-suggest)</small></h1>
+<p>Critério: <code>ozi-suggest.js</code> carregado <b>isolado</b> (sem ozi.js, sem jQuery) —
+lógica de busca/normalização pura e boot zero-jQuery.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando…</div>
+
+<!-- fixture para loadFromScriptTag -->
+<script type="application/json" data-ozi-select-options="meu-select">[{"value":1,"label":"Opção 1"},{"value":2,"label":"Opção 2"}]</script>
+
+<!-- carrega SÓ o suggest.js, direto -->
+<script src="../plugins/ozi-ui/modules/ozi-suggest/js/ozi-suggest.js"></script>
+<script>
+    var erros = [];
+    window.addEventListener('error', function (ev) {
+        if (ev.message === 'Script error.' && !ev.filename && !ev.lineno) return;
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    var vered = document.getElementById('veredito');
+
+    (async function () {
+        try {
+            var todos = true;
+            var s = window.OziSuggest;
+
+            todos = check('window.OziSuggest exposto com toda a API',
+                s && ['loadFromScriptTag','parseAliasMap','normalizeOptions','normalize','filterByQuery','createRemoteSearcher']
+                    .every(function (k) { return typeof s[k] === 'function'; })) && todos;
+            todos = check('jQuery ausente', typeof window.jQuery === 'undefined') && todos;
+            var reqJq = performance.getEntriesByType('resource').filter(function (r) { return /jquery/i.test(r.name); });
+            todos = check('zero requests a jQuery', reqJq.length === 0) && todos;
+
+            // parseAliasMap
+            var am = s.parseAliasMap('value=id, label=nome');
+            todos = check('parseAliasMap: "value=id, label=nome"', am.value === 'id' && am.label === 'nome') && todos;
+
+            // normalizeOptions (preserva originais + adiciona canônicos)
+            var no = s.normalizeOptions([{ id: 7, nome: 'São Paulo' }], { value: 'id', label: 'nome' });
+            todos = check('normalizeOptions: remapeia value/label preservando id/nome',
+                no[0].value === 7 && no[0].label === 'São Paulo' && no[0].id === 7 && no[0].nome === 'São Paulo') && todos;
+
+            // normalize (acento-insensível)
+            todos = check('normalize("Ação") === "acao"', s.normalize('Ação') === 'acao', s.normalize('Ação')) && todos;
+
+            // filterByQuery (acento-insensível, multi-campo)
+            var fr = s.filterByQuery([{ label: 'São Paulo' }, { label: 'Rio' }], 'paulo');
+            todos = check('filterByQuery: "paulo" casa "São Paulo" (sem acento)', fr.length === 1 && fr[0].label === 'São Paulo') && todos;
+
+            // loadFromScriptTag (querySelector/textContent — antes $(selector).text())
+            var opts = s.loadFromScriptTag('meu-select', 'data-ozi-select-options');
+            todos = check('loadFromScriptTag: lê <script application/json> via querySelector',
+                Array.isArray(opts) && opts.length === 2 && opts[0].label === 'Opção 1') && todos;
+            todos = check('loadFromScriptTag: chave inexistente retorna []',
+                s.loadFromScriptTag('nao-existe', 'data-ozi-select-options').length === 0) && todos;
+
+            // createRemoteSearcher: shape + short-circuit de min
+            var rs = s.createRemoteSearcher({ url: '/x', min: 2 });
+            todos = check('createRemoteSearcher: retorna searcher com API completa',
+                rs && typeof rs.fetch === 'function' && typeof rs.abort === 'function' &&
+                typeof rs.setLoading === 'function' && typeof rs.onLoadingChange === 'function' &&
+                typeof rs.isLoading === 'function') && todos;
+            var below = await rs.fetch('a'); // len 1 < min 2 — não dispara request
+            todos = check('createRemoteSearcher: query abaixo do min resolve [] sem request',
+                Array.isArray(below) && below.length === 0 && rs.isLoading() === false) && todos;
+
+            todos = check('zero erros JS reais', erros.length === 0, erros.join(' | ') || null) && todos;
+
+            vered.textContent = todos ? '✓ ACEITE módulo (ozi-suggest): PASSOU' : '✗ ACEITE módulo (ozi-suggest): FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+        } catch (err) {
+            check('exceção não tratada', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+            vered.textContent = '✗ ACEITE módulo (ozi-suggest): FALHOU (exceção)';
+            vered.className = 'fail';
+        }
+    })();
+</script>
+</body>
+</html>

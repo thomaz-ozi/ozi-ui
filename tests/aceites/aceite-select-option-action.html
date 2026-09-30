@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite v6.4.0 (ozi-select option actions)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .35rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+    .ozi-select-dropdown { display: none; }
+    .ozi-select-ui.is-open .ozi-select-dropdown { display: block; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite v6.4.0 <small>(action buttons por opção do ozi-select)</small></h1>
+<p>Critério: opção com <code>actions: [{name,icon,ariaLabel}]</code> renderiza botões
+(<code>.ozi-select-option-action</code>) dentro da opção — no caminho padrão E dentro de
+<code>optionHtml</code>; clicar no botão NÃO seleciona/desseleciona e emite
+<code>ozi:option-action</code> com <code>{action,item}</code> + os campos-base do contrato; clicar
+no corpo da opção continua selecionando normalmente; select desabilitado ignora o clique na ação;
+<code>labelHtml: true</code> restaura o <code>innerHTML</code> de label/subLabel.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<!-- Fixture A — single, opção com actions no caminho padrão -->
+<div data-ozi-select="single-actions"></div>
+<script type="application/json" data-ozi-select-options="single-actions">
+[
+  {"value":"1","label":"Item 1","actions":[{"name":"edit","icon":"bi-pencil","ariaLabel":"Editar item 1"}]},
+  {"value":"2","label":"Item 2"}
+]
+</script>
+
+<!-- Fixture B — opção com actions DENTRO de optionHtml -->
+<div data-ozi-select="html-actions"></div>
+<script type="application/json" data-ozi-select-options="html-actions">
+[{"value":"1","optionHtml":"<strong class=\"custom-mark\">Custom</strong>","actions":[{"name":"remove","ariaLabel":"Remover"}]}]
+</script>
+
+<!-- Fixture C — select desabilitado -->
+<div data-ozi-select="disabled-actions" data-ozi-select-disabled></div>
+<script type="application/json" data-ozi-select-options="disabled-actions">
+[{"value":"1","label":"Item 1","actions":[{"name":"edit","ariaLabel":"Editar"}]}]
+</script>
+
+<!-- Fixture D — labelHtml opt-in -->
+<div data-ozi-select="label-html"></div>
+<script type="application/json" data-ozi-select-options="label-html">
+[{"value":"1","label":"<b>Negrito</b>","labelHtml":true}]
+</script>
+
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['select'], lang: 'pt-BR' });
+
+    var erros = [];
+    var errosOpacos = 0;
+    window.addEventListener('error', function (ev) {
+        var isOpaco = (ev.message === 'Script error.' && !ev.filename && !ev.lineno);
+        if (isOpaco) { errosOpacos++; return; }
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    function openDropdown(root) {
+        root.querySelector('.ozi-select-control').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    }
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 9s';
+        vered.className = 'fail';
+    }, 9000);
+
+    OZI.ready(function () {
+        (async function () {
+            var todos = true;
+
+            // ── Fixture A — caminho padrão ──
+            var root = document.querySelector('[data-ozi-select="single-actions"]');
+            openDropdown(root);
+            var opt1 = root.querySelector('.ozi-select-option[data-value="1"]');
+            var actionBtn = opt1 ? opt1.querySelector('.ozi-select-option-action[data-ozi-select-action="edit"]') : null;
+            todos = check('caminho padrão: botão de ação renderiza dentro da opção',
+                !!actionBtn) && todos;
+            todos = check('caminho padrão: aria-label do botão vem de item.actions[].ariaLabel',
+                !!actionBtn && actionBtn.getAttribute('aria-label') === 'Editar item 1') && todos;
+            todos = check('caminho padrão: ícone renderizado via <i class="...">',
+                !!actionBtn && actionBtn.querySelector('i.bi-pencil') !== null) && todos;
+
+            var detail = null;
+            root.addEventListener('ozi:option-action', function (e) { detail = e.detail; });
+            actionBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+            todos = check('clique na ação NÃO seleciona a opção',
+                OZI.components.select.value('single-actions') !== '1' &&
+                !opt1.classList.contains('is-selected')) && todos;
+            todos = check('clique na ação emite ozi:option-action com action/item corretos',
+                !!detail && detail.action === 'edit' && !!detail.item && detail.item.value === '1') && todos;
+            todos = check('ozi:option-action mantém os campos-base do contrato (emit() com extra não corrompe o detail)',
+                !!detail && detail.component === 'ozi-select' && detail.name === 'single-actions' &&
+                detail.source === 'user' && Array.isArray(detail.items)) && todos;
+            todos = check('dropdown continua aberto (clique na ação não fecha/seleciona)',
+                root.querySelector('.ozi-select-ui').classList.contains('is-open')) && todos;
+
+            // clique no CORPO da opção (fora do botão) ainda seleciona normalmente
+            var opt2 = root.querySelector('.ozi-select-option[data-value="2"]');
+            opt2.querySelector('.ozi-select-option-label').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+            todos = check('clique no corpo da opção (sem action) ainda seleciona normalmente',
+                OZI.components.select.value('single-actions') === '2') && todos;
+
+            // ── Fixture B — actions dentro de optionHtml ──
+            var htmlRoot = document.querySelector('[data-ozi-select="html-actions"]');
+            openDropdown(htmlRoot);
+            var htmlOpt = htmlRoot.querySelector('.ozi-select-option[data-value="1"]');
+            var htmlActionBtn = htmlOpt ? htmlOpt.querySelector('.ozi-select-option-action[data-ozi-select-action="remove"]') : null;
+            todos = check('optionHtml: botão de ação renderiza como irmão de .ozi-select-option-custom',
+                !!htmlActionBtn && htmlOpt.querySelector('.custom-mark') !== null) && todos;
+
+            var htmlDetail = null;
+            htmlRoot.addEventListener('ozi:option-action', function (e) { htmlDetail = e.detail; });
+            htmlActionBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+            todos = check('optionHtml: clique na ação emite ozi:option-action (não seleciona)',
+                !!htmlDetail && htmlDetail.action === 'remove' &&
+                OZI.components.select.value('html-actions') !== '1') && todos;
+
+            // ── Fixture C — select desabilitado ignora clique na ação ──
+            var disRoot = document.querySelector('[data-ozi-select="disabled-actions"]');
+            var disOpt = disRoot.querySelector('.ozi-select-option[data-value="1"]');
+            var disBtn = disOpt ? disOpt.querySelector('.ozi-select-option-action') : null;
+            var disEmitted = false;
+            disRoot.addEventListener('ozi:option-action', function () { disEmitted = true; });
+            if (disBtn) disBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+            todos = check('select desabilitado: clique na ação é no-op (nenhum evento emitido)',
+                disEmitted === false) && todos;
+
+            // ── Fixture D — labelHtml opt-in ──
+            var htmlLabelRoot = document.querySelector('[data-ozi-select="label-html"]');
+            openDropdown(htmlLabelRoot);
+            var lhOpt = htmlLabelRoot.querySelector('.ozi-select-option[data-value="1"]');
+            todos = check('labelHtml:true restaura innerHTML (renderiza <b> real)',
+                !!lhOpt && lhOpt.querySelector('.ozi-select-option-label').querySelector('b') !== null) && todos;
+
+            await wait(80);
+            todos = check('zero erros JS reais (opacos filtrados: ' + errosOpacos + ')', erros.length === 0, erros.join(' | ') || null) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ ACEITE v6.4.0 (option-action): PASSOU' : '✗ ACEITE v6.4.0 (option-action): FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+            document.title = (todos ? 'DONE:PASS' : 'DONE:FAIL');
+        })().catch(function (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+            vered.textContent = '✗ ACEITE v6.4.0 (option-action): FALHOU (exceção)';
+            vered.className = 'fail';
+            document.title = 'DONE:FAIL';
+        });
+    });
+</script>
+</body>
+</html>

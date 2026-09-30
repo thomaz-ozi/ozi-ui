@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite F2 #6 (ozi-check)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .35rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite F2 #6 <small>(ozi-check)</small></h1>
+<p>Critério: motor 100% JS puro (querySelectorAll/classList/props nativos), fim do
+dual-dispatch, hierarquia switch→group→item e tristate idênticos.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<label><input type="checkbox" id="switch-norte" data-ozi-check-switch="norte" checked> switch norte</label>
+<label><input type="checkbox" id="group-norte" data-ozi-check-group="norte"> group norte</label>
+<label><input type="checkbox" id="item-pa" data-ozi-check-item="norte" value="pa"> PA</label>
+<label><input type="checkbox" id="item-am" data-ozi-check-item="norte" value="am"> AM</label>
+
+<label><input type="checkbox" id="switch-multi" data-ozi-check-switch="nordeste,sul" checked> switch nordeste+sul</label>
+<label><input type="checkbox" id="group-nordeste" data-ozi-check-group="nordeste"> group nordeste</label>
+<label><input type="checkbox" id="item-ce" data-ozi-check-item="nordeste" value="ce"> CE</label>
+<label><input type="checkbox" id="group-sul" data-ozi-check-group="sul"> group sul</label>
+<label><input type="checkbox" id="item-rs" data-ozi-check-item="sul" value="rs"> RS</label>
+
+<!-- ÚNICO script externo da página: -->
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['check'], core: { log: true } });
+
+    var erros = [];
+    var errosOpacos = 0;
+    window.addEventListener('error', function (ev) {
+        var isOpaco = (ev.message === 'Script error.' && !ev.filename && !ev.lineno);
+        if (isOpaco) { errosOpacos++; return; }
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 9s';
+        vered.className = 'fail';
+    }, 9000);
+
+    OZI.ready(function () {
+        (async function () {
+            var todos = true;
+            var check_ = OZI.components.check;
+
+            todos = check('OZI.components.check carregado', !!check_) && todos;
+            todos = check('window.OziCheck === OZI.components.check', window.OziCheck === check_) && todos;
+            todos = check('jQuery ausente (window.jQuery === undefined)', typeof window.jQuery === 'undefined') && todos;
+            var reqJq = performance.getEntriesByType('resource').filter(function (r) { return /jquery/i.test(r.name); });
+            todos = check('zero requests a jQuery', reqJq.length === 0) && todos;
+
+            var groups = check_.getGroups();
+            todos = check('getGroups(): coleta norte/nordeste/sul',
+                groups.indexOf('norte') !== -1 && groups.indexOf('nordeste') !== -1 && groups.indexOf('sul') !== -1) && todos;
+
+            var groupNorte = document.getElementById('group-norte');
+            var itemPa = document.getElementById('item-pa');
+            var itemAm = document.getElementById('item-am');
+
+            // --- item marca 1 de 2 -> group fica indeterminate (tristate) ---
+            var changeDetail = null;
+            document.addEventListener('ozi:check-change', function handler(e) {
+                if (e.detail.name === 'norte' && e.detail.level === 'item') { changeDetail = e.detail; document.removeEventListener('ozi:check-change', handler); }
+            });
+            itemPa.checked = true;
+            itemPa.dispatchEvent(new Event('change', { bubbles: true }));
+
+            todos = check('item: marcar 1 de 2 deixa group indeterminate',
+                groupNorte.indeterminate === true && groupNorte.checked === false) && todos;
+            todos = check('emit(): ozi:check-change com contrato completo (level="item")',
+                changeDetail && changeDetail.component === 'ozi-check' && changeDetail.name === 'norte' &&
+                changeDetail.level === 'item' && changeDetail.checked === true && changeDetail.value === 'pa' &&
+                changeDetail.source === 'user') && todos;
+
+            // --- item marca o 2º -> group fica totalmente checked ---
+            itemAm.checked = true;
+            itemAm.dispatchEvent(new Event('change', { bubbles: true }));
+            todos = check('item: marcar todos deixa group checked (sem indeterminate)',
+                groupNorte.checked === true && groupNorte.indeterminate === false) && todos;
+
+            // --- group (setAllItems): desmarcar group desmarca todos os items ---
+            groupNorte.checked = false;
+            groupNorte.dispatchEvent(new Event('change', { bubbles: true }));
+            todos = check('group: desmarcar group desmarca todos os items do grupo',
+                itemPa.checked === false && itemAm.checked === false) && todos;
+
+            // --- switch multi-grupo (CSV): desliga nordeste+sul simultaneamente ---
+            var switchMulti = document.getElementById('switch-multi');
+            var groupNordeste = document.getElementById('group-nordeste');
+            var groupSul = document.getElementById('group-sul');
+            var itemCe = document.getElementById('item-ce');
+            var itemRs = document.getElementById('item-rs');
+
+            switchMulti.checked = false;
+            switchMulti.dispatchEvent(new Event('change', { bubbles: true }));
+            todos = check('switch CSV: desabilita group+items de AMBOS os grupos (nordeste e sul)',
+                groupNordeste.disabled && itemCe.disabled && groupSul.disabled && itemRs.disabled) && todos;
+            todos = check('switch: classe ozi-check-disabled aplicada',
+                groupNordeste.classList.contains('ozi-check-disabled')) && todos;
+
+            // --- item de grupo desabilitado não reage a change (isGroupEnabled=false) ---
+            itemCe.checked = true;
+            itemCe.dispatchEvent(new Event('change', { bubbles: true }));
+            todos = check('item em grupo desabilitado: change é ignorado (guard isGroupEnabled)',
+                groupNordeste.checked === false && groupNordeste.indeterminate === false) && todos;
+            itemCe.checked = false; // desfaz o efeito colateral do teste anterior (não passou pelo syncGroup)
+
+            // --- reabilita o switch: re-enable + syncGroup reflete estado real ---
+            switchMulti.checked = true;
+            switchMulti.dispatchEvent(new Event('change', { bubbles: true }));
+            todos = check('switch CSV: reabilita group+items de ambos os grupos',
+                !groupNordeste.disabled && !itemCe.disabled && !groupSul.disabled && !itemRs.disabled) && todos;
+
+            // --- setGroupEnabledState / setAllItems via API direta ---
+            check_.setAllItems('sul', true);
+            todos = check('setAllItems() via API: marca todos os items do grupo', itemRs.checked === true) && todos;
+            todos = check('setAllItems() via API: syncGroup deixa group checked', groupSul.checked === true) && todos;
+
+            // --- refresh()/syncAllGroups não altera checked, só recalcula tristate/disabled ---
+            check_.refresh();
+            todos = check('refresh(): não altera checked existente', itemRs.checked === true) && todos;
+
+            await wait(300);
+            todos = check('zero erros JS reais (opacos filtrados: ' + errosOpacos + ')', erros.length === 0, erros.join(' | ') || null) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ ACEITE F2 #6 (ozi-check): PASSOU' : '✗ ACEITE F2 #6 (ozi-check): FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+        })().catch(function (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+            vered.textContent = '✗ ACEITE F2 #6 (ozi-check): FALHOU (exceção)';
+            vered.className = 'fail';
+        });
+    });
+</script>
+</body>
+</html>

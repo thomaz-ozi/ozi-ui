@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite F2 #7 (ozi-search)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 820px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .3rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+    /* fixtures ficam em layout (visíveis) — _isVisible() usa offsetWidth,
+       então itens não podem estar sob um display:none pai */
+    .fixtures { border-top: 1px dashed #ddd; margin-top: 1rem; padding-top: 1rem; opacity: .35; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite F2 #7 <small>(ozi-search)</small></h1>
+<p>Critério: motor 100% JS puro (delegação nativa/TreeWalker/regex), fim do
+dual-dispatch, filtro/grupos/highlight/words/no-filter/paginação/min idênticos,
+visibilidade original preservada, i18n de paginação e contrato do <code>emit()</code>.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<div class="fixtures">
+    <!-- q1: filtro + grupos + highlight + words + item originalmente oculto -->
+    <input id="q1" type="search" data-ozi-search=".prod" data-ozi-search-group=".secao"
+           data-ozi-search-highlight="true" data-ozi-search-words="true">
+    <div class="secao" id="secA">
+        <div class="prod">Banana</div>
+        <div class="prod">Abacaxi</div>
+        <div class="prod" id="hidden-prod" style="display:none">Banana oculta</div>
+    </div>
+    <div class="secao" id="secB">
+        <div class="prod">Manga</div>
+        <div class="prod">Maracuja</div>
+    </div>
+
+    <!-- q2: modo sem filtro + classe de highlight custom -->
+    <input id="q2" type="search" data-ozi-search=".note" data-ozi-search-no-filter="true"
+           data-ozi-search-highlight="hl-custom">
+    <div class="note">alpha teste</div>
+    <div class="note">beta teste</div>
+
+    <!-- q3: paginacao (2/pagina, 16 itens => 8 paginas => reticencias) -->
+    <input id="q3" type="search" data-ozi-search=".row"
+           data-ozi-search-pagination="2" data-ozi-search-pagination-id="nav3">
+    <div id="list3">
+        <div class="row">Item 1</div><div class="row">Item 2</div>
+        <div class="row">Item 3</div><div class="row">Item 4</div>
+        <div class="row">Item 5</div><div class="row">Item 6</div>
+        <div class="row">Item 7</div><div class="row">Item 8</div>
+        <div class="row">Item 9</div><div class="row">Item 10</div>
+        <div class="row">Item 11</div><div class="row">Item 12</div>
+        <div class="row">Item 13</div><div class="row">Item 14</div>
+        <div class="row">Item 15</div><div class="row">Item 16</div>
+    </div>
+    <div id="nav3"></div>
+
+    <!-- q4: setItems + resolucao por nome de classe (sem ponto) -->
+    <input id="q4" type="search" data-ozi-search="dyn-item">
+    <div id="wrap4"><div class="dyn-item">old A</div><div class="dyn-item">old B</div></div>
+
+    <!-- q5: min de caracteres -->
+    <input id="q5" type="search" data-ozi-search=".m" data-ozi-search-min="3">
+    <div class="m">apple</div>
+    <div class="m">apricot</div>
+</div>
+
+<!-- ÚNICO script externo da página: -->
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['search'], core: { log: true } });
+
+    var erros = [];
+    var errosOpacos = 0;
+    window.addEventListener('error', function (ev) {
+        var isOpaco = (ev.message === 'Script error.' && !ev.filename && !ev.lineno);
+        if (isOpaco) { errosOpacos++; return; }
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    function shown(el) { return el.style.display !== 'none'; }
+    function type(el, val) { el.value = val; el.dispatchEvent(new Event('input', { bubbles: true })); }
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 9s';
+        vered.className = 'fail';
+    }, 9000);
+
+    // captura do ultimo evento de contrato
+    var lastFiltered = null;
+    document.addEventListener('ozi:search-filtered', function (e) { lastFiltered = e.detail; });
+
+    OZI.ready(function () {
+        (async function () {
+            var todos = true;
+            var api = OZI.components.search;
+
+            // ---- infra / camadas ----
+            todos = check('OZI.components.search carregado', !!api) && todos;
+            todos = check('window.OziSearch === OZI.components.search', window.OziSearch === api) && todos;
+            todos = check('jQuery ausente (window.jQuery === undefined)', typeof window.jQuery === 'undefined') && todos;
+            var reqJq = performance.getEntriesByType('resource').filter(function (r) { return /jquery/i.test(r.name); });
+            todos = check('zero requests a jQuery', reqJq.length === 0) && todos;
+
+            // ---- q1: filtro simples + item oculto preservado + emit(source:user) ----
+            var secA = document.getElementById('secA'), secB = document.getElementById('secB');
+            var hiddenProd = document.getElementById('hidden-prod');
+            var q1 = document.getElementById('q1');
+
+            lastFiltered = null;
+            type(q1, 'banana');
+            var prodsA = secA.querySelectorAll('.prod');
+            var bananaVisivel = shown(prodsA[0]);
+            todos = check('filtro: item que casa fica visível, os que não casam somem',
+                bananaVisivel && !shown(secB.querySelectorAll('.prod')[0])) && todos;
+            todos = check('visibilidade original: item display:none permanece oculto mesmo casando',
+                !shown(hiddenProd)) && todos;
+            todos = check('grupos: seção sem item visível é ocultada',
+                shown(secA) && !shown(secB)) && todos;
+            todos = check('highlight: <span class="ozi-search-highlight"> aplicado no termo',
+                !!secA.querySelector('.ozi-search-highlight')) && todos;
+            todos = check('emit: contrato completo + source="user" (digitação)',
+                lastFiltered && lastFiltered.component === 'ozi-search' && lastFiltered.name === 'q1' &&
+                lastFiltered.value === 'banana' && lastFiltered.query === 'banana' &&
+                lastFiltered.matched === 1 && lastFiltered.total === 5 && lastFiltered.source === 'user') && todos;
+
+            // ---- q1: words (multi-termo) ----
+            type(q1, 'banana manga');
+            todos = check('words: múltiplos termos casam por OR + grupo reaparece ao ampliar (fix v1)',
+                shown(secA) && shown(secB) && lastFiltered.matched === 2) && todos;
+
+            // ---- q1: reset() via API restaura, limpa highlight, mantém oculto ----
+            lastFiltered = null;
+            api.reset('#q1');
+            todos = check('reset() via API: restaura visíveis e limpa highlight',
+                shown(secB.querySelectorAll('.prod')[0]) && !document.querySelector('.ozi-search-highlight')) && todos;
+            todos = check('reset(): item originalmente oculto continua oculto',
+                !shown(hiddenProd)) && todos;
+            todos = check('reset(): emit com source="api"', lastFiltered && lastFiltered.source === 'api') && todos;
+
+            // ---- q1: trigger() via API define valor e filtra (source:api) ----
+            lastFiltered = null;
+            api.trigger('#q1', 'maracuja');
+            todos = check('trigger() via API: define valor, filtra e emite source="api"',
+                q1.value === 'maracuja' && lastFiltered.matched === 1 && lastFiltered.source === 'api') && todos;
+            api.reset('#q1');
+
+            // ---- q2: modo sem filtro (todos visíveis) + highlight custom ----
+            var notes = document.querySelectorAll('.note');
+            type(document.getElementById('q2'), 'alpha');
+            todos = check('no-filter: todos os itens permanecem visíveis',
+                shown(notes[0]) && shown(notes[1])) && todos;
+            todos = check('no-filter: highlight com classe custom (hl-custom)',
+                !!document.querySelector('.hl-custom') && !document.querySelector('.ozi-search-highlight')) && todos;
+
+            // ---- q3: paginação inicial ----
+            var rows = document.querySelectorAll('.row');
+            var nav3 = document.getElementById('nav3');
+            todos = check('paginação: só a 1ª página visível no boot (2 por página)',
+                shown(rows[0]) && shown(rows[1]) && !shown(rows[2])) && todos;
+            todos = check('paginação: nav renderizado no container com reticências (8 páginas)',
+                !!nav3.querySelector('.ozi-search-pagination') &&
+                !!nav3.querySelector('.ozi-search-pagination__ellipsis')) && todos;
+            var navAria = nav3.querySelector('.ozi-search-pagination').getAttribute('aria-label');
+            todos = check('paginação: aria-label i18n resolvido via _t (não é a chave crua)',
+                !!navAria && navAria !== 'search.pagination') && todos;
+
+            var st = api.getState('#q3');
+            todos = check('getState(): pageSize/totalPages/currentPage corretos',
+                st && st.pageSize === 2 && st.totalPages === 8 && st.currentPage === 1) && todos;
+
+            // ---- q3: goToPage() via API ----
+            api.goToPage('#q3', 3);
+            todos = check('goToPage(3): mostra os itens da página 3 (Item 5, Item 6)',
+                shown(rows[4]) && shown(rows[5]) && !shown(rows[0])) && todos;
+
+            // ---- q3: clique num botão do nav (delegação nativa) ----
+            var btn8 = nav3.querySelector('[data-ozi-page="8"]');
+            btn8.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+            todos = check('nav: clique no botão da página 8 navega (Item 15, Item 16)',
+                shown(rows[14]) && shown(rows[15]) && !shown(rows[0]) &&
+                api.getState('#q3').currentPage === 8) && todos;
+
+            // ---- q3: filtro com paginação re-pagina o matched e remove nav de 1 página ----
+            type(document.getElementById('q3'), 'Item 15');
+            todos = check('paginação + filtro: matched=1 re-pagina e remove o nav (1 página)',
+                shown(rows[14]) && !nav3.querySelector('.ozi-search-pagination')) && todos;
+
+            // ---- q4: setItems() (strings) + resolução por nome de classe sem ponto ----
+            api.setItems('#q4', ['New X', 'New Y', 'New Z']);
+            var dyn = document.querySelectorAll('.dyn-item');
+            todos = check('setItems(strings): substitui o conjunto (data-ozi-search sem ponto resolvido)',
+                dyn.length === 3 && dyn[0].textContent === 'New X') && todos;
+
+            // ---- q4: setItems() com objetos {label|text} ----
+            api.setItems('#q4', [{ label: 'L1' }, { text: 'T2' }]);
+            dyn = document.querySelectorAll('.dyn-item');
+            todos = check('setItems(objetos): usa label > text',
+                dyn.length === 2 && dyn[0].textContent === 'L1' && dyn[1].textContent === 'T2') && todos;
+
+            // ---- q5: min de caracteres ----
+            var ms = document.querySelectorAll('.m');
+            lastFiltered = null;
+            type(document.getElementById('q5'), 'ap');       // 2 < 3 => não filtra
+            todos = check('min: abaixo do mínimo não filtra (todos visíveis)',
+                shown(ms[0]) && shown(ms[1]) && lastFiltered.matched === 2) && todos;
+            type(document.getElementById('q5'), 'app');      // 3 >= 3 => filtra
+            todos = check('min: atingido o mínimo, filtra normalmente (apple)',
+                shown(ms[0]) && !shown(ms[1]) && lastFiltered.matched === 1) && todos;
+
+            await wait(300);
+            todos = check('zero erros JS reais (opacos filtrados: ' + errosOpacos + ')', erros.length === 0, erros.join(' | ') || null) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ ACEITE F2 #7 (ozi-search): PASSOU' : '✗ ACEITE F2 #7 (ozi-search): FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+        })().catch(function (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+            vered.textContent = '✗ ACEITE F2 #7 (ozi-search): FALHOU (exceção)';
+            vered.className = 'fail';
+        });
+    });
+</script>
+</body>
+</html>

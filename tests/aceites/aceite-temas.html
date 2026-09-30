@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite F3 (temas)</title>
+
+<!-- CSS do tema Tailwind (como o dev linkaria): tokens + overrides + dark -->
+<link rel="stylesheet" href="../plugins/ozi-ui/themes/tailwind/tokens.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/themes/tailwind/overrides.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/themes/tailwind/dark.css">
+
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .35rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite F3 <small>(temas — tailwind/overrides.css + troca de tema)</small></h1>
+<p>Critério: o <code>themes/tailwind/overrides.css</code> aplica o look de input Tailwind
+(padding/radius/foco via tokens), e o <strong>mesmo build JS</strong> troca de tema só com
+<code>oziConf({ theme })</code> (classMap muda em runtime).</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<div id="uf" data-ozi-select="uf"></div>
+<script type="application/json" data-ozi-select-options="uf">
+[{ "value": "SP", "label": "São Paulo" }, { "value": "RJ", "label": "Rio de Janeiro" }]
+</script>
+
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['select'], theme: 'tailwind', core: { log: true } });
+
+    var erros = [];
+    window.onerror = function (msg) { erros.push(String(msg)); return false; };
+
+    var total = 0, ok = 0;
+    function check(nome, cond, extra) {
+        total++; var pass = !!cond; if (pass) ok++;
+        var li = document.createElement('li');
+        li.className = pass ? 'pass' : 'fail';
+        li.textContent = (pass ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return pass;
+    }
+    function finish() {
+        var v = document.getElementById('veredito');
+        var allPass = (ok === total) && erros.length === 0;
+        v.textContent = (allPass ? '✓ PASSOU ' : '✗ FALHOU ') + ok + '/' + total + (erros.length ? ' — ' + erros.join(' | ') : '');
+        v.className = allPass ? 'pass' : 'fail';
+        document.title = (allPass ? 'DONE:PASS ' : 'DONE:FAIL ') + ok + '/' + total;
+    }
+    var watchdog = setTimeout(function () {
+        document.getElementById('veredito').textContent = '✗ FALHOU — não terminou em 10s';
+        document.title = 'DONE:TIMEOUT ' + ok + '/' + total;
+    }, 10000);
+
+    function run() {
+        var cs = getComputedStyle;
+        check('zero jQuery', typeof window.jQuery === 'undefined');
+        check('OZI.isReady', !!(window.OZI && OZI.isReady));
+        check('theme === "tailwind"', OZI.conf && OZI.conf.theme === 'tailwind', OZI.conf && OZI.conf.theme);
+
+        // classMap do preset tailwind aplicado
+        check('classMap.invalid = tailwind', OZI.conf.classMap.invalid === 'border-red-500 text-red-600', OZI.conf.classMap.invalid);
+
+        // token resolve
+        var prim = cs(document.documentElement).getPropertyValue('--ozi-color-primary').trim();
+        check('token --ozi-color-primary resolve (#3b82f6)', prim === '#3b82f6', prim);
+
+        // overrides.css aplicado no controle renderizado
+        var ctrl = document.querySelector('#uf .ozi-select-control');
+        check('ozi-select renderizou (.ozi-select-control)', !!ctrl);
+        if (ctrl) {
+            var st = cs(ctrl);
+            check('overrides: padding = 8px 12px', st.paddingTop === '8px' && st.paddingLeft === '12px', st.paddingTop + ' / ' + st.paddingLeft);
+            check('overrides: border-radius = 6px', st.borderTopLeftRadius === '6px', st.borderTopLeftRadius);
+            check('overrides: padding 4 lados (8/12)', st.paddingRight === '12px' && st.paddingBottom === '8px', st.paddingRight + ' / ' + st.paddingBottom);
+            check('overrides: borda 1px solid', st.borderTopWidth === '1px' && st.borderTopStyle === 'solid', st.borderTopWidth + ' ' + st.borderTopStyle);
+        }
+
+        // MESMO JS troca de tema em runtime → classMap muda
+        oziConf({ theme: 'bootstrap5' });
+        check('troca p/ bootstrap5: classMap.invalid = is-invalid', OZI.conf.classMap.invalid === 'is-invalid', OZI.conf.classMap.invalid);
+        oziConf({ theme: 'default' });
+        check('troca p/ default: classMap.invalid = ozi-invalid', OZI.conf.classMap.invalid === 'ozi-invalid', OZI.conf.classMap.invalid);
+        oziConf({ theme: 'tailwind' });
+        check('volta p/ tailwind: classMap.invalid = tailwind', OZI.conf.classMap.invalid === 'border-red-500 text-red-600', OZI.conf.classMap.invalid);
+
+        check('sem erros de runtime', erros.length === 0, erros.join(' | '));
+        clearTimeout(watchdog);
+        finish();
+    }
+
+    if (window.OZI && OZI.ready) OZI.ready(function () { setTimeout(run, 150); });
+    else window.addEventListener('load', function () { setTimeout(run, 500); });
+</script>
+</body>
+</html>

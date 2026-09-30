@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite F2 #2 (ozi-toggle)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .35rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite F2 #2 <small>(ozi-toggle)</small></h1>
+<p>Critério: motor 100% JS puro (slide/fade via Web Animations API), fim do dual-dispatch
+(<code>ozi:toggle-*</code> só via <code>OZI.helpers.emit</code>), mesma API pública.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<div id="t1-trigger" data-ozi-toggle-trigger="t1">
+    <span data-ozi-toggle-show>mostrar</span>
+    <span data-ozi-toggle-hide style="display:none">ocultar</span>
+</div>
+<div id="t1-content" data-ozi-toggle-content="t1" style="display:none">conteúdo 1</div>
+
+<div id="t2-trigger" data-ozi-toggle-trigger="t2">trigger sem indicadores</div>
+<div id="t2-content" data-ozi-toggle-content="t2" data-ozi-toggle-options="slide-time:40;" style="display:none">conteúdo 2 (slide)</div>
+
+<!-- ÚNICO script externo da página: -->
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['toggle'], core: { log: true } });
+
+    var erros = [];
+    window.onerror = function (msg) { erros.push(msg); return false; };
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+
+    function onceEvent(name) {
+        return new Promise(function (resolve) {
+            document.addEventListener(name, function handler(e) {
+                document.removeEventListener(name, handler);
+                resolve(e.detail);
+            });
+        });
+    }
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 9s';
+        vered.className = 'fail';
+    }, 9000);
+
+    OZI.ready(function () {
+        var todos = true;
+        var toggle = OZI.behaviors.toggle;
+
+        todos = check('OZI.behaviors.toggle carregado', !!toggle) && todos;
+        todos = check('jQuery ausente (window.jQuery === undefined)',
+            typeof window.jQuery === 'undefined') && todos;
+
+        var reqJq = performance.getEntriesByType('resource').filter(function (r) { return /jquery/i.test(r.name); });
+        todos = check('zero requests a jQuery', reqJq.length === 0) && todos;
+
+        var trigger1 = document.getElementById('t1-trigger');
+        var content1 = document.getElementById('t1-content');
+
+        // --- open('t1') ---
+        var waitOpen = onceEvent('ozi:toggle-change');
+        toggle.open('t1');
+
+        waitOpen.then(function (detail) {
+            todos = check('open(): detail.component === "ozi-toggle"', detail.component === 'ozi-toggle') && todos;
+            todos = check('open(): detail.name === "t1"', detail.name === 't1') && todos;
+            todos = check('open(): detail.value === true (aberto)', detail.value === true) && todos;
+            todos = check('open(): detail.source === "user"', detail.source === 'user') && todos;
+            todos = check('open(): content visível (display !== none)', content1.style.display !== 'none') && todos;
+            todos = check('open(): aria-hidden="false" no content', content1.getAttribute('aria-hidden') === 'false') && todos;
+            todos = check('open(): aria-expanded="true" no trigger', trigger1.getAttribute('aria-expanded') === 'true') && todos;
+            todos = check('open(): indicador show oculto / hide visível',
+                trigger1.querySelector('[data-ozi-toggle-show]').style.display === 'none' &&
+                trigger1.querySelector('[data-ozi-toggle-hide]').style.display === '') && todos;
+
+            // --- close('t1') ---
+            var waitClose = onceEvent('ozi:toggle-change');
+            toggle.close('t1');
+            return waitClose;
+        }).then(function (detail) {
+            todos = check('close(): detail.value === false (fechado)', detail.value === false) && todos;
+            todos = check('close(): content oculto (display: none)', content1.style.display === 'none') && todos;
+            todos = check('close(): aria-hidden="true" no content', content1.getAttribute('aria-hidden') === 'true') && todos;
+            todos = check('close(): indicador volta show visível / hide oculto',
+                trigger1.querySelector('[data-ozi-toggle-show]').style.display === '' &&
+                trigger1.querySelector('[data-ozi-toggle-hide]').style.display === 'none') && todos;
+
+            // --- toggle('t2') com slide (data-ozi-toggle-options) ---
+            // Nota: onfinish/animation.finished da Web Animations API não dispara de forma
+            // confiável sob --virtual-time-budget no headless (confirmado isoladamente, fora
+            // do ozi-toggle) — por isso aqui verificamos só o efeito síncrono (display setado
+            // antes da animação começar), sem aguardar o evento de conclusão do slide.
+            var content2 = document.getElementById('t2-content');
+            toggle.toggle('t2');
+            todos = check('toggle() com slide: display setado sincronamente (Web Animations API dispara)',
+                content2.style.display !== 'none') && todos;
+
+            // --- delegação de clique nativa (usa t1, sem slide, para manter o evento confiável) ---
+            var waitClick = onceEvent('ozi:toggle-change');
+            document.getElementById('t1-trigger').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+            return waitClick;
+        }).then(function (detail) {
+            todos = check('clique delegado no trigger aciona toggle()', detail.name === 't1') && todos;
+
+            // --- compat retroativa ---
+            todos = check('window.OziToggle exposto (compat v0.x)', typeof window.OziToggle === 'object') && todos;
+            todos = check('oziToggleOpen/Close/Toggle/Sync expostos (compat v0.x)',
+                typeof window.oziToggleOpen === 'function' &&
+                typeof window.oziToggleClose === 'function' &&
+                typeof window.oziToggleToggle === 'function' &&
+                typeof window.oziToggleSync === 'function') && todos;
+
+            // --- sync() reflete estado forçado no DOM ---
+            content1.style.display = '';
+            toggle.sync('t1');
+            todos = check('sync(): recalcula indicadores a partir do DOM real',
+                trigger1.getAttribute('aria-expanded') === 'true') && todos;
+
+            todos = check('zero erros JS', erros.length === 0, erros.join(' | ') || null) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ ACEITE F2 #2 (ozi-toggle): PASSOU' : '✗ ACEITE F2 #2 (ozi-toggle): FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+        }).catch(function (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err));
+            vered.textContent = '✗ ACEITE F2 #2 (ozi-toggle): FALHOU (exceção)';
+            vered.className = 'fail';
+        });
+    });
+</script>
+</body>
+</html>

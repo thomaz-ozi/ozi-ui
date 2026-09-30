@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite F1 (raiz)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .35rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Teste de Aceite F1 <small>(página na raiz)</small></h1>
+<p>Critério (plano F1): página vazia + <code>&lt;script src="ozi.js"&gt;</code> → boot completo,
+<code>OZI.isReady === true</code>, zero erros, zero jQuery.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<!-- ÚNICO script externo da página: -->
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    // core-only: sem plugins (todos os components ainda são v1/jQuery até a F2)
+    oziConf({ plugins: [], core: { log: true } });
+
+    var erros = [];
+    window.onerror = function (msg) { erros.push(msg); return false; };
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+
+    // timeout de segurança: se o boot travar, o veredito acusa
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — OZI.ready() não disparou em 5s';
+        vered.className = 'fail';
+    }, 5000);
+
+    OZI.ready(function () {
+        clearTimeout(watchdog);
+        var todos = true;
+
+        todos = check('OZI.isReady === true', OZI.isReady === true) && todos;
+
+        todos = check('jQuery ausente (window.jQuery === undefined)',
+            typeof window.jQuery === 'undefined') && todos;
+
+        var reqJq = performance.getEntriesByType('resource').filter(function (r) {
+            return /jquery/i.test(r.name);
+        });
+        todos = check('zero requests a jQuery', reqJq.length === 0,
+            reqJq.length ? reqJq.map(function (r) { return r.name; }).join(', ') : null) && todos;
+
+        var ub = OZI.conf && OZI.conf.core && OZI.conf.core.urlBase || '';
+        todos = check('urlBase auto-detectado', /\/plugins\/ozi-ui\/$/.test(ub), ub) && todos;
+
+        todos = check('zero erros JS', erros.length === 0, erros.join(' | ') || null) && todos;
+
+        // helpers: dual-accept Element | jQuery-like
+        var div = document.createElement('div');
+        div.setAttribute('data-x', 'true');
+        var fakeJq = { 0: div, length: 1, jquery: '3.7.1' };
+        todos = check('helpers.parseBool aceita Element nativo',
+            OZI.helpers.parseBool(div, 'data-x') === true) && todos;
+        todos = check('helpers.parseBool aceita objeto jQuery-like',
+            OZI.helpers.parseBool(fakeJq, 'data-x') === true) && todos;
+        todos = check('helpers.toElement normaliza jQuery-like → Element',
+            OZI.helpers.toElement(fakeJq) === div) && todos;
+
+        // contrato de eventos: emit → CustomEvent bubbles + detail
+        document.body.appendChild(div);
+        var recebido = null;
+        document.addEventListener('ozi:change', function (e) { recebido = e.detail; }, { once: true });
+        OZI.helpers.emit(div, 'ozi:change', {
+            component: 'teste-aceite', name: 'campo', value: 'ok', source: 'api'
+        });
+        todos = check('emit(): CustomEvent bubbles até o document',
+            recebido !== null) && todos;
+        todos = check('emit(): payload no detail (contrato §1.3)',
+            recebido && recebido.component === 'teste-aceite' &&
+            recebido.value === 'ok' && recebido.source === 'api') && todos;
+
+        vered.textContent = todos ? '✓ ACEITE F1: PASSOU' : '✗ ACEITE F1: FALHOU';
+        vered.className = todos ? 'pass' : 'fail';
+    });
+</script>
+</body>
+</html>

@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite ozi-editor Fase 2 (link/unlink/color/highlight/paste/pasteFmt)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .3rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+    .fixtures { border-top: 1px dashed #ddd; margin-top: 1rem; padding-top: 1rem; opacity: .5; }
+    textarea { width: 100%; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite ozi-editor Fase 2 <small>(link, unlink, color, highlight, paste, pasteFmt)</small></h1>
+<p>Critério: popover genérico (<code>_registerPopover</code>/<code>_togglePopover</code>, mutuamente
+exclusivo), <code>link</code>/<code>unlink</code> (com bloqueio de esquema perigoso),
+<code>color</code>/<code>highlight</code> (grade de swatches, <code>styleWithCSS</code> antes de
+<code>foreColor</code>/<code>hiliteColor</code>), <code>paste</code>/<code>pasteFmt</code> (Clipboard API
+stubada — permissão real não é testável em headless determinístico, mesma classe de limitação da
+Web Animations API já documentada em lessons-learned), sanitização (href/cor) e o round-trip MD do
+<code>link</code>.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<div class="fixtures">
+    <textarea id="ta-tools" data-ozi-editor-html="conteudo"
+              data-ozi-editor-tools="[bold]; [link,unlink]; [color,highlight]; [paste,pasteFmt]; heading"></textarea>
+
+    <textarea id="ta-md" data-ozi-editor-md="notas"
+              data-ozi-editor-tools="[bold]; link"></textarea>
+</div>
+
+<!-- ÚNICO script externo — SEM jQuery: -->
+<script>
+    /* ── stub deterministico do Clipboard API ANTES do ozi.js (mesmo padrao
+       do MediaRecorder/getUserMedia stubados em aceite-audio.html) ── */
+    var _clipboardText = 'texto puro da area de transferencia';
+    var _clipboardHtml = '<p>html <strong>formatado</strong> da area de transferencia</p>';
+    var _clipboardHasHtml = true;
+    var _clipboardShouldFail = false;
+
+    var clipboardStub = {
+        readText: function () {
+            if (_clipboardShouldFail) return Promise.reject(new DOMException('denied', 'NotAllowedError'));
+            return Promise.resolve(_clipboardText);
+        },
+        read: function () {
+            if (_clipboardShouldFail) return Promise.reject(new DOMException('denied', 'NotAllowedError'));
+            if (!_clipboardHasHtml) return Promise.resolve([]);
+            var item = {
+                types: ['text/html', 'text/plain'],
+                getType: function (type) {
+                    var text = type === 'text/html' ? _clipboardHtml : _clipboardText;
+                    return Promise.resolve(new Blob([text], { type: type }));
+                }
+            };
+            return Promise.resolve([item]);
+        }
+    };
+    try {
+        Object.defineProperty(navigator, 'clipboard', { value: clipboardStub, configurable: true });
+    } catch (e) {
+        navigator.clipboard = clipboardStub;
+    }
+</script>
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['editor-md'], core: { log: true } });
+
+    var erros = [];
+    var errosOpacos = 0;
+    window.addEventListener('error', function (ev) {
+        var isOpaco = (ev.message === 'Script error.' && !ev.filename && !ev.lineno);
+        if (isOpaco) { errosOpacos++; return; }
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+    function placeCursor(inst, el, atEnd) {
+        var range = document.createRange();
+        range.selectNodeContents(el);
+        range.collapse(!atEnd);
+        var sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        inst._saveSelection();
+    }
+    function selectAll(inst, el) {
+        var range = document.createRange();
+        range.selectNodeContents(el);
+        var sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        inst._saveSelection();
+    }
+    function click(btn) { btn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true })); }
+    function isShown(el) { return !!el && el.style.display !== 'none'; }
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 9s';
+        vered.className = 'fail';
+    }, 9000);
+
+    OZI.ready(function () {
+        (async function () {
+            var todos = true;
+            var api = OZI.components.editor;
+
+            var wrap = document.querySelector('#ta-tools + .ozi-editor-wrap');
+            var inst = api.get('conteudo');
+            var content = wrap.querySelector('.ozi-editor-content');
+
+            await wait(200);
+
+            var linkBtn      = wrap.querySelector('[data-ozi-editor-tool="link"]');
+            var unlinkBtn    = wrap.querySelector('[data-ozi-editor-tool="unlink"]');
+            var colorBtn     = wrap.querySelector('[data-ozi-editor-tool="color"]');
+            var highlightBtn = wrap.querySelector('[data-ozi-editor-tool="highlight"]');
+            var headingBtn   = wrap.querySelector('.ozi-editor-btn--heading');
+
+            todos = check('toolbar: botões link/unlink/color/highlight presentes',
+                !!linkBtn && !!unlinkBtn && !!colorBtn && !!highlightBtn) && todos;
+
+            // ---- popover genérico: abrir/fechar, mutuamente exclusivo ----
+            // data-ozi-editor-popover-wrap agora carrega um ID ÚNICO por
+            // instância (ex. "link-3"), não mais o nome bruto do tool —
+            // toolbar responsiva (2026-08-31) precisa distinguir a mesma
+            // ferramenta em mais de uma variante de breakpoint; ^= (prefixo)
+            // continua achando a única instância que este teste cria.
+            var linkPopover  = wrap.querySelector('[data-ozi-editor-popover-wrap^="link-"] .ozi-editor-popover');
+            var colorPopover = wrap.querySelector('[data-ozi-editor-popover-wrap^="color-"] .ozi-editor-popover');
+
+            inst.setValue('<p>abrir popover</p>');
+            var p0 = content.querySelector('p');
+            placeCursor(inst, p0, true);
+
+            click(linkBtn);
+            todos = check('popover: link abre ao clicar', isShown(linkPopover)) && todos;
+            todos = check('popover: aria-expanded=true no botão link', linkBtn.getAttribute('aria-expanded') === 'true') && todos;
+
+            click(colorBtn);
+            todos = check('popover: abrir color fecha o link (mutuamente exclusivo)',
+                isShown(colorPopover) && !isShown(linkPopover)) && todos;
+
+            document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+            todos = check('popover: clique fora fecha o color', !isShown(colorPopover)) && todos;
+
+            // ---- link: aplicar URL segura ----
+            inst.setValue('<p>meu texto de link</p>');
+            var p1 = content.querySelector('p');
+            selectAll(inst, p1);
+            click(linkBtn);
+            var linkInput = wrap.querySelector('[data-ozi-editor-link-input]');
+            var linkApply = wrap.querySelector('[data-ozi-editor-link-apply]');
+            linkInput.value = 'https://exemplo.com/pagina';
+            click(linkApply);
+            todos = check('link: aplica <a href> com URL segura',
+                /<a href="https:\/\/exemplo\.com\/pagina">/.test(inst.getValue()), inst.getValue()) && todos;
+
+            // ---- link: reabrir sobre o link pré-preenche o campo e habilita remover ----
+            var aEl = content.querySelector('a');
+            placeCursor(inst, aEl.firstChild || aEl, true);
+            click(linkBtn);
+            todos = check('link: reabrir sobre link existente pré-preenche a URL',
+                linkInput.value === 'https://exemplo.com/pagina', linkInput.value) && todos;
+            var linkRemove = wrap.querySelector('[data-ozi-editor-link-remove]');
+            todos = check('link: botão remover habilitado quando há link', !linkRemove.disabled) && todos;
+
+            // ---- link: remover ----
+            click(linkRemove);
+            todos = check('link: remover tira o <a>', content.querySelectorAll('a').length === 0, inst.getValue()) && todos;
+
+            // ---- link: bloqueia esquema perigoso (javascript:) ----
+            inst.setValue('<p>texto perigoso</p>');
+            var p2 = content.querySelector('p');
+            selectAll(inst, p2);
+            click(linkBtn);
+            linkInput.value = 'javascript:alert(1)';
+            click(linkApply);
+            todos = check('link: NÃO aplica esquema javascript: (bloqueado por _isSafeUrl)',
+                content.querySelectorAll('a').length === 0, inst.getValue()) && todos;
+
+            // ---- unlink direto (execCmd genérico) ----
+            inst.setValue('<p><a href="https://exemplo.com">um link</a> e resto</p>');
+            selectAll(inst, content.querySelector('a'));
+            click(unlinkBtn);
+            todos = check('unlink: remove o link diretamente (sem popover)',
+                content.querySelectorAll('a').length === 0, inst.getValue()) && todos;
+
+            // ---- sanitizer: <a> com href perigoso vira texto simples ----
+            inst.setValue('<p><a href="javascript:alert(1)">clique</a></p>');
+            var sanitizedLink = inst.getValue();
+            todos = check('sanitizer: <a href="javascript:..."> perde o href (unwrap)',
+                sanitizedLink.indexOf('javascript:') === -1 && sanitizedLink.indexOf('clique') > -1,
+                sanitizedLink) && todos;
+
+            // ---- sanitizer: <a> com href seguro sobrevive ----
+            inst.setValue('<p><a href="https://ok.com" onclick="x()">ok</a></p>');
+            var sanitizedOk = inst.getValue();
+            todos = check('sanitizer: <a href="https://..."> sobrevive, onclick removido',
+                /<a href="https:\/\/ok\.com">ok<\/a>/.test(sanitizedOk), sanitizedOk) && todos;
+
+            // ---- color: aplica swatch (styleWithCSS -> span, não <font>) ----
+            inst.setValue('<p>colorir isso</p>');
+            var p3 = content.querySelector('p');
+            selectAll(inst, p3);
+            click(colorBtn);
+            var swatch = wrap.querySelector('[data-ozi-editor-popover-wrap^="color-"] [data-ozi-editor-swatch]');
+            todos = check('color: popover mostra swatches', !!swatch) && todos;
+            click(swatch);
+            todos = check('color: aplica <span style="color:..."> (não <font>)',
+                /<span style="color:\s*rgb/i.test(inst.getValue()) && inst.getValue().indexOf('<font') === -1,
+                inst.getValue()) && todos;
+
+            // ---- color: "nenhuma" remove a cor após round-trip pelo sanitizador ----
+            // getValue() logo após o clique reflete o HTML BRUTO do contenteditable
+            // (mesmo comportamento pré-existente documentado desde a Fase 1 — só o
+            // próximo setValue()/paste passa pelo _sanitizeHtml) — por isso o teste
+            // força esse round-trip explicitamente antes de checar.
+            var colorNone = wrap.querySelector('[data-ozi-editor-swatch-none="color"]');
+            selectAll(inst, content.querySelector('span'));
+            click(colorNone);
+            inst.setValue(inst.getValue());
+            // 'inherit' não bate no formato hex/rgb validado pelo sanitizador — span some
+            todos = check('color: "nenhuma" tira o style de cor após sanitizar (inherit não é uma cor válida)',
+                inst.getValue().indexOf('color:') === -1, inst.getValue()) && todos;
+
+            // ---- color: "customizar" (input nativo type=color) ----
+            inst.setValue('<p>cor customizada</p>');
+            var p3b = content.querySelector('p');
+            selectAll(inst, p3b);
+            click(colorBtn);
+            var customInput = wrap.querySelector('[data-ozi-editor-popover-wrap^="color-"] [data-ozi-editor-swatch-custom]');
+            todos = check('color: popover mostra o controle "customizar"', !!customInput) && todos;
+            customInput.value = '#3a7bd5';
+            customInput.dispatchEvent(new Event('change', { bubbles: true }));
+            todos = check('color: aplica a cor escolhida no "customizar" (fora da paleta fixa)',
+                /<span style="color:\s*rgb\(58,\s*123,\s*213\)/i.test(inst.getValue()), inst.getValue()) && todos;
+            inst.setValue(inst.getValue());
+            todos = check('color: cor customizada sobrevive ao sanitizador (validação por formato, não whitelist)',
+                /color:\s*rgb\(58,\s*123,\s*213\)/i.test(inst.getValue()), inst.getValue()) && todos;
+
+            // ---- sanitizer: valor de cor fora do formato hex/rgb(...) é descartado ----
+            // var(--x) é um valor LITERAL que o browser preserva sem resolver em
+            // child.style.color (não é hex nem rgb(...)) — exercita de verdade o
+            // limite do validador de formato, diferente de um background:url(...)
+            // que o parser CSS do próprio browser já rejeitaria antes de chegar aqui.
+            inst.setValue('<p><span style="color: var(--evil)">tentativa</span></p>');
+            var sanitizedBadColor = inst.getValue();
+            todos = check('sanitizer: valor de cor que não é hex/rgb(...) puro (ex.: var(--x)) é descartado',
+                sanitizedBadColor.indexOf('var(') === -1 && sanitizedBadColor.indexOf('tentativa') > -1,
+                sanitizedBadColor) && todos;
+
+            // ---- highlight: aplica swatch ----
+            inst.setValue('<p>realçar isso</p>');
+            var p4 = content.querySelector('p');
+            selectAll(inst, p4);
+            click(highlightBtn);
+            var hlSwatch = wrap.querySelector('[data-ozi-editor-popover-wrap^="highlight-"] [data-ozi-editor-swatch]');
+            click(hlSwatch);
+            todos = check('highlight: aplica background-color na seleção',
+                /background-color:\s*rgb/i.test(inst.getValue()), inst.getValue()) && todos;
+
+            // ---- paste (Clipboard API stubada, sempre texto puro) ----
+            // wait generoso (300ms): a cadeia de Promises do Clipboard API real
+            // (read → getType → blob.text → execCommand) tem mais saltos de
+            // microtask que um execCommand síncrono comum — 50ms mostrou ser
+            // curto demais e fazia o check ler o valor antes da resolução.
+            inst.setValue('<p></p>');
+            placeCursor(inst, content.querySelector('p'), true);
+            var pasteBtn = wrap.querySelector('[data-ozi-editor-tool="paste"]');
+            click(pasteBtn);
+            await wait(300);
+            todos = check('paste: insere texto puro da área de transferência (stub)',
+                inst.getValue().indexOf(_clipboardText) > -1, inst.getValue()) && todos;
+
+            // ---- pasteFmt (Clipboard API stubada, HTML sanitizado quando disponível) ----
+            inst.setValue('<p></p>');
+            placeCursor(inst, content.querySelector('p'), true);
+            var pasteFmtBtn = wrap.querySelector('[data-ozi-editor-tool="pasteFmt"]');
+            click(pasteFmtBtn);
+            await wait(300);
+            todos = check('pasteFmt: insere HTML formatado (sanitizado) quando o clipboard tem text/html',
+                /<strong>formatado<\/strong>/.test(inst.getValue()), inst.getValue()) && todos;
+
+            // ---- pasteFmt cai para texto puro quando não há text/html ----
+            _clipboardHasHtml = false;
+            inst.setValue('<p></p>');
+            placeCursor(inst, content.querySelector('p'), true);
+            click(pasteFmtBtn);
+            await wait(300);
+            todos = check('pasteFmt: sem text/html no clipboard, cai para texto puro',
+                inst.getValue().indexOf(_clipboardText) > -1 && inst.getValue().indexOf('<strong>') === -1,
+                inst.getValue()) && todos;
+            _clipboardHasHtml = true;
+
+            // ---- paste: falha de permissão do clipboard mostra aviso VISÍVEL ----
+            // (achado do usuário: antes falhava em silêncio — o clique não fazia
+            // nada e o editor só continuava mostrando o texto que já tinha, o que
+            // parecia "não colar o clipboard do SO, só o texto interno")
+            _clipboardShouldFail = true;
+            inst.setValue('<p></p>');
+            placeCursor(inst, content.querySelector('p'), true);
+            click(pasteBtn);
+            await wait(300);
+            var warningEl = wrap.querySelector('.ozi-editor-clipboard-warning');
+            todos = check('paste: falha de clipboard mostra aviso visível (não mais silencioso)',
+                !!warningEl && warningEl.style.display !== 'none' && warningEl.textContent.length > 0,
+                warningEl && warningEl.textContent) && todos;
+            todos = check('paste: nada é inserido quando o clipboard falha',
+                inst.getValue() === '<p></p>', inst.getValue()) && todos;
+            _clipboardShouldFail = false;
+
+            // ---- regressão: heading (popover pré-existente) continua funcionando ----
+            inst.setValue('<p>vira título</p>');
+            placeCursor(inst, content.querySelector('p'), true);
+            click(headingBtn);
+            var h1Item = wrap.querySelector('.ozi-editor-heading-item[data-ozi-heading="h1"]');
+            click(h1Item);
+            todos = check('regressão: heading (dropdown pré-existente) continua funcionando após o refactor de popover',
+                !!content.querySelector('h1'), inst.getValue()) && todos;
+
+            // ---- MD: link (mdToHtml/htmlToMd direto) ----
+            todos = check('md→html: [texto](url) vira <a href="url">',
+                /<a href="https:\/\/exemplo\.com">texto<\/a>/.test(window.OziEditorMd.mdToHtml('[texto](https://exemplo.com)')),
+                window.OziEditorMd.mdToHtml('[texto](https://exemplo.com)')) && todos;
+            todos = check('html→md: <a href> vira [texto](url)',
+                window.OziEditorMd.htmlToMd('<a href="https://exemplo.com">texto</a>').indexOf('[texto](https://exemplo.com)') > -1,
+                window.OziEditorMd.htmlToMd('<a href="https://exemplo.com">texto</a>')) && todos;
+
+            await wait(300);
+            todos = check('zero erros JS reais (opacos filtrados: ' + errosOpacos + ')', erros.length === 0, erros.join(' | ') || null) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ ACEITE ozi-editor Fase 2: PASSOU' : '✗ ACEITE ozi-editor Fase 2: FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+        })().catch(function (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+            vered.textContent = '✗ ACEITE ozi-editor Fase 2: FALHOU (exceção)';
+            vered.className = 'fail';
+        });
+    });
+</script>
+</body>
+</html>
