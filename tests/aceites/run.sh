@@ -6,7 +6,7 @@
 # em #veredito; qualquer uma sem "PASSOU" falha o script.
 #
 # Uso:   bash tests/aceites/run.sh [pagina.html ...]
-# Env:   BROWSER=/caminho/do/chrome-ou-edge   PORT=8765
+# Env:   BROWSER=/caminho/do/chrome-ou-edge   PORT=8765   PAGE_TIMEOUT=90 (segundos por página)
 #
 # ⚠️ Aceite headless mede estado (classList, valor, eventos), não pintura: verde aqui não prova
 # que o visual está certo. Ver ozi-ui-ai/logs/lessons-learned.md (2026-09-14 e 2026-08-31).
@@ -44,7 +44,9 @@ failed=0
 passed=0
 
 for page in "${PAGES[@]}"; do
-    dom=$("$BROWSER" --headless=new --disable-gpu --no-sandbox --no-first-run \
+    # timeout: uma página que nunca fica ociosa pendura o --dump-dom; vira falha, não trava o job
+    dom=$(timeout "${PAGE_TIMEOUT:-90}" "$BROWSER" --headless=new --disable-gpu --no-sandbox --no-first-run \
+          --user-data-dir="$SITE/.profile-$page" \
           --virtual-time-budget=15000 --dump-dom "http://127.0.0.1:$PORT/teste-v2/$page" 2>/dev/null)
     verdict=$(printf '%s' "$dom" | tr '\n' ' ' | grep -oE 'id="veredito"[^>]*>[^<]*' | sed 's/.*>//')
 
@@ -53,11 +55,17 @@ for page in "${PAGES[@]}"; do
         passed=$((passed + 1))
     else
         echo "✘ $page — ${verdict:-sem veredito}"
-        printf '%s' "$dom" | tr '\n' ' ' | grep -oE '<li class="fail">[^<]*' | sed 's/<li class="fail">/    · /'
+        details=$(printf '%s' "$dom" | tr '\n' ' ' | grep -oE '<li class="fail">[^<]*' | sed 's/<li class="fail">/    · /')
+        [ -n "$details" ] && echo "$details"
+        # no GitHub Actions, vira anotação no run (visível sem abrir o log)
+        if [ -n "${GITHUB_ACTIONS:-}" ]; then
+            echo "::error title=aceite $page::${verdict:-sem veredito (timeout ou página não carregou)} $(echo "$details" | tr '\n' ' ' | cut -c1-400)"
+        fi
         failed=$((failed + 1))
     fi
 done
 
 echo
 echo "Aceites: $passed passaram, $failed falharam."
+[ -n "${GITHUB_ACTIONS:-}" ] && echo "::notice title=aceites::$passed passaram, $failed falharam"
 [ "$failed" -eq 0 ]
