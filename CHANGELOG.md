@@ -6,6 +6,14 @@ listed where they changed.
 
 ## [Unreleased]
 
+## [2.7.0] — 2026-10-01
+
+### Added
+- `ozi-select` 6.5: fixed label and counter for multiple selects.
+  `data-ozi-select-multiple-label="Seller"` always shows that text on the button instead of
+  chips, and `data-ozi-select-multiple-count` adds the number of selected items. New translation
+  key `select.selectedCount` (en, pt-BR, es).
+
 ### Fixed
 - `ozi-validate` 2.2.1: a required component without `name`/`id` (e.g.
   `<div data-ozi-select="team" data-ozi-required="true">`) was silently skipped, so the form was
@@ -14,6 +22,10 @@ listed where they changed.
   injected later in standalone mode. Plugin CSS is now inserted before the first theme stylesheet.
 - `ozi-editor` 4.9.1: popovers did not open when the toolbar was scrolled out of view (long
   documents); scrolling inside a popover no longer repositions or closes it.
+
+### Changed
+- Bundled Markdown files follow one naming pattern (`ozi-<name>.CHANGELOG.md` /
+  `ozi-<name>.README.md`); `core/md/coi-conf.README.md` is now `ozi-conf.README.md`.
 
 ## [2.6.2] — 2026-10-01
 
@@ -118,7 +130,8 @@ Version 2: every plugin rewritten in plain JavaScript, no jQuery, zero runtime d
 A v1 compatibility ramp (jQuery shims, `zld*` aliases) is included and opt-in. `ozi-copy` and
 `ozi-paste` were discontinued. See the [migration guide](https://oziui.com/en/docs/migration).
 
-[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.6.2...HEAD
+[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.7.0...HEAD
+[2.7.0]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.6.2...v2.7.0
 [2.6.2]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.6.1...v2.6.2
 [2.6.1]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.6.0...v2.6.1
 [2.6.0]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.5.0...v2.6.0

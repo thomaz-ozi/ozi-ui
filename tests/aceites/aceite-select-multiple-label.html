@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite v6.5.0 (ozi-select multiple-label + count)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .35rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+    .ozi-select-dropdown { display: none; }
+    .ozi-select-ui.is-open .ozi-select-dropdown { display: block; }
+    .fixtures { display: flex; gap: .75rem; flex-wrap: wrap; } .fixtures > div { width: 220px; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite v6.5.0 <small>(rótulo fixo + contador no modo multiple — [OZI-06])</small></h1>
+<p>Critério: com <code>data-ozi-select-multiple-label</code> o botão mostra sempre o rótulo, sem chips;
+<code>data-ozi-select-multiple-count</code> acrescenta o total só com 1+ escolhidos; × com a regra de
+sempre; valor, hidden inputs e <code>ozi:change</code> idênticos; single ignora os atributos;
+multiple sem os atributos segue com chips; re-init em nó novo com a mesma chave.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<div class="fixtures">
+    <!-- A — label + count, seleção inicial (roteiro 1–8) -->
+    <div data-ozi-select="vend" data-ozi-select-multiple="true"
+         data-ozi-select-multiple-label="Vendedor" data-ozi-select-multiple-count="true"
+         data-ozi-select-value-icon="bi bi-person"></div>
+    <script type="application/json" data-ozi-select-options="vend">
+    [{"value":"1","label":"Administrador","selected":true},{"value":"24","label":"Carla Vendas"},
+     {"value":"26","label":"Diego"},{"value":"30","label":"Elisa"}]
+    </script>
+
+    <!-- B — multiple SEM os atributos (roteiro 9, regressão) -->
+    <div data-ozi-select="chips" data-ozi-select-multiple="true"></div>
+    <script type="application/json" data-ozi-select-options="chips">
+    [{"value":"1","label":"Um","selected":true},{"value":"2","label":"Dois","selected":true}]
+    </script>
+
+    <!-- C — single COM multiple-label (roteiro 10: ignora) -->
+    <div data-ozi-select="single" data-ozi-select-multiple-label="Rótulo ignorado"
+         data-ozi-select-multiple-count="true"></div>
+    <script type="application/json" data-ozi-select-options="single">
+    [{"value":"x","label":"Escolhida","selected":true},{"value":"y","label":"Outra"}]
+    </script>
+
+    <!-- D — multiple-group + label SEM count, vazio, value-placeholder deve ser ignorado -->
+    <div data-ozi-select="grp" data-ozi-select-multiple-group="true"
+         data-ozi-select-multiple-label="Equipe" data-ozi-select-value-placeholder="NÃO DEVE APARECER"></div>
+    <script type="application/json" data-ozi-select-options="grp">
+    [{"value":"a","label":"Ana","group":"Time 1"},{"value":"b","label":"Bia","group":"Time 1"}]
+    </script>
+
+    <!-- E — disabled com seleção (× escondido) -->
+    <div data-ozi-select="dis" data-ozi-select-multiple="true" data-ozi-select-disabled="true"
+         data-ozi-select-multiple-label="Bloqueado" data-ozi-select-multiple-count="true"></div>
+    <script type="application/json" data-ozi-select-options="dis">
+    [{"value":"1","label":"Um","selected":true}]
+    </script>
+
+    <!-- F — optionHtml nas opções (roteiro 12, caso do filtro Status) -->
+    <div data-ozi-select="status" data-ozi-select-multiple="true"
+         data-ozi-select-multiple-label="Status" data-ozi-select-multiple-count="true"></div>
+    <script type="application/json" data-ozi-select-options="status">
+    [{"value":"ab","label":"Aberta","optionHtml":"Aberta <span class=\"dot\" style=\"color:green\">●</span>"},
+     {"value":"fe","label":"Fechada","optionHtml":"Fechada <span class=\"dot\" style=\"color:red\">●</span>"}]
+    </script>
+
+    <!-- G — rótulo com HTML literal (deve sair como texto) -->
+    <div data-ozi-select="xss" data-ozi-select-multiple="true"
+         data-ozi-select-multiple-label="<b>Negrito</b>"></div>
+    <script type="application/json" data-ozi-select-options="xss">
+    [{"value":"1","label":"Um"}]
+    </script>
+
+    <!-- H — re-render estilo Livewire (roteiro 11): nó trocado com a mesma chave -->
+    <div id="wrap-reinit">
+        <div data-ozi-select="reinit" data-ozi-select-multiple="true"
+             data-ozi-select-multiple-label="Filtro" data-ozi-select-multiple-count="true"></div>
+        <script type="application/json" data-ozi-select-options="reinit">
+        [{"value":"1","label":"Um","selected":true},{"value":"2","label":"Dois"}]
+        </script>
+    </div>
+</div>
+
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['select'], lang: 'pt-BR' });
+
+    var erros = [];
+    var errosOpacos = 0;
+    window.addEventListener('error', function (ev) {
+        var isOpaco = (ev.message === 'Script error.' && !ev.filename && !ev.lineno);
+        if (isOpaco) { errosOpacos++; return; }
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    function q(key) { return document.querySelector('[data-ozi-select="' + key + '"]'); }
+    function valueEl(key) { return q(key).querySelector('.ozi-select-value'); }
+    function labelText(key) { var l = valueEl(key).querySelector('.ozi-select-value-label'); return l ? l.textContent : null; }
+    function countEl(key) { return valueEl(key).querySelector('.ozi-select-multiple-count'); }
+    function clearShown(key) { return q(key).querySelector('.ozi-select-clear').style.display !== 'none'; }
+    function click(el) { el.dispatchEvent(new MouseEvent('click', { bubbles: true })); }
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 9s';
+        vered.className = 'fail';
+    }, 9000);
+
+    OZI.ready(function () {
+        (async function () {
+            var todos = true;
+            var S = OZI.components.select;
+
+            // ── A — roteiro 1–8 ──
+            todos = check('1. seleção inicial: rótulo "Vendedor" + contador 1',
+                labelText('vend') === 'Vendedor' && countEl('vend') && countEl('vend').textContent === '1') && todos;
+            todos = check('1b. contador com aria-label i18n ("1 selecionado(s)")',
+                countEl('vend') && countEl('vend').getAttribute('aria-label') === '1 selecionado(s)') && todos;
+            todos = check('2. sem chips: nenhum .ozi-select-tag no .ozi-select-value',
+                valueEl('vend').querySelector('.ozi-select-tag') === null) && todos;
+            todos = check('2b. com seleção: sem is-placeholder, com is-multiple-label',
+                !valueEl('vend').classList.contains('is-placeholder') && valueEl('vend').classList.contains('is-multiple-label')) && todos;
+            todos = check('3. × visível com seleção', clearShown('vend')) && todos;
+            todos = check('ícone do valor (value-icon) continua renderizado',
+                q('vend').querySelector('.ozi-select-value-icon i.bi-person') !== null) && todos;
+
+            var chg = null;
+            q('vend').addEventListener('ozi:change', function (e) { chg = e.detail; });
+            S.value('vend', ['1', '24', '26']);
+            todos = check('4. value(key, [1,24,26]) → contador 3',
+                countEl('vend') && countEl('vend').textContent === '3') && todos;
+            var v = S.value('vend');
+            todos = check('5. valor intacto: ["1","24","26"]',
+                JSON.stringify(v) === '["1","24","26"]', JSON.stringify(v)) && todos;
+            todos = check('6. ozi:change intacto: items.length 3 e source "api"',
+                !!chg && chg.items && chg.items.length === 3 && chg.source === 'api', chg ? JSON.stringify({ n: chg.items && chg.items.length, s: chg.source }) : 'sem evento') && todos;
+            // o container de hidden é IRMÃO do root (root.after), não filho
+            // (modo estruturado: 1 input por campo do item — `vend[]` é o do valor, `vend_label[]` o do label)
+            var hidden = document.querySelectorAll('[data-ozi-select-generated-hidden="vend"] input[name="vend[]"]');
+            todos = check('hidden inputs intactos: 3 inputs com os valores',
+                hidden.length === 3 && Array.prototype.map.call(hidden, function (i) { return i.value; }).join(',') === '1,24,26',
+                hidden.length + ' input(s)') && todos;
+
+            S.value('vend', []);
+            todos = check('7. value(key, []) → só o rótulo, sem contador',
+                labelText('vend') === 'Vendedor' && countEl('vend') === null) && todos;
+            todos = check('7b. vazio: rótulo com is-placeholder',
+                valueEl('vend').classList.contains('is-placeholder')) && todos;
+            todos = check('8. vazio: × escondido', !clearShown('vend')) && todos;
+
+            // interação real: clicar 2 opções → contador sobe, sem chips.
+            // (o multiple FECHA a cada clique em opção — comportamento pré-existente, igual com chips:
+            // renderOptions tira a opção clicada do DOM e o click-fora do document vê target solto.
+            // Fora do escopo do [OZI-06]; por isso reabre antes de cada clique.)
+            function pick(i) {
+                if (!q('vend').querySelector('.ozi-select-ui').classList.contains('is-open')) click(q('vend').querySelector('.ozi-select-control'));
+                click(q('vend').querySelectorAll('.ozi-select-option')[i]);
+            }
+            pick(1); pick(2);
+            todos = check('clique do usuário: contador 2, sem chips',
+                countEl('vend') && countEl('vend').textContent === '2' &&
+                valueEl('vend').querySelector('.ozi-select-tag') === null &&
+                JSON.stringify(S.value('vend')) === '["24","26"]') && todos;
+            click(q('vend').querySelector('.ozi-select-control'));
+            todos = check('menu marca os escolhidos (is-selected nas 2 opções)',
+                q('vend').querySelectorAll('.ozi-select-option.is-selected').length === 2) && todos;
+            click(q('vend').querySelector('.ozi-select-toggle'));
+            click(q('vend').querySelector('.ozi-select-clear'));
+            todos = check('× limpa: valor [], sem contador, rótulo fica',
+                JSON.stringify(S.value('vend')) === '[]' && countEl('vend') === null && labelText('vend') === 'Vendedor') && todos;
+
+            // ── B — roteiro 9 ──
+            todos = check('9. multiple SEM atributos: continua com chips (2 tags)',
+                valueEl('chips').querySelectorAll('.ozi-select-tag').length === 2 &&
+                !valueEl('chips').classList.contains('is-multiple-label')) && todos;
+
+            // ── C — roteiro 10 ──
+            todos = check('10. single COM multiple-label: ignora e mostra a opção escolhida',
+                labelText('single') === 'Escolhida' && countEl('single') === null &&
+                !valueEl('single').classList.contains('is-multiple-label')) && todos;
+
+            // ── D — multiple-group, sem count ──
+            todos = check('multiple-group: rótulo "Equipe", value-placeholder ignorado',
+                labelText('grp') === 'Equipe' && valueEl('grp').textContent.indexOf('NÃO DEVE') === -1) && todos;
+            S.value('grp', ['a', 'b']);
+            todos = check('sem multiple-count: com seleção não há contador, rótulo em cor normal',
+                countEl('grp') === null && labelText('grp') === 'Equipe' &&
+                !valueEl('grp').classList.contains('is-placeholder') && clearShown('grp')) && todos;
+
+            // ── E — disabled ──
+            todos = check('disabled com seleção: contador 1 e × escondido',
+                countEl('dis') && countEl('dis').textContent === '1' && !clearShown('dis')) && todos;
+            S.enable('dis');
+            todos = check('enable(): × volta a aparecer', clearShown('dis')) && todos;
+
+            // ── F — roteiro 12 ──
+            click(q('status').querySelector('.ozi-select-control'));
+            todos = check('12a. optionHtml: opções renderizam com o HTML custom',
+                q('status').querySelectorAll('.ozi-select-option .dot').length === 2) && todos;
+            var sIn = q('status').querySelector('.ozi-select-search');
+            sIn.value = 'span'; sIn.dispatchEvent(new Event('input', { bubbles: true }));
+            todos = check('12b. busca por "span" não acha nada (HTML fora da busca)',
+                q('status').querySelectorAll('.ozi-select-option').length === 0) && todos;
+            sIn.value = 'fech'; sIn.dispatchEvent(new Event('input', { bubbles: true }));
+            var fech = q('status').querySelectorAll('.ozi-select-option');
+            if (fech[0]) click(fech[0]);
+            todos = check('12c. selecionar opção optionHtml → rótulo "Status" + 1, sem HTML no botão',
+                labelText('status') === 'Status' && countEl('status') && countEl('status').textContent === '1' &&
+                valueEl('status').querySelector('.dot') === null) && todos;
+
+            // ── G — rótulo é texto ──
+            todos = check('rótulo com HTML literal sai como texto (textContent)',
+                labelText('xss') === '<b>Negrito</b>' && valueEl('xss').querySelector('b') === null) && todos;
+
+            // ── H — roteiro 11 ──
+            var wrap = document.getElementById('wrap-reinit');
+            // markup "vindo do servidor" (o componente reescreve o <script> de opções — não reusar)
+            wrap.innerHTML =
+                '<div data-ozi-select="reinit" data-ozi-select-multiple="true"' +
+                ' data-ozi-select-multiple-label="Filtro" data-ozi-select-multiple-count="true"></div>' +
+                '<script type="application/json" data-ozi-select-options="reinit">' +
+                '[{"value":"1","label":"Um"},{"value":"2","label":"Dois","selected":true}]<\/script>';
+            // o nó antigo saiu do DOM; o init() destrói a instância órfã e recria no nó novo
+            S.init(wrap);
+            var reVal = S.value('reinit');
+            todos = check('11. nó novo com a mesma chave: init() recria e o rótulo volta certo',
+                labelText('reinit') === 'Filtro' && countEl('reinit') && countEl('reinit').textContent === '1' &&
+                JSON.stringify(reVal) === '["2"]', JSON.stringify(reVal)) && todos;
+
+            await wait(150);
+            todos = check('zero erros JS reais (opacos filtrados: ' + errosOpacos + ')', erros.length === 0, erros.join(' | ') || null) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ ACEITE v6.5.0 (multiple-label): PASSOU' : '✗ ACEITE v6.5.0 (multiple-label): FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+            document.title = (todos ? 'DONE:PASS' : 'DONE:FAIL');
+        })().catch(function (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+            vered.textContent = '✗ ACEITE v6.5.0 (multiple-label): FALHOU (exceção)';
+            vered.className = 'fail';
+            document.title = 'DONE:FAIL';
+        });
+    });
+</script>
+</body>
+</html>

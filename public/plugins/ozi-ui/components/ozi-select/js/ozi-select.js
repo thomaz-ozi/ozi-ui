@@ -2,10 +2,21 @@
  * ------------------------------------------
  * ozi-select
  * ------------------------------------------
- * Ver: 6.4.0
- * 2026-09-01
+ * Ver: 6.5.0
+ * 2026-09-30
  *
  * Changelog:
+ *   - v6.5.0: [FEAT] Rótulo fixo + contador no modo multiple (`data-ozi-select-multiple-label`
+ *       + `data-ozi-select-multiple-count`) — pedido [OZI-06] do SNDESK, pensado p/ barra de
+ *       filtros (👤 Vendedor `3` no lugar de 3 chips cortados). A PRESENÇA de `multiple-label`
+ *       liga o modo: o botão mostra sempre esse texto (via textContent, nunca HTML) e não desenha
+ *       `.ozi-select-tag`; sem seleção usa a cor de placeholder (`is-placeholder`) e o
+ *       `value-placeholder` é ignorado. `multiple-count` (independente) acrescenta
+ *       `.ozi-select-multiple-count` com o total, só com 1+ escolhidos, `aria-label` via
+ *       `select.selectedCount`. O × segue a regra de sempre. Só o desenho do botão muda —
+ *       menu, getValue(), hidden inputs, submit e `ozi:change` idênticos, por isso adapter
+ *       Livewire/plugin/API ficam intocados. No modo single os 2 atributos são ignorados.
+ *       Desvio no começo de `updateUI()` → `renderMultipleLabel()`. Aditivo → MINOR do pacote.
  *   - v6.4.0: [FEAT] Action buttons nativos por opção — novo campo `actions: [{ name, icon,
  *       ariaLabel }]` no objeto de opção. Renderiza um botão por ação (ícone via `<i class="...">`,
  *       fallback pro próprio `name` como texto se não houver ícone) dentro de
@@ -200,6 +211,11 @@
         this.imageDimension    = String(this.root.dataset.oziSelectImageDimension || '').trim();
         this.valueIcon         = String(this.root.dataset.oziSelectValueIcon || '').trim();
         this.searchIcon        = String(this.root.dataset.oziSelectSearchIcon || '').trim();
+
+        // rótulo fixo + contador (v6.5.0) — só no modo multiple; a PRESENÇA do atributo liga
+        this.hasMultipleLabel = this.mode === 'multiple' && this.root.hasAttribute('data-ozi-select-multiple-label');
+        this.multipleLabel    = String(this.root.getAttribute('data-ozi-select-multiple-label') || '');
+        this.multipleCount    = this.parseBooleanAttr('data-ozi-select-multiple-count');
 
         // rodapé de ação (v6.2.0) — slot (<template data-ozi-select-footer="<key>">) ou
         // botão gerado por label. O slot vive FORA do root (o buildUI/destroy limpam o root).
@@ -1087,6 +1103,7 @@
     /* ─── updateUI ─────────────────────────────────────────────────── */
 
     OziSelect.prototype.updateUI = function () {
+        if (this.hasMultipleLabel) { this.renderMultipleLabel(); return; }
         this.valueEl.innerHTML = '';
         if (!this.selectedItems.length) {
             this.valueEl.classList.add('is-placeholder');
@@ -1126,6 +1143,31 @@
             this.valueEl.appendChild(tagsWrap);
         }
         this.clearBtn.style.display = this.isDisabled() ? 'none' : '';
+    };
+
+    // modo rótulo fixo (v6.5.0): o texto nunca some; sem chips; contador só com 1+ escolhidos
+    OziSelect.prototype.renderMultipleLabel = function () {
+        var total = this.selectedItems.length;
+        this.valueEl.innerHTML = '';
+        this.valueEl.classList.add('is-multiple-label');
+        this.valueEl.classList.toggle('is-placeholder', total === 0);
+
+        var wrap = _make('div', { class: 'ozi-select-value-content' });
+        var label = _make('span', { class: 'ozi-select-value-label' });
+        label.textContent = this.multipleLabel;
+        wrap.appendChild(label);
+
+        if (this.multipleCount && total > 0) {
+            var count = _make('span', {
+                class: 'ozi-select-multiple-count',
+                'aria-label': _t('select.selectedCount', '{count} selecionado(s)').replace('{count}', total)
+            });
+            count.textContent = String(total);
+            wrap.appendChild(count);
+        }
+
+        this.valueEl.appendChild(wrap);
+        this.clearBtn.style.display = (total && !this.isDisabled()) ? '' : 'none';
     };
 
     OziSelect.prototype.buildSelectedPreview = function (item) {

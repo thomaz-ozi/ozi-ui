@@ -11,7 +11,8 @@
             valuePlaceholder:  'Selecione...',
             empty:             'Nenhuma opção encontrada',
             requiredMessage:   'Selecione uma opção.',
-            creatableLabel:    'Adicionar "{query}"'
+            creatableLabel:    'Adicionar "{query}"',
+            selectedCount:     '{count} selecionado(s)'
         }
     });
 })(window);

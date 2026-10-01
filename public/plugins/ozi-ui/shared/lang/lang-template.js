@@ -63,7 +63,9 @@
             searchPlaceholder: '',
             valuePlaceholder:  '',
             empty:             '',
-            requiredMessage:   ''
+            requiredMessage:   '',
+            creatableLabel:    '',
+            selectedCount:     ''
         }
     });
 
