@@ -1,7 +1,7 @@
 # ozi-ui
 
 [![Latest Version](https://img.shields.io/packagist/v/ozi-ui/core.svg?label=packagist)](https://packagist.org/packages/ozi-ui/core)
-[![Tests](https://github.com/thomaz-ozi/ozi-ui/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/thomaz-ozi/ozi-ui/actions/workflows/ci.yml)
+[![Tests](https://github.com/thomaz-ozi/ozi-ui/actions/workflows/ci.yml/badge.svg?branch=v2)](https://github.com/thomaz-ozi/ozi-ui/actions/workflows/ci.yml)
 [![Downloads](https://img.shields.io/packagist/dt/ozi-ui/core.svg)](https://packagist.org/packages/ozi-ui/core)
 [![PHP](https://img.shields.io/packagist/php-v/ozi-ui/core.svg)](https://packagist.org/packages/ozi-ui/core)
 [![License](https://img.shields.io/packagist/l/ozi-ui/core.svg)](LICENSE)

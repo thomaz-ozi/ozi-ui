@@ -29,11 +29,11 @@ cd ozi-ui
 composer install
 
 vendor/bin/phpunit               # PHP: assets, Blade directives, asset route, ozi:check
-bash tests/aceites/run.sh        # JS: browser acceptance pages (needs PHP and Chrome/Chromium/Edge)
+node tests/aceites/run.mjs       # JS: browser acceptance pages (Node 22+ and Chrome/Chromium/Edge)
 ```
 
-On Windows, point the runner at Edge:
-`BROWSER="/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe" bash tests/aceites/run.sh`.
+The acceptance runner has no npm dependencies; it finds Chrome or Edge on its own, or use
+`BROWSER=/path/to/browser`. Work happens on the `v2` branch; `master` follows it at each release.
 
 The JavaScript has no build step: files under `public/plugins/ozi-ui/` are what ships.
 

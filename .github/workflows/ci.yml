@@ -1,8 +1,10 @@
 name: CI
 
+# Só a v2 (branch de trabalho): o master recebe o MESMO commit por fast-forward a cada release,
+# então rodar nos dois só duplicava o run (e a exposição a instabilidade).
 on:
   push:
-    branches: [master, v2]
+    branches: [v2]
   pull_request:
 
 jobs:
@@ -74,11 +76,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: shivammathur/setup-php@v2
+      # Node só como ferramenta de teste (sem dependência npm): WebSocket nativo exige 22+
+      - uses: actions/setup-node@v4
         with:
-          php-version: '8.4'
-          coverage: none
+          node-version: '22'
 
-      # JS puro, sem build: cada página carrega só o ozi.js do pacote e escreve o veredito
+      # JS puro, sem build: cada página carrega só o ozi.js do pacote e escreve o veredito;
+      # o runner lê o #veredito em tempo real via DevTools Protocol
       - name: Rodar aceites
-        run: bash tests/aceites/run.sh
+        run: node tests/aceites/run.mjs
