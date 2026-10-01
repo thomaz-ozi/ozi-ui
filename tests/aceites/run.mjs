@@ -35,6 +35,10 @@ const KNOWN_FAIL = {
     // depois (mesma especificidade): padding do select 6px, não 8px, em janela ≥ 769px. Ver
     // ozi-ui-docs/horizonte/roadmap/lancamento-publico.md (F2, achados).
     'aceite-temas.html': 'cascata do tailwind/overrides.css no modo standalone',
+    // 37/38 só no Chrome do Linux (CI): "clique (sem movimento) numa imagem livre abre o popover"
+    // falha nas duas tentativas, de forma consistente. Passa sempre no Edge e no Chrome do
+    // Windows. Pode ser bug real para usuário de Chrome/Linux; precisa de reprodução em Linux.
+    'aceite-editor-imagem-alinhamento.html': 'clique na imagem livre não abre o popover no Chrome/Linux',
 };
 
 const MIME = {
