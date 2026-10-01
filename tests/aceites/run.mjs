@@ -144,7 +144,15 @@ const DIAG_SCRIPT = `(() => {
     addEventListener('mousemove', (e) => { if (e.isTrusted) log.push(ts() + ' MOVE(real) buttons=' + e.buttons + ' ' + e.clientX + ',' + e.clientY); }, true);
     addEventListener('mousedown', (e) => log.push(ts() + ' DOWN ' + (e.isTrusted ? 'real' : 'sint')), true);
     addEventListener('mouseup', (e) => log.push(ts() + ' UP ' + (e.isTrusted ? 'real' : 'sint')), true);
-    addEventListener('DOMContentLoaded', () => log.push(ts() + ' vh=' + innerHeight + ' font=' + getComputedStyle(document.body).fontFamily));
+    addEventListener('DOMContentLoaded', () => {
+        log.push(ts() + ' vh=' + innerHeight + ' font=' + getComputedStyle(document.body).fontFamily);
+        const orig = window.check;
+        if (typeof orig === 'function') window.check = function (nome, ok, extra) {
+            const pops = [...document.querySelectorAll('.ozi-editor-popover')].map((p) => p.style.display === 'none' ? 0 : 1).join('');
+            log.push(ts() + ' CHECK[' + (ok ? 'ok' : 'FAIL') + '] ' + String(nome).slice(0, 50) + ' pops=' + pops + ' y=' + scrollY);
+            return orig.apply(this, arguments);
+        };
+    });
 })()`;
 
 // Uma página num contexto isolado (como uma aba anônima: nada de storage compartilhado).
@@ -216,7 +224,9 @@ for (const page of pages) {
         console.log(`⚠ ${page} — ${r.verdict} (falha conhecida: ${KNOWN_FAIL[page]})`);
         if (GH) console.log(`::warning title=aceite ${page} (falha conhecida)::${r.verdict}`);
         if (r.diag) {
-            const tail = r.diag.slice(-25).join(' ¦ ');
+            const a = r.diag.findIndex((l) => l.includes('popover NÃO abre'));
+            const b = r.diag.findIndex((l) => l.includes('clique (sem movimento)'));
+            const tail = (a >= 0 && b >= a ? r.diag.slice(a, b + 1) : r.diag.slice(-25)).join(' ¦ ');
             console.log('  diag: ' + tail);
             if (GH) for (let i = 0; i < tail.length; i += 900) console.log(`::notice title=diag ${page} ${i / 900 + 1}::${tail.slice(i, i + 900)}`);
         }
