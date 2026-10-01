@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite v4.9.1 (ozi-editor: scroll dentro do popover)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .35rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite v4.9.1 <small>(ozi-editor: scroll dentro do popover)</small></h1>
+<p>Critério: com o trigger da toolbar <strong>fora da viewport</strong> (documento longo, página
+rolada até uma imagem lá embaixo), clicar na imagem <strong>abre</strong> o popover e traz a toolbar
+para a vista. A rolagem <em>interna</em> do popover (o texto de um input de URL longo rola ao
+focar/digitar) não fecha nem reposiciona nada. Rolar a <em>página</em> para longe depois continua
+fechando (v4.7.1). Até a 4.9.0 o popover fechava no mesmo instante em que abria.</p>
+<div id="veredito">aguardando boot…</div>
+<ul id="resultados"></ul>
+
+<textarea id="ta" data-ozi-editor-html="doc" data-ozi-editor-tools="[bold], [link,image]"></textarea>
+<div style="height: 1200px"></div>
+
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['editor'], lang: 'pt-BR' });
+
+    var erros = [];
+    window.addEventListener('error', function (ev) {
+        if (ev.message === 'Script error.' && !ev.filename && !ev.lineno) return;
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra && !ok ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    function isShown(el) { return !!el && el.style.display !== 'none'; }
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 9s';
+        vered.className = 'fail';
+    }, 9000);
+
+    OZI.ready(function () {
+        (async function () {
+            var todos = true;
+            var editor = OZI.components.editor;
+            await wait(50);
+
+            // documento longo: a imagem fica bem abaixo da toolbar
+            var paras = '';
+            for (var i = 0; i < 40; i++) paras += '<p>Parágrafo ' + (i + 1) + ' do documento longo.</p>';
+            var longUrl = 'https://exemplo.com/' + new Array(30).join('caminho-bem-comprido/') + 'foto.png';
+            editor.get('doc').setValue(paras + '<p><img src="' + longUrl + '" alt="foto" width="120" height="80"></p>');
+            await wait(30);
+
+            var wrap    = document.getElementById('ta').closest('.ozi-editor-wrap') || document.querySelector('.ozi-editor-wrap');
+            var trigger = wrap.querySelector('.ozi-editor-btn[data-ozi-editor-tool="image"]');
+            var img     = wrap.querySelector('.ozi-editor-content img');
+            var popover = wrap.querySelector('[data-ozi-editor-popover-wrap^="image-"] .ozi-editor-popover');
+
+            // rola a página até a imagem: a toolbar sai por cima da viewport
+            img.scrollIntoView({ block: 'center' });
+            await wait(100);
+            var r = trigger.getBoundingClientRect();
+            todos = check('fixture: trigger da toolbar fora da viewport', r.bottom < 0 || r.top > window.innerHeight,
+                'top=' + Math.round(r.top) + ' bottom=' + Math.round(r.bottom) + ' vh=' + window.innerHeight) && todos;
+
+            // clique na imagem (normal: abre no mousedown)
+            img.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0, buttons: 1 }));
+            document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+            await wait(100);   // deixa passar a rolagem do foco automático no input
+            todos = check('clique na imagem abre o popover (e ele continua aberto)', isShown(popover)) && todos;
+            var r2 = trigger.getBoundingClientRect();
+            todos = check('abrir traz o trigger da toolbar para dentro da viewport',
+                r2.bottom >= 0 && r2.top <= window.innerHeight,
+                'top=' + Math.round(r2.top) + ' vh=' + window.innerHeight) && todos;
+
+            var urlInput = popover.querySelector('[data-ozi-editor-image-url-input]');
+            todos = check('popover preenche a URL da imagem', urlInput && urlInput.value === longUrl) && todos;
+
+            // (checagens SÍNCRONAS: o guard e o reposicionamento rodam no próprio dispatch;
+            // esperar deixaria entrar um scroll real atrasado da abertura e mascarar o teste)
+            // rolagem INTERNA não dispara o reposicionamento: marca um `top` artificial e
+            // confere que ele sobrevive (o reposicionamento o sobrescreveria)
+            popover.style.top = '999px';
+            urlInput.dispatchEvent(new Event('scroll'));
+            todos = check('scroll dentro do popover (input) não reposiciona nem fecha',
+                isShown(popover) && popover.style.top === '999px', 'top=' + popover.style.top) && todos;
+
+            popover.dispatchEvent(new Event('scroll'));
+            todos = check('scroll no próprio popover não reposiciona nem fecha',
+                isShown(popover) && popover.style.top === '999px', 'top=' + popover.style.top) && todos;
+
+            // controle: scroll da janela (trigger visível) reposiciona normalmente
+            window.dispatchEvent(new Event('scroll'));
+            todos = check('controle: scroll da página reposiciona (top recalculado)',
+                isShown(popover) && popover.style.top !== '999px', 'top=' + popover.style.top) && todos;
+
+            // rolar a PÁGINA para longe depois: trigger sai da viewport e fecha (v4.7.1)
+            img.scrollIntoView({ block: 'center' });
+            await wait(150);
+            todos = check('rolar a página para longe depois ainda fecha (v4.7.1)', !isShown(popover)) && todos;
+
+            await wait(100);
+            todos = check('zero erros JS', erros.length === 0, erros.join(' | ')) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ ACEITE v4.9.1 (popover: scroll interno): PASSOU' : '✗ ACEITE v4.9.1 (popover: scroll interno): FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+        })().catch(function (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+            vered.textContent = '✗ ACEITE v4.9.1 (popover: scroll interno): FALHOU (exceção)';
+            vered.className = 'fail';
+        });
+    });
+</script>
+</body>
+</html>

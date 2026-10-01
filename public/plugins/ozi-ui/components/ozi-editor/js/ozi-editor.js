@@ -2,8 +2,8 @@
  * ------------------------------------------
  * ozi-editor
  * ------------------------------------------
- * Ver: 4.9.0
- * 2026-09-21
+ * Ver: 4.9.1
+ * 2026-10-01
  *
  * Editor WYSIWYG (contenteditable) com toolbar declarativa, modos html/md,
  * dropdowns de heading/classes, source view, sanitizacao e validacao.
@@ -18,6 +18,17 @@
  * Eventos: ozi:init, ozi:change, ozi:destroy (CustomEvent nativos, contrato v2)
  *
  * Changelog:
+ *   - v4.9.1: [FIX] Popover nao abria com o trigger da toolbar fora da viewport
+ *       (documento longo, toolbar acima da dobra — ex.: clique numa imagem la
+ *       embaixo). Abria ancorado no trigger invisivel e a primeira rolagem (o foco
+ *       automatico no input dispara uma) caia na regra da v4.7.1 "trigger fora da
+ *       viewport → fecha": fechava no mesmo instante. Agora, ao abrir, o trigger e
+ *       trazido pra vista (`scrollIntoView({block:'nearest'})`); rolar a pagina pra
+ *       longe DEPOIS continua fechando. E scroll com alvo DENTRO do popover (texto de
+ *       um input de URL longo) deixa de disparar o reposicionamento. Achado no CI
+ *       (Chrome/Linux: fonte mais alta empurrava a toolbar do aceite pra baixo da
+ *       dobra — aceite-editor-imagem-alinhamento 37/38). Aceite proprio:
+ *       aceite-editor-popover-scroll-interno.
  *   - v4.9.0: [FEAT] `indent`/`outdent` — sublista por botao e por Tab/Shift+Tab.
  *       Ate aqui NAO havia como criar sublista: a tecla Tab nao era tratada
  *       (o foco saia do campo, comportamento padrao do browser), nao existia
@@ -1528,16 +1539,21 @@
        rola por baixo. Se o trigger saiu inteiro da viewport nao ha o que
        ancorar, entao fecha (o popover flutuando sozinho sobre outra parte da
        pagina seria pior que fechar). */
+    /* trigger inteiro fora da viewport (mesma regra do fechamento abaixo) */
+    function _isOutOfViewport(el) {
+        var r  = el.getBoundingClientRect();
+        var vh = document.documentElement.clientHeight;
+        var vw = document.documentElement.clientWidth;
+        return r.bottom < 0 || r.top > vh || r.right < 0 || r.left > vw;
+    }
+
     OziEditor.prototype._repositionOpenPopovers = function () {
         var self = this;
         (self._popovers || []).forEach(function (p) {
             if (!_isShown(p.el)) return;
             var trig = self.wrap.querySelector(p.triggerSelector);
             if (!trig) return;
-            var r  = trig.getBoundingClientRect();
-            var vh = document.documentElement.clientHeight;
-            var vw = document.documentElement.clientWidth;
-            if (r.bottom < 0 || r.top > vh || r.right < 0 || r.left > vw) {
+            if (_isOutOfViewport(trig)) {
                 self._setPopoverOpen(p, false);
                 return;
             }
@@ -1550,6 +1566,17 @@
         var trig = this.wrap.querySelector(entry.triggerSelector);
 
         if (open) {
+            /* [v4.9.1] o popover e ancorado no trigger da toolbar. Com o trigger
+               fora da viewport (documento longo, toolbar acima da dobra — ex.:
+               clique numa imagem la embaixo), ele abria ancorado no nada e a
+               primeira rolagem (o proprio foco no input dispara uma) caia na
+               regra do _repositionOpenPopovers e fechava na hora: o popover
+               simplesmente nao abria. Traz o trigger pra vista antes, com o
+               minimo de rolagem ('nearest'). */
+            if (trig && _isOutOfViewport(trig)) {
+                try { trig.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (e) { trig.scrollIntoView(false); }
+            }
+
             /* medir exige estar renderizado, mas mostrar ANTES de posicionar
                deixaria um frame na coordenada antiga — `visibility` esconde
                sem tirar do layout, que e exatamente o que a medicao precisa */
@@ -3569,7 +3596,15 @@
            "tem popover aberto?" dentro do _repositionOpenPopovers, entao o
            custo e um `forEach` vazio enquanto nada esta aberto. Registrado
            pelo `_on` = removido pelo `destroy()`. */
-        var onReposition = function () { self._repositionOpenPopovers(); };
+        var onReposition = function (e) {
+            /* [v4.9.1] rolagem DENTRO do popover (o texto de um input de URL
+               longo rola ao focar/digitar) nao move o trigger: ignorar. Antes,
+               com o trigger fora da viewport, ela fechava o popover na cara do
+               usuario — inclusive enquanto ele digitava a URL. */
+            var t = e && e.target;
+            if (t && t.closest && t.closest('.ozi-editor-popover')) return;
+            self._repositionOpenPopovers();
+        };
         self._on(window, 'scroll', onReposition, true);
         self._on(window, 'resize', onReposition);
 
