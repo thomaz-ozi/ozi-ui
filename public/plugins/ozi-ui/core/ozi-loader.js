@@ -1,8 +1,8 @@
 /**
  * ozi-loader.js
- * Versão: 1.0.1
+ * Versão: 1.0.2
  *
- * 2026-05-30
+ * 2026-10-01
  *
  * Responsabilidade:
  *   - Carrega arquivos JS em sequência (ordem importa — deps primeiro)
@@ -14,6 +14,12 @@
  *     automaticamente antes de qualquer plugin
  *
  * Changelog:
+ *   - v1.0.2: [FIX] CSS de plugin é inserido ANTES da primeira folha de tema do ozi
+ *     (`…/themes/<tema>/*.css`) em vez de no fim do <head>. O `overrides.css` do tema
+ *     tem a mesma especificidade das regras do componente e perdia a cascata no modo
+ *     standalone (aceite-temas 12/14: padding do select 6px em vez de 8px no tailwind,
+ *     mascarado no Windows por um @media ≤768px). Ordem resultante = a documentada:
+ *     framework → componentes → tema. Sem tema linkado, nada muda.
  *   - v1.0.1: [FIX] Adicionado carregamento automático de ozi-reset.css e
  *     ozi-utilities.css no início de loadPlugins(). Esses arquivos definem
  *     classes compartilhadas por todos os plugins (.ozi-disabled, .ozi-loading,
@@ -78,8 +84,30 @@
                 resolve();
             };
 
-            document.head.appendChild(link);
+            // [v1.0.2] antes do tema, não no fim do <head> — ver _themeAnchor()
+            var anchor = _themeAnchor();
+            if (anchor) document.head.insertBefore(link, anchor);
+            else        document.head.appendChild(link);
         });
+    }
+
+    /**
+     * Primeira folha de tema do ozi já linkada no <head> (`…/themes/<tema>/*.css`).
+     *
+     * O CSS de componente precisa ficar ANTES do tema: `themes/<tema>/overrides.css`
+     * estiliza as mesmas classes `ozi-*` com a mesma especificidade, então vence quem
+     * vem depois. A ordem documentada (e a que o @oziStyles produz no Laravel) é
+     * framework → componentes → tema. Anexar no fim do <head> invertia isso no modo
+     * standalone: o tema, linkado estático pelo dev, perdia para o componente injetado
+     * depois (ex.: select com padding 6px em vez dos 8px do tailwind). Sem tema linkado,
+     * o comportamento é o de sempre (fim do <head>).
+     */
+    function _themeAnchor() {
+        var links = document.head.querySelectorAll('link[rel="stylesheet"]');
+        for (var i = 0; i < links.length; i++) {
+            if (/\/themes\/[^\/]+\/[^\/?#]+\.css(?:[?#]|$)/.test(links[i].href || '')) return links[i];
+        }
+        return null;
     }
 
     /* ─────────────────────────────────────────────

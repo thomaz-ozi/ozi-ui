@@ -11,7 +11,7 @@
 // são cópia fiel das do dev-hard, sem edição.
 //
 // Uso:  node tests/aceites/run.mjs [pagina.html ...]
-// Env:  BROWSER=/caminho/do/navegador   PAGE_TIMEOUT=30 (s por página)
+// Env:  BROWSER=/caminho/do/navegador   PAGE_TIMEOUT=30 (s por página)   WINDOW=800x600
 //
 // ⚠️ Aceite headless mede estado (classList, valor, eventos), não pintura: verde aqui não prova
 // que o visual está certo. Ver ozi-ui-ai/logs/lessons-learned.md (2026-09-14 e 2026-08-31).
@@ -27,14 +27,11 @@ const ROOT      = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const PAGES_DIR = join(ROOT, 'tests/aceites');
 const TIMEOUT   = Number(process.env.PAGE_TIMEOUT || 30) * 1000;
 const GH        = !!process.env.GITHUB_ACTIONS;
+const [WIN_W, WIN_H] = (process.env.WINDOW || '800x600').split('x').map(Number);
 
 // Falhas conhecidas e registradas: rodam e aparecem como aviso, mas não derrubam o job.
 // Cada entrada precisa de motivo e de onde está registrada. Tire daqui assim que passar.
 const KNOWN_FAIL = {
-    // overrides.css do tema tailwind perde a cascata para o CSS do componente, que o loader injeta
-    // depois (mesma especificidade): padding do select 6px, não 8px, em janela ≥ 769px. Ver
-    // ozi-ui-docs/horizonte/roadmap/lancamento-publico.md (F2, achados).
-    'aceite-temas.html': 'cascata do tailwind/overrides.css no modo standalone',
     // 37/38 só no Chrome do Linux (CI): "clique (sem movimento) numa imagem livre abre o popover"
     // falha nas duas tentativas, de forma consistente. Passa sempre no Edge e no Chrome do
     // Windows. Pode ser bug real para usuário de Chrome/Linux; precisa de reprodução em Linux.
@@ -81,7 +78,7 @@ const browser = spawn(findBrowser(), [
     '--remote-debugging-port=0', `--user-data-dir=${profile}`,
     // janela fixa (= padrão do Chrome headless, onde as páginas foram validadas): sem ela a janela
     // varia por SO/DPI e muda quais @media valem
-    '--window-size=800,600', '--force-device-scale-factor=1',
+    `--window-size=${WIN_W},${WIN_H}`, '--force-device-scale-factor=1',
     // rede externa bloqueada (hermético): algumas páginas usam URLs de imagem reais como fixture
     '--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1',
     'about:blank',
@@ -125,12 +122,41 @@ const PROBE = `(() => {
     });
 })()`;
 
+// [DIAGNÓSTICO TEMPORÁRIO] investigação do imagem-alinhamento no Chrome/Linux: registra quem
+// esconde popover (pilha), scrolls e mousemoves reais. Remover quando o bug for entendido.
+const DIAG_PAGES = ['aceite-editor-imagem-alinhamento.html'];
+const DIAG_SCRIPT = `(() => {
+    const log = window.__oziDiag = [];
+    const t0 = performance.now();
+    const ts = () => Math.round(performance.now() - t0);
+    const d = Object.getOwnPropertyDescriptor(CSSStyleDeclaration.prototype, 'display');
+    if (d && d.set) Object.defineProperty(CSSStyleDeclaration.prototype, 'display', {
+        get: d.get, configurable: true,
+        set(v) {
+            if (v === 'none') {
+                const st = (new Error().stack || '').split('\\n').slice(2, 7).map((l) => l.trim().replace(/\\(.*\\//, '(')).join(' < ');
+                if (/Popover/.test(st)) log.push(ts() + ' HIDE ' + st);
+            }
+            return d.set.call(this, v);
+        },
+    });
+    addEventListener('scroll', (e) => log.push(ts() + ' SCROLL y=' + scrollY + ' alvo=' + (e.target.className || e.target.nodeName)), true);
+    addEventListener('mousemove', (e) => { if (e.isTrusted) log.push(ts() + ' MOVE(real) buttons=' + e.buttons + ' ' + e.clientX + ',' + e.clientY); }, true);
+    addEventListener('mousedown', (e) => log.push(ts() + ' DOWN ' + (e.isTrusted ? 'real' : 'sint')), true);
+    addEventListener('mouseup', (e) => log.push(ts() + ' UP ' + (e.isTrusted ? 'real' : 'sint')), true);
+    addEventListener('DOMContentLoaded', () => log.push(ts() + ' vh=' + innerHeight + ' font=' + getComputedStyle(document.body).fontFamily));
+})()`;
+
 // Uma página num contexto isolado (como uma aba anônima: nada de storage compartilhado).
 async function runPage(page) {
     const { browserContextId } = await cdp('Target.createBrowserContext');
     try {
-        const { targetId } = await cdp('Target.createTarget', { url: 'about:blank', browserContextId, width: 800, height: 600 });
+        const { targetId } = await cdp('Target.createTarget', { url: 'about:blank', browserContextId, width: WIN_W, height: WIN_H });
         const { sessionId } = await cdp('Target.attachToTarget', { targetId, flatten: true });
+        if (DIAG_PAGES.includes(page)) {
+            await cdp('Page.enable', {}, sessionId);
+            await cdp('Page.addScriptToEvaluateOnNewDocument', { source: DIAG_SCRIPT }, sessionId);
+        }
         await cdp('Page.navigate', { url: base + page }, sessionId);
 
         const deadline = Date.now() + TIMEOUT;
@@ -141,7 +167,13 @@ async function runPage(page) {
                 const r = await cdp('Runtime.evaluate', { expression: PROBE, returnByValue: true }, sessionId);
                 last = JSON.parse(r.result.value);
             } catch { /* página ainda navegando */ }
-            if (/PASSOU|FALHOU/.test(last.verdict)) return last;
+            if (/PASSOU|FALHOU/.test(last.verdict)) {
+                if (DIAG_PAGES.includes(page) && !last.verdict.includes('PASSOU')) {
+                    const d = await cdp('Runtime.evaluate', { expression: 'JSON.stringify(window.__oziDiag || [])', returnByValue: true }, sessionId).catch(() => null);
+                    last.diag = d ? JSON.parse(d.result.value) : [];
+                }
+                return last;
+            }
         }
         return { verdict: last.verdict ? `${last.verdict} (timeout ${TIMEOUT / 1000}s)` : 'sem veredito (timeout)', fails: last.fails };
     } finally {
@@ -183,6 +215,11 @@ for (const page of pages) {
         known++;
         console.log(`⚠ ${page} — ${r.verdict} (falha conhecida: ${KNOWN_FAIL[page]})`);
         if (GH) console.log(`::warning title=aceite ${page} (falha conhecida)::${r.verdict}`);
+        if (r.diag) {
+            const tail = r.diag.slice(-25).join(' ¦ ');
+            console.log('  diag: ' + tail);
+            if (GH) for (let i = 0; i < tail.length; i += 900) console.log(`::notice title=diag ${page} ${i / 900 + 1}::${tail.slice(i, i + 900)}`);
+        }
     } else {
         failed++;
         console.log(`✘ ${page} — ${r.verdict}`);

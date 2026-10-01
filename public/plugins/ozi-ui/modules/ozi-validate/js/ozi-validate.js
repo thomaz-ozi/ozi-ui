@@ -2,8 +2,8 @@
  * ------------------------------------------
  * ozi-validate
  * ------------------------------------------
- * Ver: 2.2.0
- * 2026-08-24
+ * Ver: 2.2.1
+ * 2026-10-01
  *
  * Responsabilidade:
  *   - Motor generico de validacao de campos por container
@@ -24,6 +24,15 @@
  * Expoe: OZI.modules.validate, window.oziValidateContainer (compat)
  *
  * Changelog:
+ *   - v2.2.1: [FIX] Componente obrigatório sem `name`/`id` não é mais pulado em silêncio.
+ *       `_container()` resolvia o nome por `name || id` e descartava o campo sem nenhum dos
+ *       dois — mas a raiz de um componente (`<div data-ozi-select="team" data-ozi-required="true">`)
+ *       não tem `name`: a chave mora em `data-{adapter}`. O select obrigatório vazio passava
+ *       pelo gate e o form era enviado. Agora o campo obrigatório sem nome é VALIDADO e
+ *       identificado em `invalidFields` pela chave `data-{adapter.name}` (convenção de todo
+ *       adapter: ozi-select, ozi-autocomplete, ozi-audio); sem nem isso, console.warn — nunca
+ *       mais fail-open silencioso. A coleta (`data`/`formData`) NÃO muda: segue exigindo
+ *       name/id (o valor do componente já vai pelos hidden dele). Achado no lançamento (F3).
  *   - v2.2.0: [FEAT] Gate de envio declarativo — reaproveita `data-ozi-validate`, agora
  *       também em `<button type="submit">`/`<input type="submit">` (o atributo já era usado
  *       em container para validação em tempo real; papel definido pelo elemento). No submit
@@ -339,6 +348,29 @@
     // [8] VALIDACAO DE CONTAINER — funcao principal
     // ---------------------------------------------
 
+    /**
+     * Chave de um componente sem `name`/`id`, pela convenção de todo adapter:
+     * ozi-select lê `data-ozi-select="team"`, ozi-autocomplete `data-ozi-autocomplete`,
+     * ozi-audio `data-ozi-audio` — a raiz do componente é um <div>, sem `name`.
+     * Usada SÓ para identificar o campo inválido (invalidFields/eventos): o valor do
+     * componente já chega ao servidor pelos hidden dele (`[data-ozi-component-hidden]`,
+     * mesmo nome), então coletá-lo aqui também duplicaria a entrada no formData.
+     */
+    function _componentKey(el, adapter) {
+        if (!adapter || adapter === _nativeAdapter || !adapter.name) return '';
+        return (el.getAttribute('data-' + adapter.name) || '').trim();
+    }
+
+    var _noNameWarned = typeof WeakSet === 'function' ? new WeakSet() : null;
+
+    function _warnNoName(el) {
+        if (_noNameWarned) {
+            if (_noNameWarned.has(el)) return;
+            _noNameWarned.add(el);
+        }
+        console.warn('[OZI:validate] campo obrigatório sem name/id nem chave de componente: validado, mas sem nome em invalidFields.', el);
+    }
+
     function _container(config) {
         config = config || {};
 
@@ -374,14 +406,22 @@
             var required = _parseBool(el, 'required', false)
                 || _parseBool(el, 'data-ozi-required', false);
 
-            if (!name) return;
+            // [FIX v2.2.1] sem nome, um campo opcional não tem o que coletar — mas um
+            // obrigatório PRECISA ser validado, senão o form passa com ele vazio.
+            // A coleta (data/formData) segue exigindo name/id, como antes.
+            var label = name;
+            if (!name) {
+                if (!required) return;
+                label = _componentKey(el, adapter);
+                if (!label) _warnNoName(el);
+            }
 
-            if (type === 'radio') {
+            if (name && type === 'radio') {
                 if (_radioSeen[name]) return;
                 _radioSeen[name] = true;
             }
 
-            if (el.tagName === 'SELECT' && el.multiple) {
+            if (name && el.tagName === 'SELECT' && el.multiple) {
                 if (_selectSeen[name]) return;
                 _selectSeen[name] = true;
             }
@@ -389,7 +429,9 @@
             var valid = _call(adapter, 'isValid', el);
             var value = _call(adapter, 'getValue', el);
 
-            if (value instanceof FileList) {
+            if (!name) {
+                // validado abaixo, mas sem name/id não entra em data/formData (ver _componentKey)
+            } else if (value instanceof FileList) {
                 Array.prototype.forEach.call(value, function (f) {
                     formData.append(name, f, f.name);
                 });
@@ -413,7 +455,7 @@
             }
 
             if (required && !valid) {
-                invalidFields.push({ el: el, name: name, adapter: adapter.name });
+                invalidFields.push({ el: el, name: label, adapter: adapter.name });
                 if (!firstInvalid) firstInvalid = el;
             }
         });

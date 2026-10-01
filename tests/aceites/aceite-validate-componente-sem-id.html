@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite v2.2.1 (ozi-validate: componente sem id)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .35rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite v2.2.1 <small>(ozi-validate: componente obrigatório sem <code>id</code>)</small></h1>
+<p>Critério: um <code>ozi-select</code> obrigatório cuja raiz não tem <code>name</code> nem <code>id</code>
+(<code>&lt;div data-ozi-select="team" data-ozi-required="true"&gt;</code>, o uso mais natural) é
+validado: o gate barra o envio com ele vazio, ele aparece em <code>invalidFields</code> pela chave
+<code>team</code>, e depois de preenchido o valor sai <strong>uma vez só</strong> no
+<code>formData</code> (pelos hidden do próprio select). Até a 2.2.0 o campo era pulado em silêncio.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<form id="form-a" novalidate>
+    <input name="nome" value="Taylor" data-ozi-required="true">
+    <div data-ozi-select="team" data-ozi-required="true" data-ozi-select-required></div>
+    <script type="application/json" data-ozi-select-options="team">
+    [{"value":"core","label":"Core"},{"value":"docs","label":"Docs"}]
+    </script>
+    <button type="submit" data-ozi-validate id="btn-a">Enviar</button>
+</form>
+
+<!-- opcional sem id: continua fora da validação e da coleta (comportamento anterior) -->
+<form id="form-b" novalidate>
+    <div data-ozi-select="extra"></div>
+    <script type="application/json" data-ozi-select-options="extra">
+    [{"value":"x","label":"X"}]
+    </script>
+</form>
+
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['select', 'validate'], lang: 'pt-BR' });
+
+    var erros = [];
+    window.addEventListener('error', function (ev) {
+        if (ev.message === 'Script error.' && !ev.filename && !ev.lineno) return;
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra && !ok ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 9s';
+        vered.className = 'fail';
+    }, 9000);
+
+    OZI.ready(function () {
+        (async function () {
+            var todos = true;
+            var validate = OZI.modules.validate;
+            var select   = OZI.components.select;
+            await wait(50);
+
+            var formA = document.getElementById('form-a');
+            var btnA  = document.getElementById('btn-a');
+            var ctl   = function () { return formA.querySelector('[data-ozi-select="team"] .ozi-select-control'); };
+
+            var submitted = 0, broken = null;
+            formA.addEventListener('submit', function (e) { submitted++; e.preventDefault(); });
+            document.addEventListener('ozi:validate-broken', function (e) { broken = e.detail; });
+
+            // ── 1. vazio: gate barra ──
+            btnA.click();
+            await wait(20);
+            todos = check('gate: select obrigatório vazio SEM id barra o envio', submitted === 0, 'submit chegou ao form') && todos;
+            todos = check('gate: ozi:validate-broken lista o campo pela chave "team"',
+                !!broken && broken.invalidFields.indexOf('team') !== -1, JSON.stringify(broken && broken.invalidFields)) && todos;
+            todos = check('select vazio ganha o estado inválido', ctl().classList.contains('ozi-invalid'), ctl().className) && todos;
+
+            // ── 2. container() direto ──
+            var r1 = validate.container({ container: formA, silent: true });
+            todos = check('container(): isValid false e invalidFields com name "team" e adapter "ozi-select"',
+                r1.isValid === false && r1.invalidFields.some(function (f) { return f.name === 'team' && f.adapter === 'ozi-select'; }),
+                JSON.stringify(r1.invalidFields.map(function (f) { return f.name + ':' + f.adapter; }))) && todos;
+
+            // ── 3. preenchido: passa, valor sai UMA vez ──
+            select.value('team', 'core');
+            await wait(20);
+            var r2 = validate.container({ container: formA, silent: true });
+            todos = check('preenchido: isValid true', r2.isValid === true, JSON.stringify(r2.invalidFields.map(function (f) { return f.name; }))) && todos;
+            var entries = r2.formData.getAll('team');
+            todos = check('preenchido: "team" sai uma vez só no formData (pelos hidden do select)',
+                entries.length === 1 && entries[0] === 'core', JSON.stringify(entries)) && todos;
+
+            btnA.click();
+            await wait(20);
+            todos = check('gate: preenchido, o submit passa', submitted === 1, 'submits: ' + submitted) && todos;
+
+            // ── 4. opcional sem id: inalterado ──
+            var r3 = validate.container({ container: document.getElementById('form-b'), silent: true });
+            todos = check('opcional sem id: válido e fora de invalidFields (como antes)',
+                r3.isValid === true && r3.invalidFields.length === 0) && todos;
+
+            // ── 5. campo nativo segue igual ──
+            todos = check('campo nativo com name segue no data', r2.data.nome === 'Taylor', JSON.stringify(r2.data)) && todos;
+
+            await wait(100);
+            todos = check('zero erros JS', erros.length === 0, erros.join(' | ')) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ ACEITE v2.2.1 (validate: componente sem id): PASSOU' : '✗ ACEITE v2.2.1 (validate: componente sem id): FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+        })().catch(function (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+            vered.textContent = '✗ ACEITE v2.2.1 (validate: componente sem id): FALHOU (exceção)';
+            vered.className = 'fail';
+        });
+    });
+</script>
+</body>
+</html>
