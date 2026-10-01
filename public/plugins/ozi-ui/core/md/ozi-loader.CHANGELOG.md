@@ -2,6 +2,16 @@
 
 ---
 
+## [1.0.2] — 2026-10-01
+
+### Corrigido
+- **CSS de plugin entra antes do tema.** Era anexado no fim do `<head>`, depois das folhas de
+  tema que o dev linka estáticas; como `themes/<tema>/overrides.css` estiliza as mesmas classes
+  `ozi-*` com a mesma especificidade, o componente vencia e o tema não aplicava (ex.: select com
+  padding de 6px em vez dos 8px do tailwind). Agora o loader insere antes da primeira folha
+  `…/themes/<tema>/*.css`, reproduzindo a ordem documentada (framework → componentes → tema).
+  Sem tema linkado, nada muda. Aceite: `aceite-temas.html` (12/14 → 14/14).
+
 ## [1.0.0] — 2025 (v1.0.0 release)
 
 ### Adicionado

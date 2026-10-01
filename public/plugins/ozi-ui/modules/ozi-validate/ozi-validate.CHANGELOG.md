@@ -2,6 +2,18 @@
 
 ---
 
+## [2.2.1] — 2026-10-01 (fix — componente obrigatório sem `id`)
+
+### Corrigido
+- **Componente obrigatório sem `name`/`id` não é mais pulado em silêncio.** A raiz de um
+  componente (`<div data-ozi-select="team" data-ozi-required="true">`) não tem `name`, e
+  `container()` descartava o campo: o select obrigatório vazio passava pelo gate e o form era
+  enviado. Agora ele é validado e identificado em `invalidFields` pela chave `data-{adapter}`
+  (convenção de todos os adapters). Sem nem isso, `console.warn`.
+- A coleta (`data`/`formData`) **não muda**: segue exigindo `name`/`id`, porque o valor do
+  componente já vai pelos `hidden` dele (coletar de novo duplicaria a entrada).
+- Aceite: `aceite-validate-componente-sem-id.html` (falha na 2.2.0, passa na 2.2.1).
+
 ## [2.2.0] — 2026-08-24 (feat — gate de envio + fixes do standalone)
 
 ### Adicionado

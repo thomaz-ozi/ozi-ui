@@ -6,6 +6,15 @@ listed where they changed.
 
 ## [Unreleased]
 
+### Fixed
+- `ozi-validate` 2.2.1: a required component without `name`/`id` (e.g.
+  `<div data-ozi-select="team" data-ozi-required="true">`) was silently skipped, so the form was
+  submitted with it empty. It is now validated and reported by its key (`team`).
+- `ozi-loader` 1.0.2: theme stylesheets (`themes/<theme>/*.css`) lost the cascade to plugin CSS
+  injected later in standalone mode. Plugin CSS is now inserted before the first theme stylesheet.
+- `ozi-editor` 4.9.1: popovers did not open when the toolbar was scrolled out of view (long
+  documents); scrolling inside a popover no longer repositions or closes it.
+
 ## [2.6.2] — 2026-10-01
 
 ### Fixed
