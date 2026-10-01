@@ -1,10 +1,10 @@
 {
   "name": "ozi-ui/core",
   "version": "2.6.1",
-  "description": "Orquestrador do ecossistema ozi-ui — plugins front-end para Laravel (v2: JS puro, zero dependência de terceiros)",
+  "description": "UI components for Laravel and Livewire, configured in HTML: select, rich-text editor, form validation, AJAX forms. Plain JavaScript, zero dependencies.",
   "type": "library",
   "license": "MIT",
-  "keywords": ["laravel", "ozi-ui", "plugins", "frontend", "vanilla-js", "livewire"],
+  "keywords": ["laravel", "livewire", "blade", "ui-components", "select", "wysiwyg", "form-validation", "vanilla-js", "ozi-ui"],
   "homepage": "https://oziui.com",
   "authors": [
     {

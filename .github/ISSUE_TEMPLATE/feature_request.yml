@@ -1,0 +1,25 @@
+name: Feature request
+description: Suggest an improvement to a plugin or to the Laravel integration
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ozi-ui targets Laravel and Livewire; npm packages, ESM builds and wrappers for other
+        frameworks are out of scope (see CONTRIBUTING.md).
+  - type: input
+    id: plugin
+    attributes:
+      label: Plugin
+      placeholder: ozi-select, ozi-editor, @oziScripts...
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would it solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: How would you like it to work?
+      description: Ideally the HTML attributes you would write.

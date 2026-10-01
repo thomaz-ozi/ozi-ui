@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<style>
+    *, *::before, *::after { transition: none !important; animation: none !important; }
+    body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0; padding: 28px 32px; background: #fff; color: #111827; }
+    .row { display: flex; gap: 24px; align-items: flex-start; }
+    .col { flex: 1; }
+    label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: #374151; }
+</style>
+</head>
+<body>
+<div class="row">
+    <div class="col">
+        <label>Country</label>
+        <div data-ozi-select="country" data-ozi-select-value-placeholder="Pick a country"></div>
+        <script type="application/json" data-ozi-select-options="country">
+        [{"value":"br","label":"Brazil"},{"value":"ca","label":"Canada"},{"value":"de","label":"Germany"},{"value":"jp","label":"Japan"},{"value":"pt","label":"Portugal"}]
+        </script>
+    </div>
+    <div class="col">
+        <label>Skills</label>
+        <div data-ozi-select="skills" data-ozi-select-multiple-group data-ozi-select-value-placeholder="Pick your skills"></div>
+        <script type="application/json" data-ozi-select-options="skills">
+        [{"value":"laravel","label":"Laravel","group":"Backend"},{"value":"livewire","label":"Livewire","group":"Backend"},{"value":"php","label":"PHP","group":"Backend"},
+         {"value":"blade","label":"Blade","group":"Frontend"},{"value":"alpine","label":"Alpine.js","group":"Frontend"},{"value":"tailwind","label":"Tailwind CSS","group":"Frontend"}]
+        </script>
+    </div>
+</div>
+
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['select'], lang: 'en' });
+    document.addEventListener('ozi:ready', go);
+    var done = false;
+    function go() {
+        if (done) return; done = true;
+        var s = OZI.components.select;
+        s.value('country', 'br');
+        s.value('skills', ['laravel', 'livewire', 'alpine']);
+        setTimeout(function () {
+            document.querySelector('[data-ozi-select="skills"] .ozi-select-control').click();
+        }, 100);
+    }
+    setTimeout(function () { if (window.OZI && OZI.components && OZI.components.select) go(); }, 800);
+</script>
+</body>
+</html>

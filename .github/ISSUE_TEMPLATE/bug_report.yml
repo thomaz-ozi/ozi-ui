@@ -1,0 +1,55 @@
+name: Bug report
+description: Something does not work as documented
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Security issues go to support@oziui.com, not here (see SECURITY.md).
+        English or Portuguese are both fine.
+  - type: input
+    id: plugin
+    attributes:
+      label: Plugin
+      placeholder: ozi-select, ozi-editor, ozi-validate...
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: The smallest Blade or HTML snippet that shows the problem.
+      render: blade
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      placeholder: "ozi-ui/core 2.6.1, Laravel 12, Livewire 3.6, PHP 8.3, Chrome 140"
+    validations:
+      required: true
+  - type: dropdown
+    id: theme
+    attributes:
+      label: Theme
+      options: [default, bootstrap5, tailwind, custom]
+  - type: dropdown
+    id: assets
+    attributes:
+      label: How are assets served?
+      options:
+        - Package route (composer require only)
+        - Published with vendor:publish
+        - Plain HTML page (no Laravel)
+  - type: textarea
+    id: check
+    attributes:
+      label: Output of `php artisan ozi:check`
+      render: text

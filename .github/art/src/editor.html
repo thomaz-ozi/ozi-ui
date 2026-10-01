@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<style>
+    *, *::before, *::after { transition: none !important; animation: none !important; }
+    body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0; padding: 28px 32px; background: #fff; color: #111827; }
+    label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: #374151; }
+</style>
+</head>
+<body>
+<label>Release notes</label>
+<textarea data-ozi-editor-html="notes"
+          data-ozi-editor-tools="[bold,italic,underline,strike], heading, [ul,ol], [left,center,right], [link,color,highlight], [quote,codeblock,table], [undo,redo], source"><h2>ozi-ui 2.6</h2>
+<p>Declare behavior in <strong>HTML</strong>, not JavaScript. Works with <mark>Livewire 3 &amp; 4</mark> out of the box.</p>
+<ul>
+    <li><strong>@oziScripts</strong> now resolves plugin dependencies</li>
+    <li>Asset route survives <code>route:cache</code></li>
+    <li>Zero runtime dependencies — no jQuery</li>
+</ul>
+<blockquote>Simplicity above all: if you need to write JS, something is wrong.</blockquote></textarea>
+
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['editor'], lang: 'en' });
+</script>
+</body>
+</html>

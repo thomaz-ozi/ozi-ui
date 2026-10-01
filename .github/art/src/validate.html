@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="../plugins/ozi-ui/modules/ozi-validate/css/ozi-validate.css">
+<style>
+    *, *::before, *::after { transition: none !important; animation: none !important; }
+    body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0; padding: 28px 32px; background: #fff; color: #111827; }
+    .field { margin-bottom: 14px; }
+    label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: #374151; }
+    input[type=text], input[type=email] { width: 100%; box-sizing: border-box; padding: 8px 12px; font: inherit; border: 1px solid #d1d5db; border-radius: 6px; }
+    .submit { padding: 8px 18px; font: inherit; font-weight: 600; color: #fff; background: #e74526; border: 0; border-radius: 6px; }
+    .row { display: flex; gap: 16px; } .row .field { flex: 1; }
+</style>
+</head>
+<body>
+<form id="signup" novalidate>
+    <div class="row">
+        <div class="field">
+            <label>Name</label>
+            <input name="name" type="text" value="Taylor" data-ozi-required="true">
+            <span class="ozi-feedback"></span>
+        </div>
+        <div class="field">
+            <label>E-mail</label>
+            <input name="email" type="email" value="taylor@" data-ozi-required="true" data-ozi-required-message="Enter a valid e-mail.">
+            <span class="ozi-feedback"></span>
+        </div>
+    </div>
+    <div class="field">
+        <label>Team</label>
+        <div id="team" data-ozi-select="team" data-ozi-select-required data-ozi-required="true" data-ozi-select-value-placeholder="Pick a team"></div>
+        <script type="application/json" data-ozi-select-options="team">
+        [{"value":"core","label":"Core"},{"value":"docs","label":"Docs"}]
+        </script>
+    </div>
+    <button type="submit" class="submit" data-ozi-validate>Create account</button>
+</form>
+
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['select', 'validate'], lang: 'en' });
+    var form = document.getElementById('signup');
+    form.addEventListener('submit', function (e) { e.preventDefault(); });
+    OZI.ready(function () {
+        setTimeout(function () {
+            // o ozi-select tem botões internos: mirar o de envio explicitamente
+            form.querySelector('button[type="submit"]').click();
+            if (document.activeElement) document.activeElement.blur();
+        }, 50);
+    });
+</script>
+</body>
+</html>

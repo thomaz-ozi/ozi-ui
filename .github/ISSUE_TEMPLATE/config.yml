@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://oziui.com/en/docs/introduction
+    about: Guides and the attribute reference for every plugin.
+  - name: Security vulnerability
+    url: https://github.com/thomaz-ozi/ozi-ui/blob/master/SECURITY.md
+    about: Please report security issues privately.
