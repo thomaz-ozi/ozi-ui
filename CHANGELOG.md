@@ -6,6 +6,8 @@ listed where they changed.
 
 ## [Unreleased]
 
+## [2.6.2] — 2026-10-01
+
 ### Fixed
 - `@oziScripts` now emits the translation files when assets are served from the package (no
   `vendor:publish`). Since 2.1.0, apps installed with `composer require` alone got no dictionaries
@@ -107,7 +109,8 @@ Version 2: every plugin rewritten in plain JavaScript, no jQuery, zero runtime d
 A v1 compatibility ramp (jQuery shims, `zld*` aliases) is included and opt-in. `ozi-copy` and
 `ozi-paste` were discontinued. See the [migration guide](https://oziui.com/en/docs/migration).
 
-[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.6.1...HEAD
+[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.6.2...HEAD
+[2.6.2]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.6.1...v2.6.2
 [2.6.1]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.6.0...v2.6.1
 [2.6.0]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.5.0...v2.6.0
 [2.5.0]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.4.0...v2.5.0
