@@ -65,6 +65,10 @@ and the Livewire adapter turns it into a model update. Validation with `ozi-vali
 ### ozi-select
 
 Single, multiple and grouped selects with search, images, remote options and "create new" entries.
+See the [ozi-select docs](https://oziui.com/en/docs/ozi-select) for every attribute.
+
+A select named `country` submits `country` and `country_label`, plus the search box as
+`country_select_search`, so pick the fields you need instead of using `$request->all()`.
 
 ### ozi-editor
 
@@ -85,14 +89,26 @@ colors, tables, images, source mode, undo/redo. Output is sanitized.
 Client-side validation for native fields and ozi components. Put `data-ozi-validate` on the submit
 button to block the submission (click or Enter) while the form is invalid.
 
-```html
+```blade
+<head>
+    @oziStyles(['select', 'validate'])
+    @oziScripts(['select', 'validate'])
+</head>
+
 <form novalidate>
     <input name="email" type="email" data-ozi-required="true">
     <span class="ozi-feedback"></span>
 
+    <div data-ozi-select="country" data-ozi-select-required="true"></div>
+    <script type="application/json" data-ozi-select-options="country">
+        [{"value": "br", "label": "Brazil"}, {"value": "ca", "label": "Canada"}]
+    </script>
+
     <button type="submit" data-ozi-validate>Create account</button>
 </form>
 ```
+
+Native fields use `data-ozi-required`; a select uses `data-ozi-select-required`.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/thomaz-ozi/ozi-ui/master/.github/art/validate.png" alt="ozi-validate showing valid and invalid fields" width="760">
@@ -139,8 +155,13 @@ AJAX without JavaScript: collect fields, validate, send, and render the response
 ## Installation details
 
 **Blade directives.** `@oziStyles` and `@oziScripts` accept plugin keys or groups (`forms`,
-`auth`, `livewire`, `full`). With no argument they load everything. Dependencies are resolved for
-you: `@oziScripts(['editor'])` also loads the validator and the sanitizer it needs.
+`auth`, `livewire`, `full`). With no argument they load everything. The keys are the plugin names
+without the `ozi-` prefix: `select`, `editor`, `editor-md`, `validate`, `loaddata`, `autocomplete`,
+`check`, `search`, `auth`, `audio`, `toggle`. An unknown key is ignored without an error, so
+`['ozi-validate']` loads nothing.
+
+`@oziScripts` resolves dependencies for you: `@oziScripts(['editor'])` also loads the validator and
+the sanitizer it needs. `@oziStyles` does not, so list `validate` there to style the error messages.
 
 **Production.** Optionally publish the assets so your web server serves them directly:
 
@@ -164,7 +185,7 @@ missing or out of sync.
 <script>oziConf({ theme: 'bootstrap5' });</script>
 ```
 
-For a custom theme, copy `themes/_template/`.
+For a custom theme, copy `vendor/ozi-ui/core/public/plugins/ozi-ui/themes/_template/`.
 
 **Languages.** `en`, `pt-BR` and `es`. The language follows your Laravel locale by default;
 `oziConf({ lang: 'es' })` overrides it.
@@ -186,7 +207,7 @@ Every push runs on GitHub Actions:
 
 - **PHPUnit** (via Orchestra Testbench) on PHP 8.2–8.4 × Laravel 10–13: asset resolution, Blade
   directives, the asset route, and `ozi:check`
-- **34 browser acceptance pages** in headless Chrome, one or more per plugin
+- **37 browser acceptance pages** in headless Chrome, one or more per plugin
 
 See [`tests/aceites/README.md`](tests/aceites/README.md) to run them locally.
 

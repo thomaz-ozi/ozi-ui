@@ -6,6 +6,15 @@ listed where they changed.
 
 ## [Unreleased]
 
+## [2.7.1] — 2026-11-01
+
+### Fixed
+- `LICENSE` was an empty file in every release up to 2.7.0. It now contains the MIT license text
+  that `composer.json` and the README already declared.
+- README: lists the plugin keys, shows how to load and style `ozi-validate`, adds a required-select
+  example and gives the full path of the theme template. Gaps found by installing the package on a
+  clean Laravel app using only the README.
+
 ## [2.7.0] — 2026-10-01
 
 ### Added
@@ -130,7 +139,8 @@ Version 2: every plugin rewritten in plain JavaScript, no jQuery, zero runtime d
 A v1 compatibility ramp (jQuery shims, `zld*` aliases) is included and opt-in. `ozi-copy` and
 `ozi-paste` were discontinued. See the [migration guide](https://oziui.com/en/docs/migration).
 
-[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.7.0...HEAD
+[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.7.1...HEAD
+[2.7.1]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.7.0...v2.7.1
 [2.7.0]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.6.2...v2.7.0
 [2.6.2]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.6.1...v2.6.2
 [2.6.1]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.6.0...v2.6.1
