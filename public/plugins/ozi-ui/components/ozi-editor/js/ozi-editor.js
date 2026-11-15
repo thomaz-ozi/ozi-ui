@@ -2,8 +2,8 @@
  * ------------------------------------------
  * ozi-editor
  * ------------------------------------------
- * Ver: 4.9.1
- * 2026-10-01
+ * Ver: 4.9.2
+ * 2026-11-15
  *
  * Editor WYSIWYG (contenteditable) com toolbar declarativa, modos html/md,
  * dropdowns de heading/classes, source view, sanitizacao e validacao.
@@ -18,6 +18,11 @@
  * Eventos: ozi:init, ozi:change, ozi:destroy (CustomEvent nativos, contrato v2)
  *
  * Changelog:
+ *   - v4.9.2: [FIX] O `max-height` do popover que não cabe na viewport ignorava padding e
+ *       borda quando o popover é content-box (Blade sem o ozi-reset.css): a caixa ficava ~22px maior que o espaço medido e passava da
+ *       borda da tela, escondendo Aplicar/Remover até rolar. Agora desconta os dois. Junto,
+ *       ozi-editor.css 2.8.1 dá tamanho aos ícones do alinhamento de imagem, que desde a 4.7.0
+ *       mediam 0×0 (botões vazios). Achados no teste visual ao vivo de 2026-11-03.
  *   - v4.9.1: [FIX] Popover nao abria com o trigger da toolbar fora da viewport
  *       (documento longo, toolbar acima da dobra — ex.: clique numa imagem la
  *       embaixo). Abria ancorado no trigger invisivel e a primeira rolagem (o foco
@@ -1506,6 +1511,13 @@
         var vh = document.documentElement.clientHeight;
         var w  = el.offsetWidth;
         var h  = el.offsetHeight;
+        /* [4.9.2] em content-box o max-height vale so para o conteudo: sem descontar
+           padding e borda, a caixa sairia maior que o espaco medido. O standalone
+           carrega o ozi-reset.css (border-box); o @oziStyles com chaves nao */
+        var cs     = window.getComputedStyle(el);
+        var chrome = cs.boxSizing === "border-box" ? 0 :
+                     (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0) +
+                     (parseFloat(cs.borderTopWidth) || 0) + (parseFloat(cs.borderBottomWidth) || 0);
 
         var left = r.left;
         if (left + w > vw - FLOAT_EDGE) left = vw - FLOAT_EDGE - w;
@@ -1519,11 +1531,11 @@
            vira pra cima quando NAO cabe embaixo e cabe melhor em cima */
         if (h <= below || below >= above) {
             top = r.bottom + FLOAT_GAP;
-            if (h > below) el.style.maxHeight = Math.max(below, FLOAT_MIN) + 'px';
+            if (h > below) el.style.maxHeight = (Math.max(below, FLOAT_MIN) - chrome) + 'px';
         } else {
             top = r.top - FLOAT_GAP - Math.min(h, above);
             if (h > above) {
-                el.style.maxHeight = Math.max(above, FLOAT_MIN) + 'px';
+                el.style.maxHeight = (Math.max(above, FLOAT_MIN) - chrome) + 'px';
                 top = r.top - FLOAT_GAP - Math.max(above, FLOAT_MIN);
             }
         }

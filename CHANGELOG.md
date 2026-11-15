@@ -6,6 +6,20 @@ listed where they changed.
 
 ## [Unreleased]
 
+## [2.7.2] — 2026-11-15
+
+### Fixed
+- `ozi-select` 6.5.1: `data-ozi-required` now makes a select required. Only
+  `data-ozi-select-required` worked, so a select marked the way the `ozi-validate` docs show was
+  submitted empty with no error. A required select is now also seen by the `ozi-validate` submit
+  gate, which emitted `ozi:validate-ready` while the select itself blocked the submission.
+- `ozi-select` 6.5.1: in multiple mode the dropdown closed after every click on an option.
+- `ozi-validate` 2.2.2: the submit gate now moves focus into the first invalid component instead of
+  its non-focusable root element.
+- `ozi-editor` 4.9.2: a popover limited by the viewport height no longer runs past the bottom of the
+  screen when the page does not load the ozi reset stylesheet. The image alignment buttons show
+  their icons again (`ozi-editor.css` 2.8.1).
+
 ## [2.7.1] — 2026-11-01
 
 ### Fixed
@@ -139,7 +153,8 @@ Version 2: every plugin rewritten in plain JavaScript, no jQuery, zero runtime d
 A v1 compatibility ramp (jQuery shims, `zld*` aliases) is included and opt-in. `ozi-copy` and
 `ozi-paste` were discontinued. See the [migration guide](https://oziui.com/en/docs/migration).
 
-[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.7.1...HEAD
+[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.7.2...HEAD
+[2.7.2]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.7.1...v2.7.2
 [2.7.1]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.7.0...v2.7.1
 [2.7.0]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.6.2...v2.7.0
 [2.6.2]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.6.1...v2.6.2

@@ -2,6 +2,14 @@
 
 ---
 
+## [2.2.2] — 2026-11-15 (fix — foco do gate em componente)
+
+### Corrigido
+- O gate de envio leva o foco ao primeiro controle focável dentro do componente inválido. Antes
+  focava a raiz (um `<div>` sem `tabindex`), e nada acontecia.
+- Com o ozi-select 6.5.1, `<div data-ozi-select="team" data-ozi-required="true">` é de fato
+  validado. Até a 2.7.1 só `data-ozi-select-required` funcionava.
+
 ## [2.2.1] — 2026-10-01 (fix — componente obrigatório sem `id`)
 
 ### Corrigido

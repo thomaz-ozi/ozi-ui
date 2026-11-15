@@ -1,6 +1,10 @@
 /**
  * components/ozi-editor/css/ozi-editor.css
- * Versão: 2.8.0
+ * Versão: 2.8.1
+ *
+ * [2.8.1] FIX Ícones do alinhamento de imagem (`.ozi-editor-popover-align-icon`)
+ *         mediam 0×0: o SVG não tinha tamanho, e os 4 botões apareciam vazios
+ *         desde a 4.7.0. Agora 16×16, como os demais ícones de 16px.
  *
  * [2.8.0] FEAT Seletor e editor de tabela (ozi-editor.js 4.8.0) — grade de
  *         tamanho (`.ozi-editor-table-grid`/`-cell`), label vivo, checkbox de
@@ -760,6 +764,13 @@
     align-items: center;
     line-height: 0;
     font-size:   10px;
+}
+
+/* [2.8.1] sem isto o SVG media 0×0 e o botão ficava vazio */
+.ozi-editor-popover-align-icon svg {
+    width:   16px;
+    height:  16px;
+    display: block;
 }
 
 .ozi-editor-popover-label {

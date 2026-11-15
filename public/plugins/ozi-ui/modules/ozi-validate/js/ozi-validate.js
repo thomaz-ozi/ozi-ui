@@ -2,8 +2,8 @@
  * ------------------------------------------
  * ozi-validate
  * ------------------------------------------
- * Ver: 2.2.1
- * 2026-10-01
+ * Ver: 2.2.2
+ * 2026-11-15
  *
  * Responsabilidade:
  *   - Motor generico de validacao de campos por container
@@ -24,6 +24,12 @@
  * Expoe: OZI.modules.validate, window.oziValidateContainer (compat)
  *
  * Changelog:
+ *   - v2.2.2: [FIX] O gate focava a RAIZ do campo inválido, e a raiz de um componente é um
+ *       <div> sem tabindex: `focus()` não fazia nada, e o usuário não era levado ao select vazio.
+ *       Agora foca o primeiro elemento focável e visível dentro dela (o próprio campo, se ele
+ *       já for focável). O aceite da 2.2.1 passava sem cobrir o atributo documentado: a fixture
+ *       declarava `data-ozi-required` E `data-ozi-select-required`, e só o segundo funcionava
+ *       (corrigido no ozi-select 6.5.1). Aceite novo: aceite-select-validate-required.
  *   - v2.2.1: [FIX] Componente obrigatório sem `name`/`id` não é mais pulado em silêncio.
  *       `_container()` resolvia o nome por `name || id` e descartava o campo sem nenhum dos
  *       dois — mas a raiz de um componente (`<div data-ozi-select="team" data-ozi-required="true">`)
@@ -578,11 +584,25 @@
         if (!result.isValid) {
             e.preventDefault();
             e.stopImmediatePropagation();
-            if (result.invalidFields[0]) { try { result.invalidFields[0].el.focus(); } catch (err) {} }
+            if (result.invalidFields[0]) _focusField(result.invalidFields[0].el);
             _emitGateEvent(trigger, 'ozi:validate-broken', result);
         } else {
             _emitGateEvent(trigger, 'ozi:validate-ready', result);
         }
+    }
+
+    // [2.2.2] a raiz de um componente (<div data-ozi-select>) não recebe foco: desce até o
+    // primeiro controle focável e visível (o botão do select, por exemplo)
+    var FOCUSABLE = 'button:not([disabled]), input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+    function _focusField(el) {
+        var target = el;
+        if (!el.matches(FOCUSABLE)) {
+            target = Array.prototype.filter.call(el.querySelectorAll(FOCUSABLE), function (c) {
+                return c.getClientRects().length > 0;
+            })[0] || el;
+        }
+        try { target.focus(); } catch (err) {}
     }
 
     function _initGate() {

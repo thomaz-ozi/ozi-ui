@@ -2,10 +2,22 @@
  * ------------------------------------------
  * ozi-select
  * ------------------------------------------
- * Ver: 6.5.0
- * 2026-09-30
+ * Ver: 6.5.1
+ * 2026-11-15
  *
  * Changelog:
+ *   - v6.5.1: [FIX] `data-ozi-required` passa a tornar o select obrigatório. O select só lia
+ *       `data-ozi-select-required`, mas o atributo genérico é o que o ozi-validate e a doc dele
+ *       ensinam (`<div data-ozi-select="team" data-ozi-required="true">`): o validate visitava o
+ *       campo, perguntava ao adapter, e o select respondia "válido" — form enviado vazio, sem
+ *       erro. Os dois atributos agora valem, e um select obrigatório espelha
+ *       `data-ozi-required="true"` na raiz para o gate do validate enxergá-lo também quando só
+ *       `data-ozi-select-required` foi declarado (antes o envio era barrado pelo listener do
+ *       próprio select e o gate emitia `ozi:validate-ready`, a resposta errada).
+ *       [FIX] Multiple: o dropdown fechava a cada clique numa opção. `toggleItem` re-renderiza
+ *       a lista, o elemento clicado sai do DOM antes do listener de clique-fora do `document`, e
+ *       `ui.contains(e.target)` dava false. Agora o teste usa `e.composedPath()`, fixado no
+ *       despacho do evento. Achados no teste visual ao vivo de 2026-11-03.
  *   - v6.5.0: [FEAT] Rótulo fixo + contador no modo multiple (`data-ozi-select-multiple-label`
  *       + `data-ozi-select-multiple-count`) — pedido [OZI-06] do SNDESK, pensado p/ barra de
  *       filtros (👤 Vendedor `3` no lugar de 3 chips cortados). A PRESENÇA de `multiple-label`
@@ -233,7 +245,9 @@
         this.submitFieldsRaw       = String(this.root.getAttribute('data-ozi-select-submit-fields') || '');
 
         this.isDisabledConfig = this.parseBooleanAttr('data-ozi-select-disabled');
-        this.isRequiredConfig = this.parseBooleanAttr('data-ozi-select-required');
+        // [6.5.1] o genérico `data-ozi-required` (o do ozi-validate) também vale
+        this.isRequiredConfig = this.parseBooleanAttr('data-ozi-select-required') || this.parseBooleanAttr('data-ozi-required');
+        if (this.isRequiredConfig) this.root.setAttribute('data-ozi-required', 'true'); // ver syncRequiredMarker
         // debug local por instância (convenção `data-ozi-{plugin}-log`, espelha o zldLog do ozi-loaddata)
         this.debug            = this.parseBooleanAttr('data-ozi-select-log');
         this.requiredMessage  = String(this.root.getAttribute('data-ozi-select-required-message') || _t('select.requiredMessage', 'Selecione uma opção.'));
@@ -660,7 +674,11 @@
         this.search.addEventListener('keydown', onKeydown);
 
         this._onDocumentClick = function (e) {
-            if (!self.ui.contains(e.target)) self.close();
+            // [6.5.1] composedPath() é fixado no despacho: a opção clicada sai do DOM no
+            // re-render do toggleItem antes deste listener, e contains() a daria como "fora"
+            var path = typeof e.composedPath === 'function' ? e.composedPath() : null;
+            var inside = path && path.length ? path.indexOf(self.ui) !== -1 : self.ui.contains(e.target);
+            if (!inside) self.close();
         };
         document.addEventListener('click', this._onDocumentClick);
     };
@@ -1341,8 +1359,15 @@
     OziSelect.prototype.setRequired = function (state) {
         this.isRequiredConfig = !!state;
         if (this.isRequiredConfig) { this.root.setAttribute('data-ozi-select-required', 'required'); }
-        else                       { this.root.removeAttribute('data-ozi-select-required'); }
+        else                       { this.root.removeAttribute('data-ozi-select-required'); this.root.removeAttribute('data-ozi-required'); }
+        this.syncRequiredMarker();
         this.validate(false);
+    };
+
+    // [6.5.1] o gate do ozi-validate só varre `[data-ozi-required]` (é genérico, não conhece
+    // atributos de componente): um select obrigatório espelha o marcador na raiz.
+    OziSelect.prototype.syncRequiredMarker = function () {
+        if (this.isRequiredConfig) this.root.setAttribute('data-ozi-required', 'true');
     };
 
     /* ─── busca remota ─────────────────────────────────────────────── */

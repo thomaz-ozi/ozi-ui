@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite 2.7.2 (select obrigatório, dropdown múltiplo, popover do editor)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .35rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite 2.7.2 <small>(achados do teste visual ao vivo de 2026-11-03)</small></h1>
+<p>Critério: (1) <code>data-ozi-required</code> sozinho torna o <code>ozi-select</code> obrigatório
+(até a 6.5.0 só <code>data-ozi-select-required</code> valia, e o form saía vazio); (2) com só
+<code>data-ozi-select-required</code>, o gate do validate barra e emite <code>ozi:validate-broken</code>,
+não <code>ozi:validate-ready</code>; (3) o gate leva o foco para dentro do select; (4) no modo
+múltiplo, o dropdown continua aberto depois de clicar numa opção; (5) os ícones de alinhamento do
+popover de imagem têm tamanho; (6) o popover com <code>max-height</code> cabe na viewport.
+A fixture de cada caso declara <strong>um atributo só</strong>: o aceite da 2.2.1 declarava os dois
+e por isso não pegou o (1).</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<form id="form-generico" novalidate>
+    <div data-ozi-select="generico" data-ozi-required="true"></div>
+    <script type="application/json" data-ozi-select-options="generico">
+    [{"value":"a","label":"A"},{"value":"b","label":"B"}]
+    </script>
+    <button type="submit" data-ozi-validate id="btn-generico">Enviar</button>
+</form>
+
+<form id="form-proprio" novalidate>
+    <div data-ozi-select="proprio" data-ozi-select-required="true"></div>
+    <script type="application/json" data-ozi-select-options="proprio">
+    [{"value":"a","label":"A"},{"value":"b","label":"B"}]
+    </script>
+    <button type="submit" data-ozi-validate id="btn-proprio">Enviar</button>
+</form>
+
+<form id="form-opcional" novalidate>
+    <div data-ozi-select="opcional" data-ozi-required="false"></div>
+    <script type="application/json" data-ozi-select-options="opcional">
+    [{"value":"a","label":"A"}]
+    </script>
+    <button type="submit" data-ozi-validate id="btn-opcional">Enviar</button>
+</form>
+
+<div data-ozi-select="multi" data-ozi-select-multiple></div>
+<script type="application/json" data-ozi-select-options="multi">
+[{"value":"1","label":"Um"},{"value":"2","label":"Dois"},{"value":"3","label":"Três"}]
+</script>
+
+<textarea id="ta-pop" data-ozi-editor-html="pop" data-ozi-editor-tools="bold, image"></textarea>
+
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['select', 'validate', 'editor'], lang: 'pt-BR' });
+
+    var erros = [];
+    window.addEventListener('error', function (ev) {
+        if (ev.message === 'Script error.' && !ev.filename && !ev.lineno) return;
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra && !ok ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 9s';
+        vered.className = 'fail';
+    }, 9000);
+
+    OZI.ready(function () {
+        (async function () {
+            var todos = true;
+            var select = OZI.components.select;
+            await wait(250);
+
+            var gateEvents = [];
+            document.addEventListener('ozi:validate-broken', function (e) { gateEvents.push('broken:' + e.target.id); });
+            document.addEventListener('ozi:validate-ready',  function (e) { gateEvents.push('ready:' + e.target.id); });
+
+            function submits(formId) {
+                var n = { count: 0 };
+                document.getElementById(formId).addEventListener('submit', function (e) { n.count++; e.preventDefault(); });
+                return n;
+            }
+            var sGenerico = submits('form-generico');
+            var sProprio  = submits('form-proprio');
+            var sOpcional = submits('form-opcional');
+
+            // ── 1. data-ozi-required sozinho ──
+            document.getElementById('btn-generico').click();
+            await wait(30);
+            var rootG = document.querySelector('[data-ozi-select="generico"]');
+            todos = check('data-ozi-required sozinho: o gate barra o select vazio', sGenerico.count === 0, 'submits: ' + sGenerico.count) && todos;
+            todos = check('data-ozi-required sozinho: emite ozi:validate-broken', gateEvents.indexOf('broken:btn-generico') !== -1, JSON.stringify(gateEvents)) && todos;
+            todos = check('data-ozi-required sozinho: o select fica inválido',
+                rootG.querySelector('.ozi-select-control').classList.contains('ozi-invalid'), rootG.querySelector('.ozi-select-control').className) && todos;
+            todos = check('gate leva o foco para dentro do select (não fica na raiz sem tabindex)',
+                rootG.contains(document.activeElement) && document.activeElement !== rootG,
+                document.activeElement && (document.activeElement.tagName + '.' + document.activeElement.className)) && todos;
+
+            select.value('generico', 'a');
+            await wait(20);
+            document.getElementById('btn-generico').click();
+            await wait(30);
+            todos = check('data-ozi-required sozinho: preenchido, o envio passa', sGenerico.count === 1, 'submits: ' + sGenerico.count) && todos;
+
+            // ── 2. data-ozi-select-required sozinho ──
+            gateEvents.length = 0;
+            document.getElementById('btn-proprio').click();
+            await wait(30);
+            todos = check('data-ozi-select-required sozinho: o envio é barrado', sProprio.count === 0, 'submits: ' + sProprio.count) && todos;
+            todos = check('data-ozi-select-required sozinho: o gate emite broken, não ready',
+                gateEvents.indexOf('broken:btn-proprio') !== -1 && gateEvents.indexOf('ready:btn-proprio') === -1, JSON.stringify(gateEvents)) && todos;
+
+            // ── 3. opcional e setRequired ──
+            document.getElementById('btn-opcional').click();
+            await wait(30);
+            todos = check('data-ozi-required="false": continua opcional', sOpcional.count === 1, 'submits: ' + sOpcional.count) && todos;
+
+            select.required('opcional', true);
+            document.getElementById('btn-opcional').click();
+            await wait(30);
+            todos = check('required(true) pela API: o gate passa a barrar', sOpcional.count === 1, 'submits: ' + sOpcional.count) && todos;
+            select.required('opcional', false);
+            document.getElementById('btn-opcional').click();
+            await wait(30);
+            todos = check('required(false) pela API: volta a passar', sOpcional.count === 2, 'submits: ' + sOpcional.count) && todos;
+
+            // ── 4. dropdown múltiplo continua aberto ──
+            var multiUi = document.querySelector('[data-ozi-select="multi"] .ozi-select-ui');
+            select.open('multi');
+            await wait(30);
+            var opt = multiUi.querySelector('.ozi-select-option[data-value="1"]');
+            opt.click();
+            await wait(30);
+            todos = check('múltiplo: o dropdown continua aberto depois de clicar numa opção',
+                multiUi.classList.contains('is-open'), multiUi.className) && todos;
+            multiUi.querySelector('.ozi-select-option[data-value="2"]').click();
+            await wait(30);
+            todos = check('múltiplo: segunda opção também, sem reabrir',
+                multiUi.classList.contains('is-open') && select.value('multi').length === 2, JSON.stringify(select.value('multi'))) && todos;
+            document.body.click();
+            await wait(30);
+            todos = check('múltiplo: clicar fora ainda fecha', !multiUi.classList.contains('is-open'), multiUi.className) && todos;
+
+            // ── 5. ícones de alinhamento do popover de imagem ──
+            var wrap    = document.querySelector('#ta-pop + .ozi-editor-wrap');
+            var imgBtn  = wrap.querySelector('[data-ozi-editor-tool="image"]');
+            var popover = wrap.querySelector('[data-ozi-editor-popover-wrap^="image-"] .ozi-editor-popover');
+            // os botões do editor agem no mousedown (preserva a seleção), não no click
+            imgBtn.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+            await wait(400);
+            var icons = Array.prototype.map.call(wrap.querySelectorAll('.ozi-editor-popover-align-icon svg'), function (s) {
+                var r = s.getBoundingClientRect();
+                return Math.round(r.width) + 'x' + Math.round(r.height);
+            });
+            todos = check('popover de imagem: os 4 ícones de alinhamento têm tamanho (não 0×0)',
+                icons.length === 4 && icons.every(function (s) { return s === '16x16'; }), JSON.stringify(icons)) && todos;
+
+            // ── 6. max-height desconta padding e borda ──
+            var inst = OZI.components.editor.get('pop');
+            var vh = document.documentElement.clientHeight;
+            var filler = document.createElement('div');
+            filler.style.height = (vh * 2) + 'px';
+            popover.appendChild(filler);
+            var trigger = { getBoundingClientRect: function () { return { top: vh / 2 - 10, bottom: vh / 2 + 10, left: 20, right: 40 }; } };
+            // o standalone carrega o ozi-reset.css (border-box); o Blade com @oziStyles([...]) não (content-box)
+            ['content-box', 'border-box'].forEach(function (box) {
+                popover.style.boxSizing = box;
+                inst._positionFloating(popover, trigger);
+                var pr = popover.getBoundingClientRect();
+                todos = check('popover limitado pela viewport cabe inteiro na tela (' + box + ')',
+                    pr.top >= 7 && pr.bottom <= vh - 7 && pr.bottom >= vh - 12, 'top ' + Math.round(pr.top) + ', bottom ' + Math.round(pr.bottom) + ', viewport ' + vh) && todos;
+            });
+            popover.style.boxSizing = '';
+            filler.remove();
+
+            await wait(100);
+            todos = check('zero erros JS', erros.length === 0, erros.join(' | ')) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ ACEITE 2.7.2 (select obrigatório, múltiplo, popover): PASSOU' : '✗ ACEITE 2.7.2 (select obrigatório, múltiplo, popover): FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+        })().catch(function (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+            vered.textContent = '✗ ACEITE 2.7.2 (select obrigatório, múltiplo, popover): FALHOU (exceção)';
+            vered.className = 'fail';
+        });
+    });
+</script>
+</body>
+</html>
