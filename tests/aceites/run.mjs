@@ -35,6 +35,13 @@ const KNOWN_FAIL = {
     // vazio: as duas entradas de 2026-09-30 viraram correções (ozi-loader 1.0.2, ozi-editor 4.9.1)
 };
 
+// Páginas que precisam de mídia emulada (Emulation.setEmulatedMedia antes de navegar).
+// O headless roda com o sistema em claro; sem isto não dá para testar "sistema escuro + app claro".
+const EMULATE_MEDIA = {
+    // [OZI-10] do SNDESK: editor escurecia pelo Windows com o app claro (pacote 2.8.0)
+    'aceite-theme-sistema-escuro.html': [{ name: 'prefers-color-scheme', value: 'dark' }],
+};
+
 const MIME = {
     '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript',
     '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml',
@@ -125,6 +132,7 @@ async function runPage(page) {
     try {
         const { targetId } = await cdp('Target.createTarget', { url: 'about:blank', browserContextId, width: WIN_W, height: WIN_H });
         const { sessionId } = await cdp('Target.attachToTarget', { targetId, flatten: true });
+        if (EMULATE_MEDIA[page]) await cdp('Emulation.setEmulatedMedia', { features: EMULATE_MEDIA[page] }, sessionId);
         await cdp('Page.navigate', { url: base + page }, sessionId);
 
         const deadline = Date.now() + TIMEOUT;

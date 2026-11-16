@@ -161,9 +161,9 @@ multiple sem os atributos segue com chips; re-init em nó novo com a mesma chave
             todos = check('8. vazio: × escondido', !clearShown('vend')) && todos;
 
             // interação real: clicar 2 opções → contador sobe, sem chips.
-            // (o multiple FECHA a cada clique em opção — comportamento pré-existente, igual com chips:
-            // renderOptions tira a opção clicada do DOM e o click-fora do document vê target solto.
-            // Fora do escopo do [OZI-06]; por isso reabre antes de cada clique.)
+            // (até a v6.5.0 o multiple FECHAVA a cada clique em opção: renderOptions tirava a opção
+            // clicada do DOM e o click-fora do document via target solto. Corrigido na v6.5.1
+            // ([OZI-07], aceite-select-clique-fora.html); o pick() só reabre se estiver fechado.)
             function pick(i) {
                 if (!q('vend').querySelector('.ozi-select-ui').classList.contains('is-open')) click(q('vend').querySelector('.ozi-select-control'));
                 click(q('vend').querySelectorAll('.ozi-select-option')[i]);

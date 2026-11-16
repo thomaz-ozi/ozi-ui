@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite v6.5.2 (ozi-select clique-fora)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .35rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+    .ozi-select-dropdown { display: none; }
+    .ozi-select-ui.is-open .ozi-select-dropdown { display: block; }
+    .lado { display: flex; gap: 1rem; } .lado > div { flex: 1; }
+    #modal { border: 1px dashed #999; padding: 1rem; margin-top: 1rem; }
+</style>
+<script>
+    // Espião instalado ANTES do ozi.js: registra cada add/removeEventListener de 'click' no
+    // document com o flag de captura, p/ provar que o destroy() remove o MESMO listener.
+    window.__clickListeners = [];
+    (function () {
+        var add = document.addEventListener, rem = document.removeEventListener;
+        function cap(o) { return o === true || !!(o && o.capture); }
+        document.addEventListener = function (type, fn, opts) {
+            if (type === 'click') window.__clickListeners.push({ op: 'add', fn: fn, capture: cap(opts) });
+            return add.apply(this, arguments);
+        };
+        document.removeEventListener = function (type, fn, opts) {
+            if (type === 'click') window.__clickListeners.push({ op: 'remove', fn: fn, capture: cap(opts) });
+            return rem.apply(this, arguments);
+        };
+    })();
+</script>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite v6.5.2 <small>(clique-fora do ozi-select — [OZI-07] + [OZI-08])</small></h1>
+<p>Critério ([OZI-08] é o da 6.5.2; o [OZI-07] veio na 6.5.1 e segue coberto aqui): o multiple continua aberto ao marcar opções (a lista é redesenhada e o nó clicado sai
+do DOM — <code>composedPath()</code> preserva o caminho); clicar no botão de outro select fecha o
+primeiro (o toggle chama <code>stopPropagation</code>); dentro de um contêiner com
+<code>stopPropagation</code> o clique fora fecha (listener em captura); single continua fechando ao
+escolher; <code>destroy()</code> remove o listener com o mesmo <code>capture</code>.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<!-- Fixture A — multiple com 5 opções e busca -->
+<div data-ozi-select="multi" data-ozi-select-multiple data-ozi-select-search="true"></div>
+<script type="application/json" data-ozi-select-options="multi">
+[{"value":"1","label":"Um"},{"value":"2","label":"Dois"},{"value":"3","label":"Tres"},
+ {"value":"4","label":"Quatro"},{"value":"5","label":"Cinco"}]
+</script>
+
+<!-- Fixture B — single -->
+<div data-ozi-select="single"></div>
+<script type="application/json" data-ozi-select-options="single">
+[{"value":"a","label":"Alfa"},{"value":"b","label":"Beta"}]
+</script>
+
+<!-- Fixture C — dois selects lado a lado -->
+<div class="lado">
+    <div><div data-ozi-select="lado-a"></div></div>
+    <div><div data-ozi-select="lado-b"></div></div>
+</div>
+<script type="application/json" data-ozi-select-options="lado-a">[{"value":"1","label":"A1"}]</script>
+<script type="application/json" data-ozi-select-options="lado-b">[{"value":"1","label":"B1"}]</script>
+
+<!-- Fixture D — contêiner que para a propagação (como o <x-v2::modal> com wire:click.stop) -->
+<div id="modal" onclick="event.stopPropagation()">
+    <p id="modal-texto">Área do modal (fora do select, mas dentro do contêiner)</p>
+    <div data-ozi-select="no-modal"></div>
+</div>
+<script type="application/json" data-ozi-select-options="no-modal">[{"value":"1","label":"M1"}]</script>
+
+<!-- Fixture E — instância que será destruída -->
+<div data-ozi-select="destruir"></div>
+<script type="application/json" data-ozi-select-options="destruir">[{"value":"1","label":"D1"}]</script>
+
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['select'], lang: 'pt-BR' });
+
+    var erros = [];
+    var errosOpacos = 0;
+    window.addEventListener('error', function (ev) {
+        var isOpaco = (ev.message === 'Script error.' && !ev.filename && !ev.lineno);
+        if (isOpaco) { errosOpacos++; return; }
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    function click(el) { el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })); }
+    function q(key) { return document.querySelector('[data-ozi-select="' + key + '"]'); }
+    function isOpen(key) { return q(key).querySelector('.ozi-select-ui').classList.contains('is-open'); }
+    function opt(key, value) { return q(key).querySelector('.ozi-select-option[data-value="' + value + '"]'); }
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 9s';
+        vered.className = 'fail';
+    }, 9000);
+
+    OZI.ready(function () {
+        (async function () {
+            var todos = true;
+            var S = OZI.components.select;
+
+            // ── A — [OZI-07] multiple não fecha ao marcar ──
+            click(q('multi').querySelector('.ozi-select-control'));
+            todos = check('A. multiple abre pelo control', isOpen('multi')) && todos;
+
+            var alvo = opt('multi', '1');
+            click(alvo);
+            todos = check('A. premissa: a opção clicada foi redesenhada (nó antigo fora do DOM)',
+                !document.contains(alvo)) && todos;
+            todos = check('A. [OZI-07] marcar 1 opção NÃO fecha a lista', isOpen('multi')) && todos;
+
+            click(opt('multi', '3'));
+            click(opt('multi', '5'));
+            todos = check('A. marcar 3 opções seguidas: a lista continua aberta', isOpen('multi')) && todos;
+            todos = check('A. os 3 valores ficaram marcados',
+                JSON.stringify(S.value('multi')) === '["1","3","5"]', JSON.stringify(S.value('multi'))) && todos;
+
+            // busca digitada + marcar: lista aberta e busca mantida
+            var search = q('multi').querySelector('.ozi-select-search');
+            search.value = 'qua';
+            search.dispatchEvent(new Event('input', { bubbles: true }));
+            await wait(350);
+            var quatro = opt('multi', '4');
+            if (quatro) click(quatro);
+            todos = check('A. com busca digitada, marcar mantém aberta e a busca preservada',
+                !!quatro && isOpen('multi') && search.value === 'qua' &&
+                S.value('multi').indexOf('4') !== -1, 'busca="' + search.value + '"') && todos;
+
+            click(search);
+            todos = check('A. clicar na busca não fecha', isOpen('multi')) && todos;
+
+            click(document.getElementById('resultados'));
+            todos = check('A. clique fora fecha', !isOpen('multi')) && todos;
+
+            // ── B — single continua fechando ao escolher ──
+            click(q('single').querySelector('.ozi-select-control'));
+            click(opt('single', 'b'));
+            todos = check('B. single: escolher uma opção fecha (comportamento de sempre)',
+                !isOpen('single') && S.value('single') === 'b') && todos;
+
+            // ── C — [OZI-08] abrir outro select fecha o primeiro ──
+            click(q('lado-a').querySelector('.ozi-select-control'));
+            todos = check('C. premissa: A aberto', isOpen('lado-a')) && todos;
+            click(q('lado-b').querySelector('.ozi-select-toggle'));
+            todos = check('C. [OZI-08] clicar no botão do B (que chama stopPropagation) fecha o A',
+                !isOpen('lado-a')) && todos;
+            todos = check('C. e o B abre', isOpen('lado-b')) && todos;
+            click(document.body);
+            todos = check('C. clique fora fecha o B', !isOpen('lado-b')) && todos;
+
+            // ── D — [OZI-08] dentro de contêiner com stopPropagation ──
+            click(q('no-modal').querySelector('.ozi-select-control'));
+            todos = check('D. premissa: select do modal aberto', isOpen('no-modal')) && todos;
+            click(document.getElementById('modal-texto'));
+            todos = check('D. [OZI-08] clique fora, dentro do contêiner com stopPropagation, fecha',
+                !isOpen('no-modal')) && todos;
+
+            // ── E — destroy() remove o listener de captura ──
+            var inst = S.get('destruir');
+            var fn = inst && inst._onDocumentClick;
+            var addReg = window.__clickListeners.filter(function (r) { return r.op === 'add' && r.fn === fn; });
+            todos = check('E. listener do clique-fora registrado em captura',
+                addReg.length === 1 && addReg[0].capture === true) && todos;
+            S.destroy('destruir');
+            var remReg = window.__clickListeners.filter(function (r) { return r.op === 'remove' && r.fn === fn; });
+            todos = check('E. destroy() remove o MESMO listener com capture:true',
+                remReg.length === 1 && remReg[0].capture === true) && todos;
+
+            await wait(80);
+            todos = check('zero erros JS reais (opacos filtrados: ' + errosOpacos + ')', erros.length === 0, erros.join(' | ') || null) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ ACEITE v6.5.2 (clique-fora): PASSOU' : '✗ ACEITE v6.5.2 (clique-fora): FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+            document.title = (todos ? 'DONE:PASS' : 'DONE:FAIL');
+        })().catch(function (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+            vered.textContent = '✗ ACEITE v6.5.2 (clique-fora): FALHOU (exceção)';
+            vered.className = 'fail';
+            document.title = 'DONE:FAIL';
+        });
+    });
+</script>
+</body>
+</html>

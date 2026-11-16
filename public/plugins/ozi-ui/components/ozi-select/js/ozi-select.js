@@ -2,10 +2,17 @@
  * ------------------------------------------
  * ozi-select
  * ------------------------------------------
- * Ver: 6.5.1
- * 2026-11-15
+ * Ver: 6.5.2
+ * 2026-11-16
  *
  * Changelog:
+ *   - v6.5.2: [FIX] [OZI-08] do SNDESK — um select aberto NÃO fechava ao clicar no botão de
+ *       outro select (o .ozi-select-toggle chama stopPropagation) nem dentro de modal com
+ *       `wire:click.stop`: o listener de clique-fora era de bolha e o click nunca chegava ao
+ *       document. Agora em CAPTURA (passa pelo document antes de qualquer stopPropagation).
+ *       `click` mantido em vez do pointerdown sugerido, para não mudar o gesto que fecha.
+ *       `destroy()` remove com o mesmo `capture` — sem ele o remove não casa. O composedPath()
+ *       da 6.5.1 continua (é ele que resolve o [OZI-07], o multiple fechando a cada opção).
  *   - v6.5.1: [FIX] `data-ozi-required` passa a tornar o select obrigatório. O select só lia
  *       `data-ozi-select-required`, mas o atributo genérico é o que o ozi-validate e a doc dele
  *       ensinam (`<div data-ozi-select="team" data-ozi-required="true">`): o validate visitava o
@@ -673,14 +680,19 @@
         this.control.addEventListener('keydown', onKeydown);
         this.search.addEventListener('keydown', onKeydown);
 
+        // Clique-fora. Os dois detalhes são necessários:
+        //  - [6.5.2] CAPTURA: passa pelo document ANTES de qualquer stopPropagation() — o do
+        //    .ozi-select-toggle de OUTRO select (que deixava os dois abertos) e o de modais do
+        //    host (`wire:click.stop`), que impediam o fechamento. [OZI-08]
+        //  - [6.5.1] composedPath(): fixado no despacho. A opção clicada sai do DOM no re-render
+        //    do toggleItem antes deste listener, e contains() a daria como "fora". [OZI-07]
+        // `click` (não pointerdown) de propósito: mantém o gesto que fecha igual ao de sempre.
         this._onDocumentClick = function (e) {
-            // [6.5.1] composedPath() é fixado no despacho: a opção clicada sai do DOM no
-            // re-render do toggleItem antes deste listener, e contains() a daria como "fora"
             var path = typeof e.composedPath === 'function' ? e.composedPath() : null;
             var inside = path && path.length ? path.indexOf(self.ui) !== -1 : self.ui.contains(e.target);
             if (!inside) self.close();
         };
-        document.addEventListener('click', this._onDocumentClick);
+        document.addEventListener('click', this._onDocumentClick, true);
     };
 
     OziSelect.prototype.bindFormEvents = function () {
@@ -1485,7 +1497,8 @@
     OziSelect.prototype.destroy = function () {
         this._dbg('destroy() chamado — trace de quem chamou:', undefined, true);
         this.abortRemoteRequest();
-        if (this._onDocumentClick) document.removeEventListener('click', this._onDocumentClick);
+        // capture faz parte da identidade do listener: sem o `true` o remove não casa (v6.5.2)
+        if (this._onDocumentClick) document.removeEventListener('click', this._onDocumentClick, true);
         if (this.form) {
             if (this._onFormSubmit) this.form.removeEventListener('submit', this._onFormSubmit);
             if (this._onFormReset)  this.form.removeEventListener('reset',  this._onFormReset);

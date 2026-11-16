@@ -26,10 +26,13 @@
  *   1. Cria window.OZI e window.oziConf (imediato)
  *   2. Detecta urlBase pelo próprio src
  *   3. Aguarda DOM pronto
- *   4. Carrega subsistemas do core (ozi-conf, ozi-hooks, ozi-lang, ozi-helpers, ozi-integrations)
+ *   4. Carrega subsistemas do core (ozi-conf, ozi-theme, ozi-hooks, ozi-lang, ozi-helpers, ozi-integrations)
  *   5. Aplica oziConf() pendente se houver
  *   6. Carrega plugins declarados (default: todos)
  *   7. OZI.isReady = true → dispara callbacks OZI.ready()
+ *
+ * Pacote 2.8.0 (2026-10-29) — sem bump de OZI.version (marcador da geração, só muda no MAJOR):
+ *   - core/ozi-theme.js entra na lista de subsistemas (opcional) e em OZI.theme.
  *
  * Changelog 2.0.0 (corte, 2026-08-02):
  *   - [CORTE] _bridgeHooks REMOVIDO — era redundante. O ozi-loaddata ja dispara
@@ -85,6 +88,7 @@
         version: '2.0.0',
 
         conf:         {},
+        theme:        {},
         helpers:      {},
         modules:      {},
         components:   {},
@@ -197,6 +201,7 @@
 
         var systems = [
             { url: base + 'core/ozi-conf.js',             optional: false },
+            { url: base + 'core/ozi-theme.js',             optional: true  },
             { url: base + 'core/ozi-hooks.js',             optional: true  },
             { url: base + 'core/ozi-lang.js',              optional: true  },
             { url: base + 'core/helpers/ozi-helpers.js',   optional: true  },
@@ -304,6 +309,11 @@
                 }
 
                 OZI.conf = conf;
+
+                if (typeof window.OziTheme !== 'undefined') {
+                    OZI.theme = window.OziTheme;
+                    _log('info', 'theme: ok — modo', OZI.theme.mode());
+                }
 
                 if (typeof window.OziHooks !== 'undefined') {
                     OZI.hooks = window.OziHooks;

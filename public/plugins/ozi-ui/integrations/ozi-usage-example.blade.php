@@ -35,7 +35,7 @@
 <script>
 oziConf({
     theme:        'bootstrap5',
-    themeMode:    'auto',
+    themeMode:    'app',   // segue o tema do APP (2.8.0+); 'auto' = segue o sistema operacional
     lang:         'pt-BR',
     fallbackLang: 'en',
     integrations: ['livewire'],

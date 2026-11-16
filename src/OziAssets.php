@@ -192,6 +192,7 @@ class OziAssets
 
         $helpersUrl      = $this->base . 'core/helpers/ozi-helpers.js?v='  . $this->version;
         $confUrl         = $this->base . 'core/ozi-conf.js?v='             . $this->version;
+        $themeUrl        = $this->base . 'core/ozi-theme.js?v='            . $this->version;
         $langUrl         = $this->base . 'core/ozi-lang.js?v='             . $this->version;
         $integrationsUrl = $this->base . 'core/ozi-integrations.js?v='     . $this->version;
         $hooksUrl        = $this->base . 'core/ozi-hooks.js?v='            . $this->version;
@@ -205,6 +206,7 @@ class OziAssets
                        . 'window.oziConf=function(c){if(!window.OziConf)return;window.OziConf.apply(c);window.OZI.conf=window.OziConf.get();'
                        . 'if(c&&(c.lang||c.fallbackLang)&&window.OziLang&&typeof window.OziLang.init==="function"){var _n=window.OZI.conf||{};window.OziLang.init(_n.lang||"en",_n.fallbackLang||"en");}};'
                        . 'if(window.OziLang){window.OZI.lang=window.OziLang;if(typeof window.OziLang.init==="function"){var _c=window.OZI.conf||{};window.OziLang.init(_c.lang||"' . $this->locale . '",_c.fallbackLang||"en");}}'
+                       . 'window.OZI.theme=window.OziTheme||{};'
                        . 'window.OZI.hooks=window.OziHooks||{};window.OZI.integrations=window.OziIntegrations||{};if(window.OziIntegrations&&window.OziIntegrations._boot)window.OziIntegrations._boot([]);';
 
         // deferred: connect Livewire hooks only after @livewireScripts runs (window.Livewire ready at DOMContentLoaded)
@@ -213,6 +215,9 @@ class OziAssets
         $head = '<script src="' . $helpersUrl . '"></script>' . "\n"
               . '<script>' . $bridge . '</script>' . "\n"
               . '<script src="' . $confUrl . '"></script>' . "\n"
+              // ozi-theme logo após o conf (2.8.0): o oziConf({themeMode}) do blade chama
+              // OziTheme.setMode() de dentro do OziConf.apply(), então ele precisa já existir
+              . '<script src="' . $themeUrl . '"></script>' . "\n"
               . '<script src="' . $langUrl . '"></script>' . "\n"
               . '<script src="' . $integrationsUrl . '"></script>' . "\n"
               . '<script src="' . $hooksUrl . '"></script>' . "\n"

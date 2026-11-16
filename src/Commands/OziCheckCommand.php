@@ -42,6 +42,7 @@ class OziCheckCommand extends Command
     protected array $coreFiles = [
         'ozi.js',
         'core/ozi-conf.js',
+        'core/ozi-theme.js',
         'core/ozi-hooks.js',
         'core/ozi-lang.js',
         'core/helpers/ozi-helpers.js',

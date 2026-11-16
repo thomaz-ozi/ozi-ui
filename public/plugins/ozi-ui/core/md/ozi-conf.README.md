@@ -40,7 +40,7 @@ Externamente o dev usa apenas `oziConf({...})` — definido em `ozi-core.js`.
 oziConf({
     // — global —
     theme:        'bootstrap5',  // 'default' | 'bootstrap5' | 'tailwind' | 'custom'
-    themeMode:    'light',       // 'light' | 'dark' | 'auto'
+    themeMode:    'app',         // 'auto' | 'light' | 'dark' | 'app'
     lang:         'pt-BR',
     fallbackLang: 'en',
     integrations: ['livewire'], // auto-detect v3/v4
@@ -75,10 +75,22 @@ oziConf({
 | Opção | Tipo | Default | Descrição |
 |---|---|---|---|
 | `theme` | string | `'default'` | Preset de tema UI |
-| `themeMode` | string | `'auto'` | Modo de cor |
+| `themeMode` | string | `'auto'` | Modo de cor (ver abaixo) |
 | `lang` | string | `'pt-BR'` | Idioma ativo |
 | `fallbackLang` | string | `'en'` | Idioma de fallback |
 | `integrations` | array | `[]` | Adapters a inicializar |
+
+### Valores de `themeMode` (efetivo desde o pacote 2.8.0, via `core/ozi-theme.js`)
+
+| Valor | Comportamento |
+|---|---|
+| `'auto'` | Padrão. Não toca no `<html>`: os componentes seguem o tema do **sistema operacional** |
+| `'light'` / `'dark'` | Força o tema (escreve `data-ozi-theme` no `<html>`) |
+| `'app'` | Segue o tema **do app**: `data-bs-theme` (Bootstrap) → classe `dark` no `<html>` (Tailwind) → brilho do fundo do `<body>`. Reavalia quando o app troca de tema |
+
+Também dá para declarar no markup, sem JS: `<html data-ozi-theme-mode="app">`. Um
+`oziConf({ themeMode })` vence o atributo. API: `OZI.theme.setMode()`, `.mode()`, `.current()`,
+`.refresh()`.
 
 ### Valores de `theme`
 

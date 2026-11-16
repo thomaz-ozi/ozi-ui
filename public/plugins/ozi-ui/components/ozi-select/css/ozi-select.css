@@ -1,8 +1,13 @@
 /**
  * components/ozi-select/css/ozi-select.css
- * Versão: 1.4.0
+ * Versão: 1.5.0
  *
  * Changelog:
+ *   - v1.5.0: [FEAT] Escuro próprio do componente — [data-ozi-theme="dark"] / [data-bs-theme="dark"]
+ *     + @media prefers-color-scheme guardado por data-ozi-theme/data-bs-theme="light". Antes o
+ *     select só escurecia com um themes/*\/dark.css linkado; sem tema, a lista ficava branca no
+ *     app escuro ([OZI-09] do SNDESK). Mesmo padrão do ozi-autocomplete. Acompanha o pacote 2.8.0
+ *     (modo themeMode:'app' do core/ozi-theme.js).
  *   - v1.4.0: [FEAT] Rótulo fixo + contador no modo multiple (.ozi-select-value.is-multiple-label /
  *     .ozi-select-multiple-count) — acompanha o ozi-select.js v6.5.0. Badge arredondado ao lado
  *     do rótulo. Tokens novos (com fallback nas cores de opção selecionada, então claro/escuro
@@ -63,6 +68,56 @@
     --ozi-select-disabled-text:     var(--ozi-color-gray-500,        #6b7280);
 
     --ozi-select-icon-color:        currentColor;
+}
+
+/* ─── DARK MODE (v1.5.0) ────────────────────────────── */
+
+/* Até a v1.4.0 o escuro do select existia SÓ nos themes/*\/dark.css — que o host linka à mão
+   (o @oziStyles não carrega). Sem eles, a lista ficava branca no app escuro ([OZI-09]).
+   Mesmo padrão do ozi-autocomplete: cada token consome o global do tema (que o dark.css do
+   tema inverte) com fallback escuro para quando não há tema. Os dois blocos abaixo têm os
+   MESMOS remapeamentos (armadilha A3). */
+[data-ozi-theme="dark"],
+[data-bs-theme="dark"] {
+    --ozi-select-bg:                var(--ozi-color-gray-100,        #1f2937);
+    --ozi-select-search-bg:         var(--ozi-color-gray-100,        #1f2937);
+    --ozi-select-border-color:      var(--ozi-border-color,          #4b5563);
+    --ozi-select-shadow:            0 8px 24px rgba(0, 0, 0, 0.35);
+    --ozi-select-text-color:        var(--ozi-color-gray-700,        #e5e7eb);
+    --ozi-select-placeholder-color: var(--ozi-color-gray-500,        #9ca3af);
+    --ozi-select-clear-color:       var(--ozi-color-gray-500,        #9ca3af);
+    --ozi-select-toggle-color:      var(--ozi-color-gray-700,        #e5e7eb);
+    --ozi-select-hover-bg:          var(--ozi-color-gray-200,        #374151);
+    --ozi-select-selected-bg:       var(--ozi-color-primary-light,   rgba(59, 130, 246, 0.15));
+    --ozi-select-selected-color:    var(--ozi-color-primary,         #60a5fa);
+    --ozi-select-highlight-bg:      var(--ozi-color-primary-light,   rgba(59, 130, 246, 0.15));
+    --ozi-select-tag-bg:            var(--ozi-color-gray-200,        #374151);
+    --ozi-select-tag-border:        var(--ozi-color-gray-300,        #4b5563);
+    --ozi-select-disabled-bg:       var(--ozi-color-gray-50,         #111827);
+    --ozi-select-disabled-border:   var(--ozi-color-gray-200,        #374151);
+    --ozi-select-disabled-text:     var(--ozi-color-gray-500,        #9ca3af);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-ozi-theme="light"]):not([data-bs-theme="light"]) {
+        --ozi-select-bg:                var(--ozi-color-gray-100,        #1f2937);
+        --ozi-select-search-bg:         var(--ozi-color-gray-100,        #1f2937);
+        --ozi-select-border-color:      var(--ozi-border-color,          #4b5563);
+        --ozi-select-shadow:            0 8px 24px rgba(0, 0, 0, 0.35);
+        --ozi-select-text-color:        var(--ozi-color-gray-700,        #e5e7eb);
+        --ozi-select-placeholder-color: var(--ozi-color-gray-500,        #9ca3af);
+        --ozi-select-clear-color:       var(--ozi-color-gray-500,        #9ca3af);
+        --ozi-select-toggle-color:      var(--ozi-color-gray-700,        #e5e7eb);
+        --ozi-select-hover-bg:          var(--ozi-color-gray-200,        #374151);
+        --ozi-select-selected-bg:       var(--ozi-color-primary-light,   rgba(59, 130, 246, 0.15));
+        --ozi-select-selected-color:    var(--ozi-color-primary,         #60a5fa);
+        --ozi-select-highlight-bg:      var(--ozi-color-primary-light,   rgba(59, 130, 246, 0.15));
+        --ozi-select-tag-bg:            var(--ozi-color-gray-200,        #374151);
+        --ozi-select-tag-border:        var(--ozi-color-gray-300,        #4b5563);
+        --ozi-select-disabled-bg:       var(--ozi-color-gray-50,         #111827);
+        --ozi-select-disabled-border:   var(--ozi-color-gray-200,        #374151);
+        --ozi-select-disabled-text:     var(--ozi-color-gray-500,        #9ca3af);
+    }
 }
 
 [data-ozi-select] { display: block; width: 100%; }

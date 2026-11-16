@@ -1,6 +1,10 @@
 /**
  * ozi-check.css
- * Versão: 1.0.2
+ * Versão: 1.0.3
+ *
+ * Changelog v1.0.3 (pacote 2.8.0):
+ *   - Corrigido: bloco dark era CSS inválido (seletor + @media na mesma lista) e o navegador
+ *     o descartava inteiro. Separado em bloco por atributo + @media guardado por "light".
  *
  * Changelog v1.0.2:
  *   - Renomeados: data-ozi-check-enabled → switch, data-ozi-check-all → group
@@ -71,9 +75,16 @@ label:has(.ozi-check-disabled) {
    Dark mode
 ───────────────────────────────────────────── */
 
+/* v1.0.3: até aqui era `[data-ozi-theme="dark"], @media (...) { :root {…} }` — seletor e
+   at-rule na mesma lista é CSS inválido, e o navegador descartava a regra INTEIRA: o escuro
+   do check nunca funcionou, nem pelo atributo nem pelo sistema. */
 [data-ozi-theme="dark"],
+[data-bs-theme="dark"] {
+    --ozi-check-disabled-opacity: .35;
+}
+
 @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-ozi-theme="light"]):not([data-bs-theme="light"]) {
         --ozi-check-disabled-opacity: .35;
     }
 }

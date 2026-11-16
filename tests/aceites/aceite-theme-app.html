@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite ozi-theme 1.0.0 (themeMode 'app')</title>
+<link rel="stylesheet" href="../plugins/ozi-ui/modules/ozi-validate/css/ozi-validate.css">
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; background: #ffffff; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .35rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+    /* tema escuro "próprio" do app, no formato do SNDESK ([OZI-09]/[OZI-10]) */
+    body.dark-mode { background: #111827; color: #f9fafb; }
+    body.oklch-escuro { background: oklch(0.21 0.034 264.665); }   /* gray-900 do Tailwind 4 */
+    body.com-transicao { transition: background-color 150ms linear; }
+    body.transparente, html.transparente { background: transparent; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite ozi-theme 1.0.0 <small>(themeMode 'app' — [OZI-09] + [OZI-10])</small></h1>
+<p>Critério: sem configuração nada muda (<code>auto</code>, <code>&lt;html&gt;</code> intocado);
+<code>themeMode:'app'</code> escreve <code>data-ozi-theme</code> pelo tema do app, nas 4 camadas
+(Bootstrap, Tailwind, fundo, canvas) e acompanha a troca de tema; <code>light</code>/<code>dark</code>
+forçam; voltar a <code>auto</code> devolve o atributo do host; select, editor, check e validate
+reagem ao atributo.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<div data-ozi-select="tema"></div>
+<script type="application/json" data-ozi-select-options="tema">[{"value":"1","label":"Um"}]</script>
+
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['select', 'editor', 'check'], lang: 'pt-BR' });
+
+    var erros = [];
+    var errosOpacos = 0;
+    window.addEventListener('error', function (ev) {
+        var isOpaco = (ev.message === 'Script error.' && !ev.filename && !ev.lineno);
+        if (isOpaco) { errosOpacos++; return; }
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+    var html = document.documentElement;
+    function attr() { return html.getAttribute('data-ozi-theme'); }
+    function rootVar(name) { return getComputedStyle(html).getPropertyValue(name).trim(); }
+    function lum(cssColor) {
+        var m = /rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)/.exec(cssColor);
+        if (!m) return -1;
+        var c = [m[1], m[2], m[3]].map(function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+        return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+    }
+    function selectBg() {
+        return getComputedStyle(document.querySelector('[data-ozi-select="tema"] .ozi-select-control')).backgroundColor;
+    }
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 12s';
+        vered.className = 'fail';
+    }, 12000);
+
+    OZI.ready(function () {
+        (async function () {
+            var todos = true;
+            var T = OZI.theme;
+
+            // ── 0. sem configuração: nada muda ──
+            todos = check('0. OZI.theme exposto pelo boot (ozi.js)',
+                !!T && typeof T.setMode === 'function') && todos;
+            todos = check('0. padrão é auto e o <html> fica intocado',
+                T.mode() === 'auto' && attr() === null, 'mode=' + T.mode() + ' attr=' + attr()) && todos;
+            todos = check('0. auto: current() é o tema do sistema (headless = claro)', T.current() === 'light') && todos;
+
+            // ── 1. oziConf({themeMode:'app'}) com app claro ──
+            oziConf({ themeMode: 'app' });
+            todos = check('1. oziConf({themeMode:"app"}) liga o modo', T.mode() === 'app') && todos;
+            todos = check('1. app claro (fundo branco) → data-ozi-theme="light"', attr() === 'light', attr()) && todos;
+            todos = check('1. select claro', lum(selectBg()) > 0.5, selectBg()) && todos;
+
+            // ── 2. app troca para escuro por classe no body (caso SNDESK) ──
+            document.body.classList.add('dark-mode');
+            await wait(30);
+            todos = check('2. body.dark-mode → data-ozi-theme="dark" (observer, sem código do app)', attr() === 'dark', attr()) && todos;
+            await wait(250);   // .ozi-select-control tem transition de 150 ms no background-color
+            todos = check('2. [OZI-09] select escuro sem tema linkado', lum(selectBg()) < 0.18, selectBg()) && todos;
+            todos = check('2. editor escuro (--ozi-editor-bg)', rootVar('--ozi-editor-bg') === '#1f2937', rootVar('--ozi-editor-bg')) && todos;
+            todos = check('2. check: opacidade do escuro (.35) — o bloco antes era CSS inválido',
+                rootVar('--ozi-check-disabled-opacity') === '.35', rootVar('--ozi-check-disabled-opacity')) && todos;
+            todos = check('2. validate: ícone do escuro (#f87171)', rootVar('--ozi-icon-invalid').indexOf('f87171') !== -1) && todos;
+
+            document.body.classList.remove('dark-mode');
+            await wait(30);
+            todos = check('2. volta ao claro ao tirar a classe', attr() === 'light', attr()) && todos;
+            todos = check('2. check/validate voltam ao claro',
+                rootVar('--ozi-check-disabled-opacity') === '.45' && rootVar('--ozi-icon-invalid').indexOf('f87171') === -1,
+                rootVar('--ozi-check-disabled-opacity')) && todos;
+
+            // ── 3. camada 1: Bootstrap 5.3 vence o fundo ──
+            html.setAttribute('data-bs-theme', 'dark');
+            await wait(30);
+            todos = check('3. data-bs-theme="dark" no <html> → dark (mesmo com fundo branco)', attr() === 'dark', attr()) && todos;
+            html.removeAttribute('data-bs-theme');
+            await wait(30);
+            todos = check('3. sem data-bs-theme → volta a light', attr() === 'light', attr()) && todos;
+
+            // ── 4. camada 2: classe dark do Tailwind ──
+            html.classList.add('dark');
+            await wait(30);
+            todos = check('4. html.dark (Tailwind) → dark', attr() === 'dark', attr()) && todos;
+            html.classList.remove('dark');
+            await wait(30);
+
+            // ── 5. camada 3 com cor oklch (canvas) ──
+            document.body.classList.add('oklch-escuro');
+            await wait(30);
+            todos = check('5. fundo oklch() escuro (Tailwind 4) → dark', attr() === 'dark',
+                attr() + ' / ' + getComputedStyle(document.body).backgroundColor) && todos;
+            document.body.classList.remove('oklch-escuro');
+            await wait(30);
+
+            // ── 6. troca com transição: reavalia no fim ──
+            document.body.classList.add('com-transicao');
+            await wait(30);
+            document.body.classList.add('dark-mode');
+            await wait(400);
+            todos = check('6. fundo com transition → dark depois do transitionend', attr() === 'dark', attr()) && todos;
+            document.body.classList.remove('dark-mode');
+            await wait(400);
+            todos = check('6. e light na volta', attr() === 'light', attr()) && todos;
+            document.body.classList.remove('com-transicao');
+
+            // ── 7. camada 4: tudo transparente → canvas ──
+            document.body.classList.add('transparente');
+            html.classList.add('transparente');
+            await wait(30);
+            todos = check('7. tudo transparente, sem color-scheme → light (canvas branco)', attr() === 'light', attr()) && todos;
+            html.style.colorScheme = 'dark';
+            await wait(30);
+            todos = check('7. tudo transparente + color-scheme:dark → dark', attr() === 'dark', attr()) && todos;
+            html.style.colorScheme = '';
+            document.body.classList.remove('transparente');
+            html.classList.remove('transparente');
+            await wait(30);
+            todos = check('7. restaurado → light', attr() === 'light', attr()) && todos;
+
+            // ── 8. modos forçados e invalidação ──
+            T.setMode('dark');
+            todos = check('8. setMode("dark") força dark, mesmo com app claro', attr() === 'dark' && T.current() === 'dark') && todos;
+            document.body.classList.add('dark-mode');
+            document.body.classList.remove('dark-mode');
+            await wait(30);
+            todos = check('8. fora do modo app o observer está desligado (continua dark)', attr() === 'dark', attr()) && todos;
+            T.setMode('light');
+            todos = check('8. setMode("light") força light', attr() === 'light') && todos;
+
+            var avisos = [];
+            var warn = console.warn;
+            console.warn = function (m) { avisos.push(String(m)); };
+            T.setMode('escuro');
+            console.warn = warn;
+            todos = check('8. modo inválido: aviso no console e modo mantido',
+                T.mode() === 'light' && avisos.length === 1 && avisos[0].indexOf('themeMode inválido') !== -1) && todos;
+
+            // ── 9. auto devolve o <html> ao host ──
+            T.setMode('auto');
+            todos = check('9. auto: atributo removido (o host não tinha)', attr() === null, attr()) && todos;
+            html.setAttribute('data-ozi-theme', 'dark');        // host escolheu dark à mão
+            T.setMode('app');
+            todos = check('9. app assume o atributo (app claro → light)', attr() === 'light', attr()) && todos;
+            T.setMode('auto');
+            todos = check('9. auto devolve o valor do host ("dark")', attr() === 'dark', attr()) && todos;
+            html.removeAttribute('data-ozi-theme');
+
+            await wait(80);
+            todos = check('zero erros JS reais (opacos filtrados: ' + errosOpacos + ')', erros.length === 0, erros.join(' | ') || null) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ ACEITE ozi-theme 1.0.0 (app): PASSOU' : '✗ ACEITE ozi-theme 1.0.0 (app): FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+            document.title = (todos ? 'DONE:PASS' : 'DONE:FAIL');
+        })().catch(function (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+            vered.textContent = '✗ ACEITE ozi-theme 1.0.0 (app): FALHOU (exceção)';
+            vered.className = 'fail';
+            document.title = 'DONE:FAIL';
+        });
+    });
+</script>
+</body>
+</html>

@@ -3,9 +3,15 @@
  *  ------------------------------------------
  *  ozi-conf
  *  ------------------------------------------
- *  Ver: 3.0.1
- *  2026-08-28
+ *  Ver: 3.1.0
+ *  2026-10-29
  *
+ *  v3.1.0 — [FEAT] `themeMode` passa a ter efeito: apply() repassa o valor ao
+ *    core/ozi-theme.js (se carregado), que escreve `data-ozi-theme` no <html>.
+ *    Valor novo 'app' (segue o tema do app). O default continua 'auto' e não é
+ *    aplicado no init — comportamento de quem não configura nada fica idêntico.
+ *    Chamada guardada por `window.OziTheme`: o ozi-conf segue sem depender de
+ *    outro subsistema.
  *  v3.0.1 — [FIX] entrada `editor-sanitize` no _pluginMap/_allPlugins (módulo
  *    puro extraído do ozi-editor, Fase 3 da nova leva de ferramentas — ver
  *    ozi-ui-docs/horizonte/roadmap/ozi-editor-subdivisao.md); `editor` passa a
@@ -36,7 +42,7 @@
 
     var _defaults = {
         theme:       'default',   // 'default' | 'bootstrap5' | 'tailwind' | 'custom'
-        themeMode:   'auto',      // 'light'   | 'dark'       | 'auto'
+        themeMode:   'auto',      // 'auto' (segue o sistema) | 'light' | 'dark' | 'app' (segue o app) — ver core/ozi-theme.js
         lang:        'en',        // 'en' | 'pt-BR' | qualquer locale registrado
         fallbackLang:'en',
 
@@ -476,6 +482,12 @@
             // classMap pontual sobrescreve o preset
             if (userConfig.classMap) {
                 _deepMerge(_conf.classMap, userConfig.classMap);
+            }
+
+            // v3.1.0: themeMode deixa de ser config morta. Só quando o host PASSA o campo —
+            // o default 'auto' não é aplicado, para não apagar um <html data-ozi-theme-mode>.
+            if (userConfig.themeMode && window.OziTheme) {
+                window.OziTheme.setMode(userConfig.themeMode);
             }
         },
 

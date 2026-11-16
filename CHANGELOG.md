@@ -6,6 +6,29 @@ listed where they changed.
 
 ## [Unreleased]
 
+### Added
+- Follow the app's own theme: `oziConf({ themeMode: 'app' })` or `<html data-ozi-theme-mode="app">`.
+  The new `core/ozi-theme.js` reads the app's theme and sets `data-ozi-theme="light|dark"` on
+  `<html>`, which every ozi-ui stylesheet already understands. It checks Bootstrap's
+  `data-bs-theme`, then Tailwind's `dark` class, then the brightness of the page background, so
+  apps with their own dark mode (e.g. `body.dark-mode`) need no extra code. It re-checks when the
+  app switches themes. Exposed as `OZI.theme` (`setMode()`, `mode()`, `current()`, `refresh()`).
+- `themeMode: 'light' | 'dark'` now work. The option was declared but had no effect.
+- `ozi-select` CSS 1.5: built-in dark colors, like the other components. Before, the select only
+  turned dark when a theme `dark.css` was linked, so its list stayed white in dark apps.
+
+### Fixed
+- `ozi-select` 6.5.2: an open select did not close when another select was clicked, or when
+  clicking inside a container that stops event propagation (e.g. a modal with `wire:click.stop`).
+- `ozi-validate` CSS: the dark icons were used whenever the OS was dark, even with
+  `data-ozi-theme="light"`; there was also no `data-ozi-theme="dark"` rule.
+- `ozi-check` CSS: the dark-mode rule was invalid CSS and browsers ignored it.
+
+### Unchanged by default
+- With no configuration, `themeMode` stays `'auto'` and ozi-ui follows the OS as before. The only
+  visible difference is the select, which now goes dark with the OS like the editor and
+  autocomplete already did.
+
 ## [2.7.2] — 2026-11-15
 
 ### Fixed
