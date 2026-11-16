@@ -196,21 +196,28 @@ class OziAssets
         $langUrl         = $this->base . 'core/ozi-lang.js?v='             . $this->version;
         $integrationsUrl = $this->base . 'core/ozi-integrations.js?v='     . $this->version;
         $hooksUrl        = $this->base . 'core/ozi-hooks.js?v='            . $this->version;
+        $bootUrl         = $this->base . 'core/ozi-assets-boot.js?v='      . $this->version;
+        $readyUrl        = $this->base . 'core/ozi-assets-ready.js?v='     . $this->version;
 
-        $bridge = 'window.OZI=window.OZI||{components:{},behaviors:{},modules:{},helpers:{},conf:null,lang:null};window.OZI.helpers=window.OziHelpers||{};';
+        // ⚠️ 2.8.0 ([OZI-11] do SNDESK): o boot NÃO pode ser <script> inline. No `wire:navigate`
+        // o Livewire reinsere os scripts do <body> de uma vez, e o navegador executa os inline na
+        // hora e os externos depois, em ordem. O boot inline rodava antes do core e gravava
+        // OZI.hooks = {} (erro "reading 'register'" nos módulos), OZI.helpers = {}, deixava
+        // OZI.conf nulo e perdia o oziConf() do blade. Agora o boot é core/ozi-assets-boot.js e
+        // core/ozi-assets-ready.js, na fila dos externos.
+        //
+        // O único inline que sobra é esta ponte, e ela só precisa de duas coisas que valem em
+        // qualquer ordem: o window.OZI e uma FILA para o oziConf(). Um oziConf({...}) inline do
+        // blade que rode antes do boot (o caso do navigate) é guardado e aplicado pelo boot.
+        $bridge = 'window.OZI=window.OZI||{components:{},behaviors:{},modules:{},helpers:{},conf:null,lang:null};'
+                . 'window.OZI.helpers=window.OziHelpers||window.OZI.helpers||{};'
+                . 'window.__oziConfQueue=[];'
+                . 'window.oziConf=function(c){(window.__oziConfQueue=window.__oziConfQueue||[]).push(c);};';
 
-        // immediate: init conf + lang + expose OZI.hooks + OZI.integrations so plugins can use them synchronously
-        // oziConf() re-inicializa o lang quando o host passa lang/fallbackLang DEPOIS do boot imediato
-        // (caso do @oziScripts: o boot roda no HEAD, o oziConf({lang}) vem depois — sem isso ficava en/en).
-        $immediateBoot = 'if(window.OziConf){window.OziConf.init();window.OziConf.apply({core:{urlBase:"' . $this->base . '"},lang:"' . $this->locale . '"});window.OZI.conf=window.OziConf.get();}'
-                       . 'window.oziConf=function(c){if(!window.OziConf)return;window.OziConf.apply(c);window.OZI.conf=window.OziConf.get();'
-                       . 'if(c&&(c.lang||c.fallbackLang)&&window.OziLang&&typeof window.OziLang.init==="function"){var _n=window.OZI.conf||{};window.OziLang.init(_n.lang||"en",_n.fallbackLang||"en");}};'
-                       . 'if(window.OziLang){window.OZI.lang=window.OziLang;if(typeof window.OziLang.init==="function"){var _c=window.OZI.conf||{};window.OziLang.init(_c.lang||"' . $this->locale . '",_c.fallbackLang||"en");}}'
-                       . 'window.OZI.theme=window.OziTheme||{};'
-                       . 'window.OZI.hooks=window.OziHooks||{};window.OZI.integrations=window.OziIntegrations||{};if(window.OziIntegrations&&window.OziIntegrations._boot)window.OziIntegrations._boot([]);';
-
-        // deferred: connect Livewire hooks only after @livewireScripts runs (window.Livewire ready at DOMContentLoaded)
-        $deferredBoot = '(function(){function b(){var O=window.OZI;if(!O)return;if(O.hooks&&typeof O.hooks._boot==="function")O.hooks._boot();O.isReady=true;}document.readyState==="loading"?document.addEventListener("DOMContentLoaded",b):setTimeout(b,0);})();';
+        // base e locale vão por data-* (o arquivo os lê de document.currentScript)
+        $bootTag = '<script src="' . $bootUrl . '"'
+                 . ' data-ozi-base="' . htmlspecialchars($this->base, ENT_QUOTES) . '"'
+                 . ' data-ozi-locale="' . htmlspecialchars($this->locale, ENT_QUOTES) . '"></script>';
 
         $head = '<script src="' . $helpersUrl . '"></script>' . "\n"
               . '<script>' . $bridge . '</script>' . "\n"
@@ -221,9 +228,9 @@ class OziAssets
               . '<script src="' . $langUrl . '"></script>' . "\n"
               . '<script src="' . $integrationsUrl . '"></script>' . "\n"
               . '<script src="' . $hooksUrl . '"></script>' . "\n"
-              . '<script>' . $immediateBoot . '</script>';
+              . $bootTag;
 
-        // Dicionários logo após o boot imediato: os arquivos de lang chamam
+        // Dicionários logo após o boot: os arquivos de lang chamam
         // OZI.lang.register(), que só existe a partir dele. Antes dos plugins,
         // para que qualquer _t() em tempo de init já encontre as chaves.
         $langs = $this->resolveLangs($map);
@@ -240,7 +247,8 @@ class OziAssets
             $map
         ));
 
-        return $head . "\n" . $body . "\n" . '<script>' . $deferredBoot . '</script>';
+        // ready por último: liga os hooks do Livewire e sobe OZI.isReady depois dos plugins
+        return $head . "\n" . $body . "\n" . '<script src="' . $readyUrl . '"></script>';
     }
 
     /**

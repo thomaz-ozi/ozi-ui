@@ -48,6 +48,8 @@ class OziCheckCommand extends Command
         'core/helpers/ozi-helpers.js',
         'core/ozi-loader.js',
         'core/ozi-integrations.js',
+        'core/ozi-assets-boot.js',   // boot do @oziScripts (2.8.0, era inline)
+        'core/ozi-assets-ready.js',
     ];
 
     /**

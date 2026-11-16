@@ -150,7 +150,7 @@ class OziAssetsTest extends TestCase
             $this->app->setLocale($appLocale);
 
             $this->assertStringContainsString(
-                'lang:"' . $expected . '"',
+                'data-ozi-locale="' . $expected . '"',
                 (new OziAssets())->scripts([]),
                 "locale {$appLocale}"
             );
@@ -171,11 +171,45 @@ class OziAssetsTest extends TestCase
 
     public function test_dictionaries_come_after_the_boot_and_before_the_plugins(): void
     {
-        // os arquivos de lang chamam OZI.lang.register(), que só existe depois do boot imediato
+        // os arquivos de lang chamam OZI.lang.register(), que só existe depois do boot
         $html = $this->assets()->scripts(['select']);
 
-        $this->assertLessThan(strpos($html, 'shared/lang/'), strpos($html, 'OziConf.init()'));
+        $this->assertLessThan(strpos($html, 'shared/lang/'), strpos($html, 'core/ozi-assets-boot.js'));
         $this->assertLessThan(strpos($html, 'components/ozi-select/js/'), strpos($html, 'components/ozi-select/lang/'));
+    }
+
+    // ── boot externo ([OZI-11], 2.8.0) ───────────────────────────────
+
+    public function test_the_only_inline_script_is_the_bridge(): void
+    {
+        // No wire:navigate o navegador executa os inline ANTES dos externos. Qualquer lógica de
+        // boot inline roda antes do core existir; só a ponte (OZI + fila do oziConf) pode ser inline.
+        $html = $this->assets()->scripts(['select']);
+
+        $this->assertSame(1, substr_count($html, '<script>'), 'um único <script> inline');
+        $this->assertStringContainsString('window.__oziConfQueue=[]', $html);
+        $this->assertStringNotContainsString('OziConf.init()', $html, 'o boot não é mais inline');
+    }
+
+    public function test_boot_runs_after_the_core_and_ready_runs_last(): void
+    {
+        $html = $this->assets()->scripts(['select']);
+
+        $this->assertLessThan(strpos($html, 'core/ozi-assets-boot.js'), strpos($html, 'core/ozi-hooks.js'));
+        $this->assertLessThan(strpos($html, 'components/ozi-select/js/'), strpos($html, 'core/ozi-assets-boot.js'));
+        $this->assertLessThan(strpos($html, 'core/ozi-assets-ready.js'), strpos($html, 'components/ozi-select/js/'));
+        $this->assertStringEndsWith('/p/core/ozi-assets-ready.js?v=T"></script>', $html);
+    }
+
+    public function test_boot_tag_carries_base_and_locale(): void
+    {
+        $this->app->setLocale('pt_BR');
+        $html = (new OziAssets())->setBase('/p/')->setVersion('T')->scripts([]);
+
+        $this->assertStringContainsString(
+            '<script src="/p/core/ozi-assets-boot.js?v=T" data-ozi-base="/p/" data-ozi-locale="pt-BR"></script>',
+            $html
+        );
     }
 
     public function test_unsupported_locale_falls_back_to_english_dictionaries(): void

@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite 2.8.0 (@oziScripts no wire:navigate — [OZI-11])</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .35rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+    iframe { width: 100%; height: 60px; border: 1px dashed #999; }
+</style>
+<script>
+    /*
+     * Esta página é a "tela A" (sem ozi-ui). O teste:
+     *   1. carrega a fixture da "tela B" (_fixture-oziscripts-tela-b.html = HTML real do @oziScripts)
+     *      num IFRAME — carga normal;
+     *   2. busca a mesma fixture e faz o que o `wire:navigate` do Livewire faz (livewire.esm.js,
+     *      prepNewBodyScriptTagsToRun + cloneScriptTag): clona cada <script> com `async = el.async`
+     *      e troca o <body> inteiro. O navegador executa os inline NA HORA e os externos depois.
+     * Até o pacote 2.7.2 o boot do @oziScripts era inline e quebrava no passo 2 ([OZI-11]).
+     * O harness mora no <head>: ele sobrevive à troca do <body>.
+     */
+    var erros = [];
+    window.addEventListener('error', function (ev) {
+        if (ev.message === 'Script error.' && !ev.filename && !ev.lineno) return;
+        erros.push((ev.message || 'error') + ' @ ' + String(ev.filename || '').split('/').pop() + ':' + ev.lineno);
+    });
+
+    var linhas = [];
+    function check(nome, ok, extra) {
+        linhas.push({ ok: ok, txt: (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '') });
+        render();
+        return ok;
+    }
+    function render() {
+        var ul = document.getElementById('resultados');
+        if (!ul) return;
+        ul.innerHTML = '';
+        linhas.forEach(function (l) {
+            var li = document.createElement('li');
+            li.className = l.ok ? 'pass' : 'fail';
+            li.textContent = l.txt;
+            ul.appendChild(li);
+        });
+    }
+    function veredito(txt, ok) {
+        var v = document.getElementById('veredito');
+        if (v) { v.textContent = txt; v.className = ok ? 'pass' : 'fail'; }
+        document.title = ok ? 'DONE:PASS' : 'DONE:FAIL';
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    async function ate(cond, ms) {
+        var fim = Date.now() + ms;
+        while (Date.now() < fim) { try { if (cond()) return true; } catch (e) {} await wait(50); }
+        return false;
+    }
+
+    // Os mesmos checks, na carga normal (iframe) e no navigate (esta janela)
+    async function verificar(w, rotulo) {
+        var todos = true;
+        var d = w.document;
+        var pronto = await ate(function () { return w.OZI && w.OZI.isReady && d.querySelector('[data-ozi-select="nav"] .ozi-select-ui'); }, 6000);
+        todos = check(rotulo + ': OZI.isReady e o select da tela B iniciou', pronto) && todos;
+        if (!pronto) return false;
+        var O = w.OZI;
+        todos = check(rotulo + ': OZI.hooks é o OziHooks (não o {} vazio)',
+            !!O.hooks && !!O.hooks.afterRender && typeof O.hooks.afterRender.register === 'function') && todos;
+        todos = check(rotulo + ': OZI.helpers.emit existe',
+            !!O.helpers && typeof O.helpers.emit === 'function') && todos;
+        todos = check(rotulo + ': OZI.conf inicializado com o locale da tag (pt-BR)',
+            !!O.conf && O.conf.lang === 'pt-BR', O.conf ? O.conf.lang : 'conf nulo') && todos;
+        todos = check(rotulo + ': o oziConf() inline do blade foi aplicado (themeMode "app")',
+            O.conf && O.conf.themeMode === 'app' && O.theme && typeof O.theme.mode === 'function' && O.theme.mode() === 'app',
+            O.conf ? 'themeMode=' + O.conf.themeMode : '') && todos;
+        var busca = O.lang && typeof O.lang.t === 'function' ? O.lang.t('select.searchPlaceholder') : '';
+        todos = check(rotulo + ': i18n da tela B em pt-BR (select.searchPlaceholder)',
+            busca === 'Pesquisar...', busca) && todos;
+
+        // re-init pós-render: prova que o component:select se registrou no afterRender
+        var novo = d.createElement('div');
+        novo.setAttribute('data-ozi-select', 'nav-depois');
+        var opts = d.createElement('script');
+        opts.type = 'application/json';
+        opts.setAttribute('data-ozi-select-options', 'nav-depois');
+        opts.textContent = '[{"value":"x","label":"X"}]';
+        d.body.appendChild(opts);
+        d.body.appendChild(novo);
+        O.hooks.afterRender.run(d.body);
+        todos = check(rotulo + ': afterRender.run() inicia um select inserido depois (hook registrado)',
+            !!novo.querySelector('.ozi-select-ui')) && todos;
+        return todos;
+    }
+
+    async function principal() {
+        var todos = true;
+
+        // ── 1. carga normal (iframe) ──
+        var ifr = document.getElementById('carga-normal');
+        await new Promise(function (r) { ifr.addEventListener('load', r, { once: true }); ifr.src = '_fixture-oziscripts-tela-b.html'; });
+        todos = await verificar(ifr.contentWindow, 'carga normal') && todos;
+
+        // ── 2. wire:navigate simulado (tela A → tela B) ──
+        todos = check('premissa: a tela A não tem ozi-ui', typeof window.OZI === 'undefined') && todos;
+        var html = await (await fetch('_fixture-oziscripts-tela-b.html')).text();
+        var novo = new DOMParser().parseFromString(html, 'text/html');
+        // swapCurrentPageWithNewHtml: adota o <body> ANTES de trocar os scripts. Sem isso, o
+        // script novo seria inserido no documento do DOMParser e marcado "já iniciado" (nunca roda)
+        var novoBody = document.adoptNode(novo.body);
+        novoBody.querySelectorAll('script').forEach(function (i) {          // prepNewBodyScriptTagsToRun
+            var s = document.createElement('script');                       // cloneScriptTag
+            s.textContent = i.textContent;
+            s.async = i.async;
+            Array.prototype.forEach.call(i.attributes, function (a) { s.setAttribute(a.name, a.value); });
+            i.replaceWith(s);
+        });
+        document.body.replaceWith(novoBody);
+        render();
+
+        todos = check('navigate: o inline da tela B rodou', await ate(function () { return window.__telaBInlineRodou; }, 2000)) && todos;
+        todos = await verificar(window, 'navigate') && todos;
+
+        await wait(100);
+        todos = check('navigate: zero erros JS (antes: "reading \'register\'" no validate/actions/suggest)',
+            erros.length === 0, erros.join(' | ') || null) && todos;
+
+        veredito(todos ? '✓ ACEITE 2.8.0 (@oziScripts no navigate): PASSOU' : '✗ ACEITE 2.8.0 (@oziScripts no navigate): FALHOU', todos);
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        var watchdog = setTimeout(function () { veredito('✗ FALHOU — testes não terminaram em 15s', false); }, 15000);
+        principal().then(function () { clearTimeout(watchdog); }).catch(function (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err));
+            veredito('✗ ACEITE 2.8.0 (@oziScripts no navigate): FALHOU (exceção)', false);
+        });
+    });
+</script>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite 2.8.0 <small>(@oziScripts no <code>wire:navigate</code> — [OZI-11])</small></h1>
+<p>Critério: a tela B (HTML real do <code>@oziScripts</code>) funciona igual na carga normal e chegando
+por <code>wire:navigate</code> de uma tela sem ozi-ui: <code>OZI.hooks</code>, <code>helpers</code>,
+<code>conf</code> e i18n ligados, o <code>oziConf()</code> inline do blade aplicado, o re-init
+pós-render registrado e zero erros.</p>
+<iframe id="carga-normal" title="tela B, carga normal"></iframe>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando…</div>
+</body>
+</html>

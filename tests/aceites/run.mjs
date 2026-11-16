@@ -154,7 +154,8 @@ async function runPage(page) {
 // ── execução ────────────────────────────────────────────────────────────────
 const pages = process.argv.slice(2).length
     ? process.argv.slice(2)
-    : readdirSync(PAGES_DIR).filter((f) => f.endsWith('.html')).sort();
+    // "_*.html" são fixtures carregadas por outras páginas (iframe/fetch), não aceites
+    : readdirSync(PAGES_DIR).filter((f) => f.endsWith('.html') && !f.startsWith('_')).sort();
 
 let passed = 0, failed = 0, known = 0, flaky = 0;
 

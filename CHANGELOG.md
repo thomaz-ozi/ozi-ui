@@ -18,6 +18,12 @@ listed where they changed.
   turned dark when a theme `dark.css` was linked, so its list stayed white in dark apps.
 
 ### Fixed
+- `@oziScripts` with Livewire `wire:navigate`: on a page reached from a page without ozi-ui, the
+  inline boot script ran before the core files had loaded. `OZI.hooks` was left empty (errors
+  `Cannot read properties of undefined (reading 'register')`), `OZI.conf` stayed null, translations
+  were not loaded and `oziConf()` calls in the Blade view were dropped. The boot now lives in
+  `core/ozi-assets-boot.js` and `core/ozi-assets-ready.js`, which load in order with the other
+  scripts; `oziConf()` calls made before the boot are queued and applied.
 - `ozi-select` 6.5.2: an open select did not close when another select was clicked, or when
   clicking inside a container that stops event propagation (e.g. a modal with `wire:click.stop`).
 - `ozi-validate` CSS: the dark icons were used whenever the OS was dark, even with

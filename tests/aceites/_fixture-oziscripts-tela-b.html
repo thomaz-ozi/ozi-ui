@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Fixture — tela B com @oziScripts (aceite-oziscripts-navigate)</title>
+</head>
+<body>
+<!--
+  FIXTURE, não é aceite (o run.mjs pula arquivos que começam com "_").
+  É a "tela B" do aceite-oziscripts-navigate.html: o HTML que o @oziScripts(['select','check','toggle'])
+  emite, com locale pt_BR. Gerada do OziAssets.php (pacote 2.8.0) pela bancada -dev-bs:
+    php artisan tinker --execute="app()->setLocale('pt_BR'); echo (new OziUI\Core\OziAssets)
+      ->setBase('../plugins/ozi-ui/')->setVersion('fixture')->scripts(['select','check','toggle']);"
+  Ao mudar a ordem/forma do que o OziAssets emite, REGENERE esta fixture (o PHPUnit trava o contrato
+  do lado PHP; esta página prova o comportamento no navegador).
+-->
+<ul id="resultados"></ul>
+<div id="veredito">tela B carregada…</div>
+
+<div data-ozi-select="nav" data-ozi-required="true"></div>
+<script type="application/json" data-ozi-select-options="nav">[{"value":"1","label":"Um"},{"value":"2","label":"Dois"}]</script>
+
+<script src="../plugins/ozi-ui/core/helpers/ozi-helpers.js?v=fixture"></script>
+<script>window.OZI=window.OZI||{components:{},behaviors:{},modules:{},helpers:{},conf:null,lang:null};window.OZI.helpers=window.OziHelpers||window.OZI.helpers||{};window.__oziConfQueue=[];window.oziConf=function(c){(window.__oziConfQueue=window.__oziConfQueue||[]).push(c);};</script>
+<script src="../plugins/ozi-ui/core/ozi-conf.js?v=fixture"></script>
+<script src="../plugins/ozi-ui/core/ozi-theme.js?v=fixture"></script>
+<script src="../plugins/ozi-ui/core/ozi-lang.js?v=fixture"></script>
+<script src="../plugins/ozi-ui/core/ozi-integrations.js?v=fixture"></script>
+<script src="../plugins/ozi-ui/core/ozi-hooks.js?v=fixture"></script>
+<script src="../plugins/ozi-ui/core/ozi-assets-boot.js?v=fixture" data-ozi-base="../plugins/ozi-ui/" data-ozi-locale="pt-BR"></script>
+<script src="../plugins/ozi-ui/shared/lang/pt-BR.js?v=fixture"></script>
+<script src="../plugins/ozi-ui/modules/ozi-loaddata/lang/pt-BR.js?v=fixture"></script>
+<script src="../plugins/ozi-ui/components/ozi-select/lang/pt-BR.js?v=fixture"></script>
+<script src="../plugins/ozi-ui/modules/ozi-validate/js/ozi-validate.js?v=fixture"></script>
+<script src="../plugins/ozi-ui/modules/ozi-actions/js/ozi-actions.js?v=fixture"></script>
+<script src="../plugins/ozi-ui/modules/ozi-suggest/js/ozi-suggest.js?v=fixture"></script>
+<script src="../plugins/ozi-ui/modules/ozi-loaddata/js/ozi-loaddata.js?v=fixture"></script>
+<script src="../plugins/ozi-ui/components/ozi-select/js/ozi-select.js?v=fixture"></script>
+<script src="../plugins/ozi-ui/components/ozi-check/js/ozi-check.js?v=fixture"></script>
+<script src="../plugins/ozi-ui/behaviors/ozi-toggle/js/ozi-toggle.js?v=fixture"></script>
+<script src="../plugins/ozi-ui/core/ozi-assets-ready.js?v=fixture"></script>
+<script>
+    // como o blade do SNDESK: oziConf() inline, logo depois do @oziScripts
+    oziConf({ themeMode: 'app', fallbackLang: 'en' });
+    window.__telaBInlineRodou = true;
+</script>
+</body>
+</html>
