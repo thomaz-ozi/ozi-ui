@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite adapter Livewire 2.3.0 (livewire-call / -defer)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .35rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+    .ozi-select-dropdown { display: none; }
+    .ozi-select-ui.is-open .ozi-select-dropdown { display: block; }
+</style>
+<script>
+    // ── Livewire simulado ANTES do ozi.js: registra set/call por componente ──
+    window.__lw = [];
+    window.Livewire = {
+        find: function (id) {
+            return {
+                set:  function (prop, value, live) { window.__lw.push({ id: id, op: 'set', prop: prop, value: value, live: live }); },
+                call: function () { window.__lw.push({ id: id, op: 'call', args: Array.prototype.slice.call(arguments) }); }
+            };
+        },
+        on: function () {}, hook: function () {}
+    };
+    window.__avisos = [];
+    (function () { var w = console.warn; console.warn = function (m) { window.__avisos.push(String(m)); return w.apply(console, arguments); }; })();
+</script>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite adapter Livewire 2.3.0 <small>(<code>livewire-call</code> e <code>-defer</code> — [OZI-15])</small></h1>
+<p>Critério (roteiro do registro <code>[OZI-15]</code>): escolher uma opção num select com
+<code>data-ozi-livewire-call</code> chama o método <b>uma vez</b>, com os argumentos + os valores;
+<code>source:'api'</code> não chama; nó trocado continua ligado; <code>-defer</code> faz
+<code>set(prop, valor, false)</code>; args inválidos e falta de <code>[wire:id]</code> avisam.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<div wire:id="dash">
+    <!-- 1. modo C: definirPerfis('card:funil', valores) — o caso do SNDESK -->
+    <div id="area-call">
+        <div data-ozi-select="perfis" data-ozi-select-multiple="true"
+             data-ozi-livewire-call="definirPerfis" data-ozi-livewire-args='["card:funil"]'></div>
+        <script type="application/json" data-ozi-select-options="perfis">
+        [{"value":"1","label":"Atendimento"},{"value":"2","label":"Vendedor"}]
+        </script>
+    </div>
+
+    <!-- 4. modo B deferido -->
+    <div data-ozi-select="status" data-ozi-livewire-model="status" data-ozi-livewire-defer></div>
+    <script type="application/json" data-ozi-select-options="status">[{"value":"a","label":"Aberto"},{"value":"f","label":"Fechado"}]</script>
+
+    <!-- modo B sem defer (controle) -->
+    <div data-ozi-select="uf" data-ozi-livewire-model="uf"></div>
+    <script type="application/json" data-ozi-select-options="uf">[{"value":"SP","label":"SP"},{"value":"RJ","label":"RJ"}]</script>
+
+    <!-- args inválidos -->
+    <div data-ozi-select="ruim" data-ozi-livewire-call="metodo" data-ozi-livewire-args='[nao-e-json'></div>
+    <script type="application/json" data-ozi-select-options="ruim">[{"value":"1","label":"Um"}]</script>
+
+    <!-- args escalar vira array -->
+    <div data-ozi-select="escalar" data-ozi-livewire-call="porItem" data-ozi-livewire-args='42'></div>
+    <script type="application/json" data-ozi-select-options="escalar">[{"value":"x","label":"X"}]</script>
+</div>
+
+<!-- sem [wire:id] ancestral -->
+<div data-ozi-select="orfao" data-ozi-livewire-call="metodo"></div>
+<script type="application/json" data-ozi-select-options="orfao">[{"value":"1","label":"Um"}]</script>
+
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['select', 'select-plugin', 'livewire'], lang: 'pt-BR' });
+
+    var erros = [];
+    window.addEventListener('error', function (ev) {
+        if (ev.message === 'Script error.' && !ev.filename && !ev.lineno) return;
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    function click(el) { el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })); }
+    function q(k) { return document.querySelector('[data-ozi-select="' + k + '"]'); }
+    function escolher(k, v) {
+        if (!q(k).querySelector('.ozi-select-ui').classList.contains('is-open')) click(q(k).querySelector('.ozi-select-control'));
+        click(q(k).querySelector('.ozi-select-option[data-value="' + v + '"]'));
+    }
+    function desde(n, op) { return window.__lw.slice(n).filter(function (r) { return !op || r.op === op; }); }
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () { vered.textContent = '✗ FALHOU — testes não terminaram em 9s'; vered.className = 'fail'; }, 9000);
+
+    OZI.ready(function () {
+        (async function () {
+            await wait(150);   // adapter.scan roda no registro do plugin
+            var todos = true, n, r;
+
+            // ── 1. modo C: escolher uma opção chama o método uma vez, com args + valores ──
+            n = window.__lw.length;
+            escolher('perfis', '2');
+            r = desde(n, 'call');
+            todos = check('1. livewire-call: escolher chama o método UMA vez', r.length === 1, r.length + ' chamada(s)') && todos;
+            todos = check('1. com os args antes do valor: definirPerfis("card:funil", ["2"]) no wire:id dash',
+                r.length === 1 && r[0].id === 'dash' && JSON.stringify(r[0].args) === '["definirPerfis","card:funil",["2"]]',
+                r[0] ? JSON.stringify(r[0].args) : '') && todos;
+            todos = check('1. modo C sozinho não faz set', desde(n, 'set').length === 0) && todos;
+
+            escolher('perfis', '1');
+            r = desde(n, 'call');
+            todos = check('1. 2ª escolha: nova chamada com os 2 valores',
+                r.length === 2 && JSON.stringify(r[1].args) === '["definirPerfis","card:funil",["2","1"]]',
+                r[1] ? JSON.stringify(r[1].args) : '') && todos;
+
+            // ── 2. source 'api' não chama ──
+            n = window.__lw.length;
+            OZI.components.select.value('perfis', ['1']);
+            todos = check('2. api.value() (source "api") NÃO chama o método', desde(n).length === 0, desde(n).length + ' registro(s)') && todos;
+
+            // args lidos no EVENTO: o morph pode trocar
+            q('perfis').setAttribute('data-ozi-livewire-args', '["card:status"]');
+            n = window.__lw.length;
+            escolher('perfis', '2');
+            r = desde(n, 'call');
+            todos = check('args lidos no evento (trocados depois do bind)',
+                r.length === 1 && r[0].args[1] === 'card:status', r[0] ? JSON.stringify(r[0].args) : '') && todos;
+
+            // ── 3. nó trocado pelo Livewire continua ligado ──
+            var area = document.getElementById('area-call');
+            area.innerHTML =
+                '<div data-ozi-select="perfis-v2" data-ozi-select-multiple="true" data-ozi-livewire-call="definirPerfis" data-ozi-livewire-args=\'["card:funil"]\'></div>' +
+                '<script type="application/json" data-ozi-select-options="perfis-v2">[{"value":"9","label":"Novo"}]<\/script>';
+            OZI.hooks.afterRender.run(area);
+            await wait(50);
+            n = window.__lw.length;
+            escolher('perfis-v2', '9');
+            r = desde(n, 'call');
+            todos = check('3. nó novo (re-render) continua ligado ao método',
+                r.length === 1 && JSON.stringify(r[0].args) === '["definirPerfis","card:funil",["9"]]', r[0] ? JSON.stringify(r[0].args) : r.length + ' chamada(s)') && todos;
+
+            // ── 4. -defer: set(prop, valor, false) ──
+            n = window.__lw.length;
+            escolher('status', 'f');
+            r = desde(n, 'set');
+            todos = check('4. livewire-defer: set("status", "f", false) — sem ida ao servidor',
+                r.length === 1 && r[0].prop === 'status' && r[0].value === 'f' && r[0].live === false, JSON.stringify(r[0] || {})) && todos;
+            n = window.__lw.length;
+            escolher('uf', 'RJ');
+            r = desde(n, 'set');
+            todos = check('4. sem -defer: set("uf", "RJ", true) (comportamento de antes)',
+                r.length === 1 && r[0].prop === 'uf' && r[0].live === true, JSON.stringify(r[0] || {})) && todos;
+
+            // ── args escalar e avisos ──
+            n = window.__lw.length;
+            escolher('escalar', 'x');
+            r = desde(n, 'call');
+            todos = check('args escalar (42) vira [42]', r.length === 1 && JSON.stringify(r[0].args) === '["porItem",42,"x"]',
+                r[0] ? JSON.stringify(r[0].args) : '') && todos;
+
+            n = window.__lw.length;
+            var a0 = window.__avisos.length;
+            escolher('ruim', '1');
+            todos = check('args inválidos: não chama e avisa',
+                desde(n).length === 0 && window.__avisos.slice(a0).some(function (m) { return m.indexOf('livewire-args não é JSON') !== -1; })) && todos;
+
+            a0 = window.__avisos.length;
+            escolher('orfao', '1');
+            todos = check('sem [wire:id] ancestral: avisa',
+                window.__avisos.slice(a0).some(function (m) { return m.indexOf('componente Livewire não encontrado') !== -1; })) && todos;
+
+            await wait(80);
+            todos = check('zero erros JS', erros.length === 0, erros.join(' | ') || null) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ ACEITE adapter 2.3.0 (livewire-call): PASSOU' : '✗ ACEITE adapter 2.3.0 (livewire-call): FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+            document.title = todos ? 'DONE:PASS' : 'DONE:FAIL';
+        })().catch(function (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+            vered.textContent = '✗ ACEITE adapter 2.3.0 (livewire-call): FALHOU (exceção)';
+            vered.className = 'fail';
+            document.title = 'DONE:FAIL';
+        });
+    });
+</script>
+</body>
+</html>

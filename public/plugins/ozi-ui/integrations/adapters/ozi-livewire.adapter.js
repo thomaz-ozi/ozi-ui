@@ -3,8 +3,8 @@
  * ------------------------------------------
  * ozi-livewire.adapter
  * ------------------------------------------
- * Ver: 2.2.0
- * 2026-09-23
+ * Ver: 2.3.0
+ * 2026-11-16
  *
  *
  * Responsabilidade:
@@ -14,12 +14,14 @@
  *   - Sincronizar valor inicial via data-ozi-livewire-value
  *   - Eventos DOM imperativos: ozi:set-value, ozi:set-options
  *
- * Dois modos de propagação (o adapter escolhe automaticamente):
+ * Modos de propagação (A ou B, o adapter escolhe; C soma-se a eles):
  *   A) wire:model NATIVO (preferido) — data-ozi-livewire-native aponta o input
  *      wire:model; no ozi:change o adapter faz dispatch de `input`+`change`
  *      nativos nele → o Livewire trata pela própria máquina de wire:model
  *      (respeita .live/.debounce/.lazy). É o caminho robusto para timing.
  *   B) component.set() (compat) — data-ozi-livewire-model + component.set(prop).
+ *      Com data-ozi-livewire-defer, set(prop, valor, false): sem ida ao servidor.
+ *   C) component.call() (v2.3.0) — data-ozi-livewire-call (+ -args): chama um método.
  *
  * Atributos HTML reconhecidos:
  *   data-ozi-livewire-model         → propriedade Livewire (modo B)
@@ -30,6 +32,10 @@
  *   data-ozi-livewire-value         → valor inicial (sobrescreve opções)
  *   data-ozi-select-footer-call     → método Livewire chamado no clique do rodapé do
  *                                     ozi-select (via evento ozi:select-footer)
+ *   data-ozi-livewire-call          → modo C: método chamado no ozi:change do usuário,
+ *                                     component.call(metodo, ...args, valor)
+ *   data-ozi-livewire-args          → JSON com os argumentos que vêm ANTES do valor
+ *   data-ozi-livewire-defer         → modo B deferido: component.set(prop, valor, false)
  *
  * Dependências:
  *   - ozi-integrations.js (OZI.integrations.registerAdapter)
@@ -38,6 +44,13 @@
  *     adapter NÃO instala hooks de render próprios.
  *
  * Changelog:
+ *   - v2.3.0: [FEAT] [OZI-15] do SNDESK. Modo C `data-ozi-livewire-call` (+ `-args`):
+ *     `component.call(metodo, ...args, valor)` no ozi:change do usuário — o SNDESK tinha 10
+ *     ouvintes manuais de ozi:change com o mesmo molde. `data-ozi-livewire-defer`: o modo B
+ *     passa `live = false` ao `set` (sem ida ao servidor por mudança — o editor emite a cada
+ *     tecla). call/args/defer são lidos NO EVENTO (o morph pode trocá-los). `source:'api'`
+ *     segue ignorado nos três modos. Args inválidos ou sem [wire:id] ancestral: console.warn.
+ *     Aditivo → MINOR.
  *   - v2.2.0: [FIX] Seletor de plugin com MAIS DE UM GRUPO (vírgula) era composto
  *     errado. `_scan` e os eventos imperativos concatenavam `plugin.selector + '[attr]'`,
  *     o que num seletor tipo `'[a], [b]'` produz `'[a], [b][attr]'` — o 1º grupo fica
@@ -86,6 +99,9 @@
         native:       'data-ozi-livewire-native',
         optionsEvent: 'data-ozi-livewire-options-event',
         value:        'data-ozi-livewire-value',
+        call:         'data-ozi-livewire-call',     // v2.3.0 — modo C: chamar método
+        args:         'data-ozi-livewire-args',     // v2.3.0 — args JSON antes do valor
+        defer:        'data-ozi-livewire-defer',    // v2.3.0 — modo B sem ida ao servidor
         bound:        'data-ozi-livewire-bound',
         lastValue:    'data-ozi-livewire-last-value'
     };
@@ -163,6 +179,13 @@
         target.dispatchEvent(new Event('change', { bubbles: true }));
     }
 
+    // Atributo booleano: presença liga; "false"/"0"/"no"/"off" desliga.
+    function _boolAttr(el, name) {
+        if (!el.hasAttribute(name)) return false;
+        var raw = String(el.getAttribute(name) || '').trim().toLowerCase();
+        return !(raw === 'false' || raw === '0' || raw === 'no' || raw === 'off');
+    }
+
     // Propaga o valor do componente OZI para o Livewire.
     // Preferência v2: modo A (wire:model nativo). Fallback: modo B (component.set).
     function _propagate(el, modelProp, textProp, value, detail) {
@@ -172,15 +195,46 @@
         if (!modelProp) return;
         var comp = _getComponent(el);
         if (!comp) return;
+        // v2.3.0 ([OZI-15]): -defer → set(prop, value, false), o 3º argumento `live` do Livewire.
+        // O valor vai junto da próxima requisição, sem uma ida ao servidor por mudança — o caso do
+        // ozi-editor, que emite ozi:change a cada tecla. Lido no evento (o morph pode trocar).
+        var live = !_boolAttr(el, ATTR.defer);
         try {
-            comp.set(modelProp, value);
+            comp.set(modelProp, value, live);
             // text-model (autocomplete — label além do value)
             if (textProp && detail && detail.label !== undefined) {
-                comp.set(textProp, detail.label || '');
+                comp.set(textProp, detail.label || '', live);
             }
         } catch (err) {
             console.warn('[OZI:livewire] component.set falhou:', err.message);
         }
+    }
+
+    // Modo C (v2.3.0, [OZI-15]): data-ozi-livewire-call="metodo" (+ -args='[...]') →
+    // component.call(metodo, ...args, valor). Tira das telas o ouvinte manual de ozi:change
+    // (guard de source, closest('[wire:id]'), Livewire.find(...).call). Lido no evento.
+    function _callMethod(el, value) {
+        var method = String(el.getAttribute(ATTR.call) || '').trim();
+        if (!method) return;
+        var comp = _getComponent(el);
+        if (!comp || typeof comp.call !== 'function') {
+            console.warn('[OZI:livewire] livewire-call "' + method + '": componente Livewire não encontrado (falta um ancestral [wire:id]?).');
+            return;
+        }
+        // JSON.parse direto (não o _parseJsonSafe): o helper troca o fallback por null, e um
+        // args inválido viraria [null] e chamaria o método com um argumento que ninguém pediu
+        var rawArgs = el.getAttribute(ATTR.args);
+        var args = [];
+        if (!_isBlank(rawArgs)) {
+            try { args = JSON.parse(rawArgs); }
+            catch (e) {
+                console.warn('[OZI:livewire] livewire-args não é JSON válido: ' + rawArgs);
+                return;
+            }
+        }
+        if (!Array.isArray(args)) args = [args];
+        try { comp.call.apply(comp, [method].concat(args, [value])); }
+        catch (err) { console.warn('[OZI:livewire] livewire-call falhou:', err.message); }
     }
 
 
@@ -198,10 +252,11 @@
         var optEvent   = el.getAttribute(ATTR.optionsEvent);
         var initValue  = el.getAttribute(ATTR.value);
         var nativeAttr = el.getAttribute(ATTR.native);   // v2 — modo wire:model nativo
+        var hasCall    = el.hasAttribute(ATTR.call);      // v2.3.0 — modo C
 
         // suporta: optionsEvent sem model (ex: ozi-search recebe itens sem sync de valor);
-        // e modo nativo (wire:model) sem model.
-        if (!modelProp && !optEvent && nativeAttr === null) return;
+        // modo nativo (wire:model) sem model; e modo C (call) sem model.
+        if (!modelProp && !optEvent && nativeAttr === null && !hasCall) return;
 
         // — valor inicial — (só quando há model)
         if (modelProp && !_isBlank(initValue)) {
@@ -211,8 +266,8 @@
             }, 0);
         }
 
-        // — ozi:change → Livewire — (modo A nativo e/ou modo B component.set)
-        if (modelProp || nativeAttr !== null) {
+        // — ozi:change → Livewire — (modo A nativo e/ou modo B component.set; modo C call)
+        if (modelProp || nativeAttr !== null || hasCall) {
             el.addEventListener(plugin.changeEvent || 'ozi:change', function (e) {
                 // v2 (contrato §1.3): source:'api' = mudança programática (setValue,
                 // tipicamente originada do próprio Livewire) — não repropaga, senão
@@ -229,7 +284,8 @@
                 if (el.getAttribute(ATTR.lastValue) === valueStr) return;
                 el.setAttribute(ATTR.lastValue, valueStr);
 
-                _propagate(el, modelProp, textProp, value, e.detail);
+                if (modelProp || nativeAttr !== null) _propagate(el, modelProp, textProp, value, e.detail);
+                if (hasCall) _callMethod(el, value);
             });
         }
 
@@ -306,7 +362,8 @@
         if (scope.querySelectorAll) {
             var sel = _composeSelector(plugin.selector, '[' + ATTR.model + ']') + ',' +
                       _composeSelector(plugin.selector, '[' + ATTR.optionsEvent + ']') + ',' +
-                      _composeSelector(plugin.selector, '[' + ATTR.native + ']');
+                      _composeSelector(plugin.selector, '[' + ATTR.native + ']') + ',' +
+                      _composeSelector(plugin.selector, '[' + ATTR.call + ']');
             elements = scope.querySelectorAll(sel);
         }
 

@@ -21,6 +21,11 @@ listed where they changed.
   `selected`; `selected: false` stays unchecked), turns the clear button into "Select all" and,
   with `data-ozi-select-multiple-count`, shows "All" instead of the number. New translation keys
   `select.selectAll`, `select.allCount`, `select.allSelected`.
+- Livewire adapter 2.3: `data-ozi-livewire-call="method"` (with optional
+  `data-ozi-livewire-args='["first-arg"]'`) calls a component method on every user change, with the
+  arguments followed by the value, so no hand-written `ozi:change` listener is needed.
+  `data-ozi-livewire-defer` makes `data-ozi-livewire-model` update without a server round-trip
+  (`set(prop, value, false)`), useful for the editor, which changes on every keystroke.
 
 ### Fixed
 - `@oziScripts` with Livewire `wire:navigate`: on a page reached from a page without ozi-ui, the
