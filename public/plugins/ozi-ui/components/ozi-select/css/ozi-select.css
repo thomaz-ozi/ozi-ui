@@ -1,8 +1,11 @@
 /**
  * components/ozi-select/css/ozi-select.css
- * Versão: 1.5.0
+ * Versão: 1.6.0
  *
  * Changelog:
+ *   - v1.6.0: [FEAT] Caixinha de marcar (.ozi-select-option.has-check / .ozi-select-check) —
+ *     acompanha o ozi-select.js v6.6.0 ([OZI-12]). Token novo com fallback: --ozi-select-check-color
+ *     (o ✓, #fff). A opção marcada com caixinha não usa o fundo de selecionada.
  *   - v1.5.0: [FEAT] Escuro próprio do componente — [data-ozi-theme="dark"] / [data-bs-theme="dark"]
  *     + @media prefers-color-scheme guardado por data-ozi-theme/data-bs-theme="light". Antes o
  *     select só escurecia com um themes/*\/dark.css linkado; sem tema, a lista ficava branca no
@@ -393,6 +396,45 @@
     padding: 0.75rem; text-align: center;
     color: var(--ozi-select-placeholder-color); font-style: italic;
 }
+
+/* ─── CHECK (caixinha de marcar, v6.6.0) ───────────── */
+/* data-ozi-select-check no multiple. A opção ganha .has-check e um <span.ozi-select-check> como 1º
+   filho. Marcada, a caixinha já diz o estado: a opção não usa o fundo de "selecionada". Só
+   variáveis do componente — o claro/escuro segue sozinho. */
+
+.ozi-select-option.has-check { display: flex; align-items: center; gap: 10px; }
+.ozi-select-option.has-check > .ozi-select-option-content,
+.ozi-select-option.has-check > .ozi-select-option-custom { flex: 1 1 auto; min-width: 0; }
+.ozi-select-option.has-check .ozi-select-option-image.is-no-image { display: none; }
+
+.ozi-select-check {
+    flex:          0 0 auto;
+    position:      relative;
+    width:         16px;
+    height:        16px;
+    border:        1.5px solid var(--ozi-select-border-color);
+    border-radius: 4px;
+    background:    var(--ozi-select-search-bg);
+    transition:    background-color 0.15s ease-in-out, border-color 0.15s ease-in-out;
+}
+.ozi-select-option.is-selected .ozi-select-check {
+    border-color: var(--ozi-select-selected-color);
+    background:   var(--ozi-select-selected-color);
+}
+.ozi-select-option.is-selected .ozi-select-check::after {
+    content:      '';
+    position:     absolute;
+    left:         4.5px;
+    top:          1.5px;
+    width:        4px;
+    height:       8px;
+    border:       solid var(--ozi-select-check-color, #fff);
+    border-width: 0 2px 2px 0;
+    transform:    rotate(45deg);
+}
+.ozi-select-option.has-check.is-selected { background-color: transparent; font-weight: 500; }
+.ozi-select-option.has-check.is-selected:hover,
+.ozi-select-option.has-check.is-highlighted { background-color: var(--ozi-select-hover-bg); }
 
 /* ─── CREATABLE (v6.3.0) ────────────────────────────── */
 

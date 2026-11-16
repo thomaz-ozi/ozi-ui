@@ -2,10 +2,21 @@
  * ------------------------------------------
  * ozi-select
  * ------------------------------------------
- * Ver: 6.5.2
+ * Ver: 6.6.0
  * 2026-11-16
  *
  * Changelog:
+ *   - v6.6.0: [FEAT] Caixinha de marcar no multiple — [OZI-12] do SNDESK, nome e desenho
+ *       aprovados pelo usuário em 13/11. `data-ozi-select-check` desenha `.ozi-select-check`
+ *       (1º filho da opção, classe `has-check`); só desenha — o clique segue o toggleItem.
+ *       `data-ozi-select-check="all"`: a opção sem `selected` nasce marcada (`selected:false`
+ *       explícito, desmarcada) no init e no reset; o × vira "Marcar todos" (some com todas
+ *       marcadas); com `multiple-count`, todas marcadas = "Todos". No single, ignorado.
+ *       getValue/hidden inputs/submit/ozi:change iguais — adapter Livewire intocado.
+ *       i18n novas: select.selectAll, select.allCount, select.allSelected.
+ *       [FIX] [OZI-14]: chave repetida na página fazia o 2º select não iniciar em SILÊNCIO.
+ *       Agora `console.warn` (uma vez por elemento). A mudança de modelo (instância por
+ *       elemento) segue em aberto, decisão de API.
  *   - v6.5.2: [FIX] [OZI-08] do SNDESK — um select aberto NÃO fechava ao clicar no botão de
  *       outro select (o .ozi-select-toggle chama stopPropagation) nem dentro de modal com
  *       `wire:click.stop`: o listener de clique-fora era de bolha e o click nunca chegava ao
@@ -235,6 +246,11 @@
         this.hasMultipleLabel = this.mode === 'multiple' && this.root.hasAttribute('data-ozi-select-multiple-label');
         this.multipleLabel    = String(this.root.getAttribute('data-ozi-select-multiple-label') || '');
         this.multipleCount    = this.parseBooleanAttr('data-ozi-select-multiple-count');
+
+        // caixinha de marcar (v6.6.0, [OZI-12]) — só no multiple; a PRESENÇA liga a caixinha e
+        // o valor "all" faz nascer tudo marcado (o × passa a "marcar todos")
+        this.hasCheck = this.mode === 'multiple' && this.root.hasAttribute('data-ozi-select-check');
+        this.checkAll = this.hasCheck && String(this.root.getAttribute('data-ozi-select-check') || '').trim().toLowerCase() === 'all';
 
         // rodapé de ação (v6.2.0) — slot (<template data-ozi-select-footer="<key>">) ou
         // botão gerado por label. O slot vive FORA do root (o buildUI/destroy limpam o root).
@@ -809,6 +825,16 @@
     };
 
     OziSelect.prototype.clearSelection = function () {
+        // check="all" (v6.6.0): o × volta ao padrão, que é tudo marcado — limpar quer dizer
+        // "ninguém" numa lista do tipo "quem pode ver"; desmarcar tudo segue possível, um a um
+        if (this.checkAll) {
+            if (this.isDisabled() || this.allSelected()) return;
+            this.selectedItems = this.options.slice();
+            this.syncHiddenInputs(); this.updateUI();
+            this.renderOptions(this.search.value || '');
+            this.clearInvalid(); this.emitChange();
+            return;
+        }
         if (this.isDisabled() || !this.selectedItems.length) return;
         this.selectedItems = [];
         this.syncHiddenInputs(); this.updateUI();
@@ -816,7 +842,20 @@
         this.clearInvalid(); this.emitChange();
     };
 
+    OziSelect.prototype.allSelected = function () {
+        var self = this;
+        return this.options.length > 0 && this.options.every(function (o) { return self.isSelected(o.value); });
+    };
+
     OziSelect.prototype.loadInitialSelection = function () {
+        // check="all" (v6.6.0): a opção SEM `selected` nasce marcada; `selected: false` explícito,
+        // desmarcada. Assim o servidor manda uma lista parcial sem atributo novo. Só aqui (init e
+        // reset): o applySelectedDefaultsFromOptions roda a cada busca remota e, se marcasse tudo,
+        // desfaria um "desmarcar todos" do usuário.
+        if (this.checkAll) {
+            this.selectedItems = this.options.filter(function (item) { return item && item.selected !== false; });
+            return;
+        }
         var defaults = this.options.filter(function (item) { return item && item.selected === true; });
         this.selectedItems = this.mode === 'single' ? (defaults[0] ? [defaults[0]] : []) : defaults;
     };
@@ -1093,6 +1132,12 @@
         if (item.optionClass && String(item.optionClass).trim()) {
             _classListOp(option, String(item.optionClass).trim(), 'add');
         }
+        // caixinha (v6.6.0): só desenha — o clique segue o toggleItem de sempre (o span é filho
+        // da opção, então o closest('.ozi-select-option') do listener o pega)
+        if (this.hasCheck) {
+            option.classList.add('has-check');
+            option.appendChild(_make('span', { class: 'ozi-select-check', 'aria-hidden': 'true' }));
+        }
         if (item.optionHtml && String(item.optionHtml).trim()) {
             var custom = _make('div', { class: 'ozi-select-option-custom' });
             this.renderOptionalHtml(custom, item.optionHtml);
@@ -1133,7 +1178,7 @@
     /* ─── updateUI ─────────────────────────────────────────────────── */
 
     OziSelect.prototype.updateUI = function () {
-        if (this.hasMultipleLabel) { this.renderMultipleLabel(); return; }
+        if (this.hasMultipleLabel) { this.renderMultipleLabel(); this.applyCheckAllClear(); return; }
         this.valueEl.innerHTML = '';
         if (!this.selectedItems.length) {
             this.valueEl.classList.add('is-placeholder');
@@ -1144,6 +1189,7 @@
             wrap.appendChild(span);
             this.valueEl.appendChild(wrap);
             this.clearBtn.style.display = 'none';
+            this.applyCheckAllClear();
             return;
         }
         this.valueEl.classList.remove('is-placeholder');
@@ -1173,6 +1219,17 @@
             this.valueEl.appendChild(tagsWrap);
         }
         this.clearBtn.style.display = this.isDisabled() ? 'none' : '';
+        this.applyCheckAllClear();
+    };
+
+    // check="all" (v6.6.0): o × vira "Marcar todos" e some com todas marcadas — inclusive com
+    // nada marcado, quando é justamente o caso de mostrá-lo
+    OziSelect.prototype.applyCheckAllClear = function () {
+        if (!this.checkAll) return;
+        var label = _t('select.selectAll', 'Marcar todos');
+        this.clearBtn.setAttribute('aria-label', label);
+        this.clearBtn.setAttribute('title', label);
+        this.clearBtn.style.display = (!this.options.length || this.allSelected() || this.isDisabled()) ? 'none' : '';
     };
 
     // modo rótulo fixo (v6.5.0): o texto nunca some; sem chips; contador só com 1+ escolhidos
@@ -1188,11 +1245,15 @@
         wrap.appendChild(label);
 
         if (this.multipleCount && total > 0) {
+            // com a caixinha (v6.6.0) e todas marcadas, o contador diz "Todos", não o número
+            var todas = this.hasCheck && this.allSelected();
             var count = _make('span', {
                 class: 'ozi-select-multiple-count',
-                'aria-label': _t('select.selectedCount', '{count} selecionado(s)').replace('{count}', total)
+                'aria-label': todas
+                    ? _t('select.allSelected', 'Todos selecionados')
+                    : _t('select.selectedCount', '{count} selecionado(s)').replace('{count}', total)
             });
-            count.textContent = String(total);
+            count.textContent = todas ? _t('select.allCount', 'Todos') : String(total);
             wrap.appendChild(count);
         }
 
@@ -1551,7 +1612,16 @@
                     var oldInDom = existing.root && document.contains(existing.root);
                     if (sameEl && el.__oziSelectInitialized) return;
                     if (!sameEl && !oldInDom) { existing.destroy(); }
-                    else if (!sameEl && oldInDom) { return; }
+                    else if (!sameEl && oldInDom) {
+                        // v6.6.0 ([OZI-14]): era um return SILENCIOSO — o 2º select não iniciava e
+                        // ninguém sabia por quê. Avisa uma vez por elemento (o afterRender re-varre)
+                        if (!el.__oziSelectDupWarned) {
+                            el.__oziSelectDupWarned = true;
+                            console.warn('[OZI:select] a chave "' + key + '" já está em uso por outro elemento ' +
+                                'na página; este select NÃO foi iniciado. Use chaves únicas em data-ozi-select.', el);
+                        }
+                        return;
+                    }
                 }
 
                 try {

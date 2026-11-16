@@ -16,6 +16,11 @@ listed where they changed.
 - `themeMode: 'light' | 'dark'` now work. The option was declared but had no effect.
 - `ozi-select` CSS 1.5: built-in dark colors, like the other components. Before, the select only
   turned dark when a theme `dark.css` was linked, so its list stayed white in dark apps.
+- `ozi-select` 6.6: checkboxes in multiple mode. `data-ozi-select-check` draws a checkbox on each
+  option. `data-ozi-select-check="all"` starts with every option checked (options without
+  `selected`; `selected: false` stays unchecked), turns the clear button into "Select all" and,
+  with `data-ozi-select-multiple-count`, shows "All" instead of the number. New translation keys
+  `select.selectAll`, `select.allCount`, `select.allSelected`.
 
 ### Fixed
 - `@oziScripts` with Livewire `wire:navigate`: on a page reached from a page without ozi-ui, the
@@ -24,6 +29,8 @@ listed where they changed.
   were not loaded and `oziConf()` calls in the Blade view were dropped. The boot now lives in
   `core/ozi-assets-boot.js` and `core/ozi-assets-ready.js`, which load in order with the other
   scripts; `oziConf()` calls made before the boot are queued and applied.
+- `ozi-select` 6.6: when two elements on a page share the same `data-ozi-select` key, the second
+  one is not initialized. This used to happen silently; it now logs a console warning.
 - `ozi-select` 6.5.2: an open select did not close when another select was clicked, or when
   clicking inside a container that stops event propagation (e.g. a modal with `wire:click.stop`).
 - `ozi-validate` CSS: the dark icons were used whenever the OS was dark, even with

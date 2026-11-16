@@ -15,7 +15,10 @@
             empty:             'No options found',
             requiredMessage:   'Please select an option.',
             creatableLabel:    'Add "{query}"',
-            selectedCount:     '{count} selected'
+            selectedCount:     '{count} selected',
+            selectAll:         'Select all',
+            allCount:          'All',
+            allSelected:       'All selected'
         }
     });
 })(window);

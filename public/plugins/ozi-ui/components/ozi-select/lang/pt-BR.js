@@ -12,7 +12,10 @@
             empty:             'Nenhuma opção encontrada',
             requiredMessage:   'Selecione uma opção.',
             creatableLabel:    'Adicionar "{query}"',
-            selectedCount:     '{count} selecionado(s)'
+            selectedCount:     '{count} selecionado(s)',
+            selectAll:         'Marcar todos',
+            allCount:          'Todos',
+            allSelected:       'Todos selecionados'
         }
     });
 })(window);

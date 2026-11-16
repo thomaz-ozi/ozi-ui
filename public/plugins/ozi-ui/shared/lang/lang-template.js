@@ -65,7 +65,10 @@
             empty:             '',
             requiredMessage:   '',
             creatableLabel:    '',
-            selectedCount:     ''
+            selectedCount:     '',
+            selectAll:         '',
+            allCount:          '',
+            allSelected:       ''
         }
     });
 

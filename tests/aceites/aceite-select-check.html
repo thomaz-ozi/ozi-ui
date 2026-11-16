@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite v6.6.0 (ozi-select caixinha de marcar)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .35rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+    .ozi-select-dropdown { display: none; }
+    .ozi-select-ui.is-open .ozi-select-dropdown { display: block; }
+</style>
+<script>
+    // conta os console.warn do [OZI-14] (instalado antes do ozi.js)
+    window.__avisos = [];
+    (function () { var w = console.warn; console.warn = function (m) { window.__avisos.push(String(m)); return w.apply(console, arguments); }; })();
+</script>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite v6.6.0 <small>(caixinha de marcar — [OZI-12]; aviso de chave repetida — [OZI-14])</small></h1>
+<p>Critério (roteiro da seção 6 do registro <code>[OZI-12]</code>): <code>data-ozi-select-check="all"</code>
+nasce tudo marcado (opção sem <code>selected</code>), contador "Todos", × vira "Marcar todos" e some com
+todas marcadas; <code>selected</code> explícito restringe; sem <code>all</code> o × limpa; sem o atributo
+nada muda; no single é ignorado; nó novo nasce tudo marcado; reset do form volta ao padrão.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<form id="form-perfis">
+    <!-- 1–4: all, opções sem selected (caso real do SNDESK: Dashboard de Propostas) -->
+    <div data-ozi-select="perfis" data-ozi-select-multiple="true" data-ozi-select-check="all"
+         data-ozi-select-multiple-label="Perfis" data-ozi-select-multiple-count="true"></div>
+    <script type="application/json" data-ozi-select-options="perfis">
+    [{"value":"1","label":"Atendimento"},{"value":"2","label":"Técnico Líder"},{"value":"3","label":"Vendedor"}]
+    </script>
+</form>
+
+<!-- 5: restrição do servidor -->
+<div data-ozi-select="parcial" data-ozi-select-multiple="true" data-ozi-select-check="all"></div>
+<script type="application/json" data-ozi-select-options="parcial">
+[{"value":"1","label":"A","selected":true},{"value":"2","label":"B","selected":false},{"value":"3","label":"C","selected":false}]
+</script>
+<div data-ozi-select="ninguem" data-ozi-select-multiple="true" data-ozi-select-check="all"></div>
+<script type="application/json" data-ozi-select-options="ninguem">
+[{"value":"1","label":"A","selected":false},{"value":"2","label":"B","selected":false}]
+</script>
+
+<!-- 6: só a caixinha -->
+<div data-ozi-select="so-caixa" data-ozi-select-multiple="true" data-ozi-select-check></div>
+<script type="application/json" data-ozi-select-options="so-caixa">
+[{"value":"1","label":"A","selected":true},{"value":"2","label":"B"}]
+</script>
+
+<!-- 7: sem o atributo; e single com o atributo -->
+<div data-ozi-select="sem-check" data-ozi-select-multiple="true"></div>
+<script type="application/json" data-ozi-select-options="sem-check">
+[{"value":"1","label":"A","selected":true},{"value":"2","label":"B"}]
+</script>
+<div data-ozi-select="single-check" data-ozi-select-check="all"></div>
+<script type="application/json" data-ozi-select-options="single-check">
+[{"value":"1","label":"A"},{"value":"2","label":"B"}]
+</script>
+
+<!-- [OZI-14]: duas raízes com a mesma chave -->
+<div id="dup-1" data-ozi-select="dup"></div>
+<div id="dup-2" data-ozi-select="dup"></div>
+<script type="application/json" data-ozi-select-options="dup">[{"value":"1","label":"A"}]</script>
+
+<div id="area-nova"></div>
+
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['select'], lang: 'pt-BR' });
+
+    var erros = [];
+    window.addEventListener('error', function (ev) {
+        if (ev.message === 'Script error.' && !ev.filename && !ev.lineno) return;
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    function click(el) { el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })); }
+    function q(k) { return document.querySelector('[data-ozi-select="' + k + '"]'); }
+    function val(k) { return JSON.stringify(OZI.components.select.value(k)); }
+    function opt(k, v) { return q(k).querySelector('.ozi-select-option[data-value="' + v + '"]'); }
+    function caixas(k) { return q(k).querySelectorAll('.ozi-select-option.has-check > .ozi-select-check:first-child').length; }
+    function contador(k) { var c = q(k).querySelector('.ozi-select-multiple-count'); return c ? c.textContent : null; }
+    function xVisivel(k) { return q(k).querySelector('.ozi-select-clear').style.display !== 'none'; }
+    function abrir(k) { if (!q(k).querySelector('.ozi-select-ui').classList.contains('is-open')) click(q(k).querySelector('.ozi-select-control')); }
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () { vered.textContent = '✗ FALHOU — testes não terminaram em 9s'; vered.className = 'fail'; }, 9000);
+
+    OZI.ready(function () {
+        (async function () {
+            var todos = true;
+
+            // ── 1. all, opções sem selected ──
+            todos = check('1. all: nascem as 3 marcadas', val('perfis') === '["1","2","3"]', val('perfis')) && todos;
+            todos = check('1. contador "Todos" (com aria-label "Todos selecionados")',
+                contador('perfis') === 'Todos' &&
+                q('perfis').querySelector('.ozi-select-multiple-count').getAttribute('aria-label') === 'Todos selecionados',
+                contador('perfis')) && todos;
+            todos = check('1. × escondido com todas marcadas', !xVisivel('perfis')) && todos;
+            todos = check('1. × rotulado "Marcar todos" (aria-label e title)',
+                q('perfis').querySelector('.ozi-select-clear').getAttribute('aria-label') === 'Marcar todos' &&
+                q('perfis').querySelector('.ozi-select-clear').getAttribute('title') === 'Marcar todos') && todos;
+            todos = check('1. 3 caixinhas, cada uma 1º filho da opção', caixas('perfis') === 3, caixas('perfis')) && todos;
+            todos = check('1. hidden inputs: 3', document.querySelectorAll('#form-perfis input[type="hidden"][name="perfis[]"]').length === 3,
+                document.querySelectorAll('#form-perfis input[type="hidden"][name="perfis[]"]').length) && todos;
+
+            // ── 2. desmarcar pelo clique ──
+            var ev = null;
+            q('perfis').addEventListener('ozi:change', function (e) { ev = e.detail; });
+            abrir('perfis');
+            click(opt('perfis', '3').querySelector('.ozi-select-check'));   // clique NA caixinha
+            todos = check('2. clicar na caixinha desmarca (é o toggleItem de sempre)', val('perfis') === '["1","2"]', val('perfis')) && todos;
+            todos = check('2. ozi:change com source "user" e os 2 valores',
+                !!ev && ev.source === 'user' && JSON.stringify(ev.value) === '["1","2"]', ev ? ev.source + ' ' + JSON.stringify(ev.value) : 'sem evento') && todos;
+            todos = check('2. contador 2 e × visível', contador('perfis') === '2' && xVisivel('perfis'), contador('perfis')) && todos;
+
+            // ── 3. × marca todas ──
+            ev = null;
+            click(q('perfis').querySelector('.ozi-select-clear'));
+            todos = check('3. × marca todas de novo e emite ozi:change',
+                val('perfis') === '["1","2","3"]' && !!ev, val('perfis')) && todos;
+            todos = check('3. contador volta a "Todos" e o × some', contador('perfis') === 'Todos' && !xVisivel('perfis')) && todos;
+
+            // ── 4. desmarcar todas, uma a uma ──
+            abrir('perfis');
+            ['1', '2', '3'].forEach(function (v) { click(opt('perfis', v)); });
+            todos = check('4. desmarcar uma a uma chega a []', val('perfis') === '[]', val('perfis')) && todos;
+            todos = check('4. só o rótulo (sem contador) e × "Marcar todos" visível',
+                contador('perfis') === null && xVisivel('perfis')) && todos;
+
+            // ── reset do formulário volta ao padrão (loadInitialSelection) ──
+            document.getElementById('form-perfis').reset();
+            await wait(60);
+            todos = check('reset do form: volta a tudo marcado', val('perfis') === '["1","2","3"]', val('perfis')) && todos;
+
+            // ── 5. restrição do servidor ──
+            todos = check('5. selected explícito: só a marcada', val('parcial') === '["1"]', val('parcial')) && todos;
+            todos = check('5. todas selected:false: vazio', val('ninguem') === '[]', val('ninguem')) && todos;
+
+            // ── 6. só a caixinha ──
+            todos = check('6. sem "all": seleção pelo selected:true e com caixinha',
+                val('so-caixa') === '["1"]' && caixas('so-caixa') === 2, val('so-caixa')) && todos;
+            click(q('so-caixa').querySelector('.ozi-select-clear'));
+            todos = check('6. sem "all": o × limpa como sempre', val('so-caixa') === '[]', val('so-caixa')) && todos;
+
+            // ── 7. sem atributo / single ──
+            todos = check('7. sem o atributo: sem caixinha e com chips',
+                caixas('sem-check') === 0 && q('sem-check').querySelector('.ozi-select-tag') !== null) && todos;
+            todos = check('7. single com o atributo: ignorado (sem caixinha, nada marcado)',
+                q('single-check').querySelectorAll('.ozi-select-check').length === 0 && !OZI.components.select.value('single-check'),
+                String(OZI.components.select.value('single-check'))) && todos;
+
+            // ── 8. nó novo com chave nova (re-render do Livewire) ──
+            document.getElementById('area-nova').innerHTML =
+                '<script type="application/json" data-ozi-select-options="perfis-v2">[{"value":"a","label":"A"},{"value":"b","label":"B"}]<\/script>' +
+                '<div data-ozi-select="perfis-v2" data-ozi-select-multiple="true" data-ozi-select-check="all"></div>';
+            OZI.hooks.afterRender.run(document.getElementById('area-nova'));
+            todos = check('8. nó novo com chave nova nasce tudo marcado, com caixinhas',
+                val('perfis-v2') === '["a","b"]' && caixas('perfis-v2') === 2, val('perfis-v2')) && todos;
+
+            // ── [OZI-14] chave repetida: avisa, uma vez ──
+            var dup = window.__avisos.filter(function (m) { return m.indexOf('a chave "dup"') !== -1; });
+            todos = check('[OZI-14] 2ª raiz com a mesma chave: não inicia e AVISA no console',
+                dup.length === 1 && !document.getElementById('dup-2').querySelector('.ozi-select-ui'), dup.length + ' aviso(s)') && todos;
+            OZI.hooks.afterRender.run(document.body);
+            dup = window.__avisos.filter(function (m) { return m.indexOf('a chave "dup"') !== -1; });
+            todos = check('[OZI-14] re-render não repete o aviso', dup.length === 1, dup.length + ' aviso(s)') && todos;
+
+            await wait(80);
+            todos = check('zero erros JS', erros.length === 0, erros.join(' | ') || null) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ ACEITE v6.6.0 (check): PASSOU' : '✗ ACEITE v6.6.0 (check): FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+            document.title = todos ? 'DONE:PASS' : 'DONE:FAIL';
+        })().catch(function (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+            vered.textContent = '✗ ACEITE v6.6.0 (check): FALHOU (exceção)';
+            vered.className = 'fail';
+            document.title = 'DONE:FAIL';
+        });
+    });
+</script>
+</body>
+</html>
