@@ -2,10 +2,12 @@
  * ------------------------------------------
  * ozi-select
  * ------------------------------------------
- * Ver: 6.6.0
- * 2026-11-16
+ * Ver: 6.6.1
+ * 2026-11-17
  *
  * Changelog:
+ *   - v6.6.1: [FIX] só CSS (ozi-select.css v1.6.1), este arquivo não mudou de lógica: rótulo
+ *       fixo do multiple sumia em coluna estreita; barra de rolagem da lista branca no escuro.
  *   - v6.6.0: [FEAT] Caixinha de marcar no multiple — [OZI-12] do SNDESK, nome e desenho
  *       aprovados pelo usuário em 13/11. `data-ozi-select-check` desenha `.ozi-select-check`
  *       (1º filho da opção, classe `has-check`); só desenha — o clique segue o toggleItem.

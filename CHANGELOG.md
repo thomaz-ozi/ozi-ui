@@ -6,6 +6,18 @@ listed where they changed.
 
 ## [Unreleased]
 
+## [2.8.1] — 2026-11-17
+
+### Fixed
+- `ozi-select` 6.6.1 (CSS 1.6.1): in fixed-label mode (`data-ozi-select-multiple-label` with
+  `data-ozi-select-multiple-count`), a narrow select with an icon showed only the count; the label
+  shrank to nothing. Now the icon gives up its space first, the label keeps at least a couple of
+  characters with an ellipsis, and the count never overlaps the clear button. Other modes are
+  unchanged.
+- `ozi-select` CSS 1.6.1: the dropdown scrollbar stayed white in dark mode. It now follows the
+  select's border color, through the new `--ozi-select-scrollbar-color` token (dark only; light
+  mode keeps the native scrollbar).
+
 ## [2.8.0] — 2026-11-17
 
 ### Added
@@ -196,7 +208,8 @@ Version 2: every plugin rewritten in plain JavaScript, no jQuery, zero runtime d
 A v1 compatibility ramp (jQuery shims, `zld*` aliases) is included and opt-in. `ozi-copy` and
 `ozi-paste` were discontinued. See the [migration guide](https://oziui.com/en/docs/migration).
 
-[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.8.0...HEAD
+[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.8.1...HEAD
+[2.8.1]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.8.0...v2.8.1
 [2.8.0]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.7.2...v2.8.0
 [2.7.2]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.7.1...v2.7.2
 [2.7.1]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.7.0...v2.7.1
