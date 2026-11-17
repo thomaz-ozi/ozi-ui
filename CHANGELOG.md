@@ -6,6 +6,8 @@ listed where they changed.
 
 ## [Unreleased]
 
+## [2.8.0] — 2026-11-17
+
 ### Added
 - Follow the app's own theme: `oziConf({ themeMode: 'app' })` or `<html data-ozi-theme-mode="app">`.
   The new `core/ozi-theme.js` reads the app's theme and sets `data-ozi-theme="light|dark"` on
@@ -194,7 +196,8 @@ Version 2: every plugin rewritten in plain JavaScript, no jQuery, zero runtime d
 A v1 compatibility ramp (jQuery shims, `zld*` aliases) is included and opt-in. `ozi-copy` and
 `ozi-paste` were discontinued. See the [migration guide](https://oziui.com/en/docs/migration).
 
-[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.7.2...HEAD
+[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.8.0...HEAD
+[2.8.0]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.7.2...v2.8.0
 [2.7.2]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.7.1...v2.7.2
 [2.7.1]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.7.0...v2.7.1
 [2.7.0]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.6.2...v2.7.0
