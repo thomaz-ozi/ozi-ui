@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite ozi-editor 4.10.0 / sanitize 1.2.0 (perfil email, OZI-16)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .3rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+    .fixtures { border-top: 1px dashed #ddd; margin-top: 1rem; padding-top: 1rem; }
+    textarea { width: 100%; }
+</style>
+</head>
+<body>
+<h1>Aceite <code>ozi-editor</code> 4.10.0 / <code>ozi-editor-sanitize</code> 1.2.0 <small>([OZI-16] do SNDESK)</small></h1>
+<p>Critério: <code>data-ozi-editor-sanitize="email"</code> mantém o estilo inline de e-mail (faixa, botão,
+tabela de layout) no ciclo carregar → digitar → salvar, sem abrir brecha (url(), position:fixed,
+script). No perfil padrão nada muda, mas a perda no carregamento deixa de ser silenciosa:
+<code>ozi:editor-sanitized</code>.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<div class="fixtures">
+    <textarea id="ta-email" data-ozi-editor-html="corpoEmail" data-ozi-editor-sanitize="email"
+              data-ozi-editor-tools="[bold,italic]; source"></textarea>
+    <textarea id="ta-padrao" data-ozi-editor-html="corpoPadrao"
+              data-ozi-editor-tools="[bold,italic]; source"></textarea>
+    <textarea id="ta-limpo" data-ozi-editor-html="corpoLimpo"
+              data-ozi-editor-tools="[bold]">&lt;p style="text-align:center"&gt;&lt;strong&gt;ok&lt;/strong&gt;&lt;/p&gt;</textarea>
+    <textarea id="ta-errado" data-ozi-editor-html="corpoErrado" data-ozi-editor-sanitize="emial"
+              data-ozi-editor-tools="[bold]">x</textarea>
+</div>
+
+<script>
+    /* corpo do teste do registro do SNDESK (§4), escrito no textarea ANTES do boot */
+    var CORPO = '<div style="background:#0d6efd;color:#fff;padding:20px;border-radius:8px">Faixa</div>' +
+        '<p><a href="https://exemplo.com" style="background:#198754;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none">Botão</a></p>' +
+        '<table width="600" cellpadding="0" style="background:#f5f5f5"><tbody><tr><td style="padding:16px">Célula</td></tr></tbody></table>';
+    document.getElementById('ta-email').value  = CORPO;
+    document.getElementById('ta-padrao').value = CORPO;
+
+    /* listener ANTES do boot: o init já emite */
+    var eventos = [];
+    document.addEventListener('ozi:editor-sanitized', function (e) { eventos.push(e.detail); });
+
+    var avisos = [];
+    var _warn = console.warn;
+    console.warn = function () { avisos.push(Array.prototype.join.call(arguments, ' ')); return _warn.apply(console, arguments); };
+</script>
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['editor'], core: { log: true } });
+
+    var erros = [];
+    window.addEventListener('error', function (ev) {
+        var isOpaco = (ev.message === 'Script error.' && !ev.filename && !ev.lineno);
+        if (isOpaco) return;
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function waitFor(fn, ms) {
+        var t0 = Date.now();
+        return new Promise(function (res) {
+            (function loop() {
+                if (fn() || Date.now() - t0 > ms) return res(fn());
+                setTimeout(loop, 30);
+            })();
+        });
+    }
+    function has(html, list) { return list.filter(function (s) { return html.indexOf(s) === -1; }); }
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 8s';
+        vered.className = 'fail';
+    }, 8000);
+
+    OZI.ready(async function () {
+        try {
+            var todos = true;
+            var mod = window.OziEditorSanitize;
+            var ESPERADO = ['<div', 'background-color: rgb(13, 110, 253)', 'padding: 20px', 'border-radius: 8px',
+                'padding: 10px 18px', 'border-radius: 6px', 'text-decoration: none', 'background-color: rgb(25, 135, 84)',
+                'width="600"', 'cellpadding="0"', 'background-color: rgb(245, 245, 245)', 'padding: 16px'];
+
+            // ---- 1. módulo, perfil email ----
+            var r = mod.sanitize(CORPO, { profile: 'email' });
+            todos = check('1a perfil email mantém faixa, botão e tabela (todas as propriedades do §4)',
+                has(r.html, ESPERADO).length === 0, 'faltou: ' + has(r.html, ESPERADO).join(', ') + ' | ' + r.html) && todos;
+            todos = check('1b perfil email não relata perda no corpo do SNDESK',
+                r.removed.length === 0, JSON.stringify(r.removed)) && todos;
+            todos = check('1c idempotente no perfil email',
+                mod.sanitizeHtml(r.html, { profile: 'email' }) === r.html) && todos;
+            todos = check('1d border:none não vira perda falsa (medium/currentcolor)',
+                mod.sanitize('<div style="border:none;padding:4px">x</div>', { profile: 'email' }).removed.length === 0,
+                JSON.stringify(mod.sanitize('<div style="border:none;padding:4px">x</div>', { profile: 'email' }).removed)) && todos;
+
+            // ---- 2. segurança no perfil email ----
+            var mal = mod.sanitizeHtml('<div style="background:url(javascript:alert(1));position:fixed;top:0;z-index:9999;width:calc(100% - 1px);color:#fff" onclick="x()">a</div>' +
+                '<script>alert(1)<\/script><p><a href="javascript:alert(1)" style="padding:4px">b</a></p>', { profile: 'email' });
+            todos = check('2a url(), position:fixed, z-index, calc(), onclick, script e href javascript: continuam saindo',
+                !/url\(|fixed|z-index|calc|onclick|script|javascript/i.test(mal) && mal.indexOf('color: rgb(255, 255, 255)') > -1, mal) && todos;
+            todos = check('2b bgcolor com lixo e role diferente de presentation são descartados',
+                mod.sanitizeHtml('<table bgcolor="url(x)" role="button"><tbody><tr><td>c</td></tr></tbody></table>', { profile: 'email' }) ===
+                '<table><tbody><tr><td>c</td></tr></tbody></table>') && todos;
+            todos = check('2c perfil desconhecido no módulo cai no padrão',
+                mod.sanitize('<div>x</div>', { profile: 'xyz' }).html === '<p>x</p>') && todos;
+
+            // ---- 3. perfil padrão: saída igual, relatório honesto ----
+            var p = mod.sanitize(CORPO);
+            todos = check('3a padrão: DIV ainda vira P e padding/radius ainda saem (sem regressão)',
+                p.html.indexOf('<div') === -1 && p.html.indexOf('padding') === -1 && p.html.indexOf('<p>Faixa</p>') > -1, p.html) && todos;
+            var nomes = p.removed.map(function (x) { return x.tag + ':' + x.name; });
+            todos = check('3b padrão: relatório lista o que se perdeu (padding da DIV, radius do A, width da TABLE)',
+                nomes.indexOf('DIV:padding-top') > -1 && nomes.indexOf('A:border-top-left-radius') > -1 && nomes.indexOf('TABLE:width') > -1,
+                nomes.join(', ')) && todos;
+            todos = check('3c padrão: troca sem perda vai em renamed, não em removed',
+                JSON.stringify(mod.sanitize('<b>x</b>')) === JSON.stringify({ html: '<strong>x</strong>', removed: [], renamed: [{ from: 'B', to: 'STRONG' }], profile: 'default' })) && todos;
+            todos = check('3d padrão: cor e alinhamento válidos não viram perda falsa',
+                mod.sanitize('<p style="text-align:center;color:#fff;background-color:rgb(1,2,3)">x</p>').removed.length === 0) && todos;
+
+            // ---- 4. editor real ----
+            await waitFor(function () { return OZI.components.editor.get('corpoEmail') && OZI.components.editor.get('corpoPadrao'); }, 3000);
+            var eEmail  = OZI.components.editor.get('corpoEmail');
+            var ePadrao = OZI.components.editor.get('corpoPadrao');
+
+            todos = check('4a editor lê data-ozi-editor-sanitize="email"', eEmail && eEmail.sanitizeProfile === 'email') && todos;
+
+            /* "digitar uma letra": texto no fim + o mesmo sync que o input faz */
+            eEmail.content.focus();
+            var sel = window.getSelection(); sel.selectAllChildren(eEmail.content); sel.collapseToEnd();
+            document.execCommand('insertText', false, ' mais');
+            eEmail._syncToTextarea();
+            var salvo = eEmail.getValue();
+            todos = check('4b email: depois de digitar, o valor salvo mantém faixa/botão/tabela',
+                has(salvo, ESPERADO).length === 0 && salvo.indexOf('mais') > -1, 'faltou: ' + has(salvo, ESPERADO).join(', ')) && todos;
+
+            var evPadrao = eventos.filter(function (d) { return d.name === 'corpoPadrao'; });
+            todos = check('4c padrão: init emite ozi:editor-sanitized com removed, value cru e source api',
+                evPadrao.length === 1 && evPadrao[0].removed.length > 0 && evPadrao[0].value === CORPO &&
+                evPadrao[0].component === 'ozi-editor' && evPadrao[0].source === 'api' && evPadrao[0].profile === 'default',
+                JSON.stringify(evPadrao.map(function (d) { return [d.removed.length, d.source]; }))) && todos;
+            todos = check('4d email e conteúdo limpo: nenhum evento de perda',
+                eventos.filter(function (d) { return d.name === 'corpoEmail' || d.name === 'corpoLimpo'; }).length === 0) && todos;
+            todos = check('4e relatório fica em inst.lastSanitize',
+                ePadrao.lastSanitize && ePadrao.lastSanitize.removed.length === evPadrao[0].removed.length) && todos;
+
+            var antes = eventos.length;
+            ePadrao.setValue('<div style="padding:8px">novo</div>');
+            todos = check('4f setValue() com perda emite de novo (source api)',
+                eventos.length === antes + 1 && eventos[eventos.length - 1].source === 'api') && todos;
+            antes = eventos.length;
+            ePadrao.setValue('<p>sem perda</p>');
+            todos = check('4g setValue() sem perda não emite', eventos.length === antes) && todos;
+
+            todos = check('4h perfil com erro de digitação avisa no console e cai no padrão',
+                OZI.components.editor.get('corpoErrado').sanitizeProfile === 'default' &&
+                avisos.some(function (a) { return a.indexOf('data-ozi-editor-sanitize="emial"') > -1; })) && todos;
+
+            todos = check('zero erros JS', erros.length === 0, erros.join(' | ') || null) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ ACEITE editor-sanitize-email: PASSOU' : '✗ ACEITE editor-sanitize-email: FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+        } catch (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+            vered.textContent = '✗ ACEITE editor-sanitize-email: FALHOU (exceção)';
+            vered.className = 'fail';
+        }
+    });
+</script>
+</body>
+</html>

@@ -2,8 +2,8 @@
  * ------------------------------------------
  * ozi-editor-sanitize
  * ------------------------------------------
- * Ver: 1.1.0
- * 2026-09-10
+ * Ver: 1.2.0
+ * 2026-11-18
  *
  * Responsabilidade:
  *   - Motor puro de sanitizacao de HTML para o ozi-editor (whitelist de tags,
@@ -29,6 +29,21 @@
  * Expoe: OZI.modules.editorSanitize, window.OziEditorSanitize (compat)
  *
  * Changelog:
+ *   - v1.2.0: [FEAT] ([OZI-16] do SNDESK) perfil `email`, opt-in:
+ *       `sanitizeHtml(html, { profile: 'email' })`. Mantem DIV (no padrao
+ *       vira P) e uma whitelist de estilo inline validada por FORMA
+ *       (`EMAIL_STYLE`: cor, padding/margin/border/radius por longhand,
+ *       fonte, line-height, width/height, display block/inline-block/inline,
+ *       vertical-align) + atributos de layout de tabela (width, align,
+ *       valign, bgcolor, cellpadding, cellspacing, border,
+ *       role=presentation, colspan/rowspan). Continua fora: url(), calc(),
+ *       var(), expression(), position/z-index fora de <img>, negativos.
+ *       Perfil padrao: saida identica a 1.1.0.
+ *       [FEAT] `sanitize(html, opts)` devolve `{ html, removed, renamed,
+ *       profile }`: `removed` lista o que se perdeu (element/unwrap/attr/
+ *       style, com tag e nome), `renamed` as trocas de tag sem perda. Base
+ *       do aviso de perda no carregamento do ozi-editor 4.10.0 — a perda
+ *       era silenciosa: so aparecia no banco depois da primeira tecla.
  *   - v1.1.0: [FEAT] whitelist de ESTILO INLINE para `<img>` — alinhamento de
  *       imagem (ozi-editor.js 4.7.0) grava float/margin/display/position/
  *       left/top/max-width direto no style da tag, porque o HTML salvo tem
@@ -230,18 +245,176 @@
 
 
     // ---------------------------------------------
+    // [3c] PERFIL "email" (v1.2.0, [OZI-16])
+    // E-mail precisa de estilo INLINE (cliente de e-mail ignora <style> e
+    // classe). O perfil mantem DIV e uma whitelist de propriedades CSS, cada
+    // uma validada por FORMA (mesmo idioma de _isSafeColorValue): nada de
+    // url(), expression(), var(), calc(), position, z-index — por construcao,
+    // ja que so passa o que casa com o formato de cada propriedade.
+    // ---------------------------------------------
+
+    var PROFILES = { 'default': true, 'email': true };
+
+    function _isSafeLength(value) {
+        var v = _trim(value).toLowerCase();
+        return v === '0' || /^\d{1,4}(\.\d{1,2})?(px|pt|em|rem|%)$/.test(v);
+    }
+    function _lenOrAuto(v) { return v === 'auto' || _isSafeLength(v); }
+    /* `currentcolor`/`medium` sao o que o browser grava ao expandir
+       `border:none` — aceitar evita relatar perda que o autor nao escreveu */
+    function _colorOrTransparent(v) { return v === 'transparent' || v === 'currentcolor' || _isSafeColorValue(v); }
+    function _borderWidth(v) { return v === 'thin' || v === 'medium' || v === 'thick' || _isSafeLength(v); }
+    function _oneOf(list) {
+        var set = {};
+        list.split(' ').forEach(function (k) { set[k] = true; });
+        return function (v) { return set[v] === true; };
+    }
+    function _isSafeFontFamily(v) { return /^[a-z0-9 ,"'\-]{1,200}$/i.test(v); }
+    function _isSafeLineHeight(v) { return v === 'normal' || /^\d{1,2}(\.\d{1,3})?$/.test(v) || _isSafeLength(v); }
+
+    var BORDER_STYLE = _oneOf('none hidden solid dashed dotted double');
+
+    /* propriedade -> validador. Sempre LONGHAND: o browser ja expandiu o
+       shorthand (`padding:10px 18px`, `border:1px solid #ccc`) ao parsear, e
+       recombina na serializacao. `text-decoration` e lido pelo longhand
+       `-line` e regravado como shorthand (EMAIL_WRITE_AS). */
+    var EMAIL_STYLE = {
+        'color':            _colorOrTransparent,
+        'background-color': _colorOrTransparent,
+        'font-size':        _isSafeLength,
+        'font-weight':      _oneOf('normal bold bolder lighter 100 200 300 400 500 600 700 800 900'),
+        'font-style':       _oneOf('normal italic'),
+        'font-family':      _isSafeFontFamily,
+        'line-height':      _isSafeLineHeight,
+        'text-align':       _oneOf('left center right justify'),
+        'text-decoration-line': _oneOf('none underline overline line-through'),
+        'text-transform':   _oneOf('none uppercase lowercase capitalize'),
+        'vertical-align':   _oneOf('top middle bottom baseline'),
+        'display':          _oneOf('block inline-block inline'),
+        'width':            _lenOrAuto,
+        'min-width':        _isSafeLength,
+        'max-width':        function (v) { return v === 'none' || _isSafeLength(v); },
+        'height':           _lenOrAuto,
+        'border-collapse':  _oneOf('collapse separate')
+    };
+    ['top', 'right', 'bottom', 'left'].forEach(function (s) {
+        EMAIL_STYLE['padding-' + s]        = _isSafeLength;
+        EMAIL_STYLE['margin-' + s]         = _lenOrAuto;
+        EMAIL_STYLE['border-' + s + '-width'] = _borderWidth;
+        EMAIL_STYLE['border-' + s + '-style'] = BORDER_STYLE;
+        EMAIL_STYLE['border-' + s + '-color'] = _colorOrTransparent;
+    });
+    ['top-left', 'top-right', 'bottom-right', 'bottom-left'].forEach(function (c) {
+        EMAIL_STYLE['border-' + c + '-radius'] = _isSafeLength;
+    });
+
+    var EMAIL_WRITE_AS = { 'text-decoration-line': 'text-decoration' };
+
+    /* atributos de layout de tabela (e-mail ainda usa muito). Valor validado
+       por forma; bgcolor pelo mesmo validador de cor. */
+    var EMAIL_TABLE_TAGS = { 'TABLE': true, 'THEAD': true, 'TBODY': true, 'TR': true, 'TD': true, 'TH': true };
+    var EMAIL_TABLE_ATTRS = {
+        'width':       function (v) { return /^\d{1,4}%?$/.test(v); },
+        'height':      function (v) { return /^\d{1,4}%?$/.test(v); },
+        'align':       _oneOf('left center right'),
+        'valign':      _oneOf('top middle bottom baseline'),
+        'bgcolor':     _isSafeColorValue,
+        'cellpadding': function (v) { return /^\d{1,2}$/.test(v); },
+        'cellspacing': function (v) { return /^\d{1,2}$/.test(v); },
+        'border':      function (v) { return /^\d{1,2}$/.test(v); },
+        'role':        _oneOf('presentation'),
+        'colspan':     function (v) { return /^\d{1,3}$/.test(v); },
+        'rowspan':     function (v) { return /^\d{1,3}$/.test(v); }
+    };
+
+    function _emailStyleWhitelist(el) {
+        var st  = el && el.style;
+        var out = {};
+        if (!st) return out;
+        Object.keys(EMAIL_STYLE).forEach(function (prop) {
+            var v = _trim(st.getPropertyValue(prop)).toLowerCase();
+            /* font-family preserva caixa (nome de fonte) */
+            if (prop === 'font-family') v = _trim(st.getPropertyValue(prop));
+            if (v && EMAIL_STYLE[prop](v)) out[EMAIL_WRITE_AS[prop] || prop] = v;
+        });
+        return out;
+    }
+
+    function _emailTableAttrs(el) {
+        var out = {};
+        Object.keys(EMAIL_TABLE_ATTRS).forEach(function (name) {
+            var v = el.getAttribute(name);
+            if (v === null) return;
+            v = _trim(v);
+            if (EMAIL_TABLE_ATTRS[name](name === 'bgcolor' ? v : v.toLowerCase())) out[name] = v;
+        });
+        return out;
+    }
+
+
+    // ---------------------------------------------
     // [4] SANITIZADOR
     // ---------------------------------------------
 
-    function _sanitizeHtml(html) {
-        if (!html) return '';
-        var tmp = document.createElement('div');
-        tmp.innerHTML = html;
-        _cleanNode(tmp);
-        return tmp.innerHTML;
+    /* ctx = { profile, removed[], renamed[] } — `removed` e o relatorio do
+       que se PERDEU (elemento, atributo, propriedade de estilo); `renamed`
+       so troca de tag sem perda (B->STRONG, DIV->P). Quem decide o que fazer
+       com o relatorio e o chamador (ozi-editor 4.10.0: evento
+       ozi:editor-sanitized). */
+    function _makeCtx(opts) {
+        var p = opts && opts.profile;
+        return { profile: PROFILES[p] ? p : 'default', removed: [], renamed: [] };
     }
 
-    function _cleanNode(node) {
+    function _sanitize(html, opts) {
+        var ctx = _makeCtx(opts);
+        if (!html) return { html: '', removed: [], renamed: [], profile: ctx.profile };
+        var tmp = document.createElement('div');
+        tmp.innerHTML = html;
+        _cleanNode(tmp, ctx);
+        return { html: tmp.innerHTML, removed: ctx.removed, renamed: ctx.renamed, profile: ctx.profile };
+    }
+
+    function _sanitizeHtml(html, opts) {
+        return _sanitize(html, opts).html;
+    }
+
+    function _note(ctx, type, tag, name) {
+        ctx.removed.push(name ? { type: type, tag: tag, name: name } : { type: type, tag: tag });
+    }
+
+    /* foto do estado antes da limpeza: atributos (menos style) e cada
+       propriedade de estilo (longhand). `initial` e preenchimento de
+       shorthand (`background:#fff` gera background-image:initial etc.), nao
+       algo que o autor escreveu — fica de fora pra nao virar falsa perda. */
+    function _snapshot(el) {
+        var attrs = {}, styles = {};
+        Array.prototype.slice.call(el.attributes).forEach(function (a) {
+            if (a.name !== 'style') attrs[a.name] = a.value;
+        });
+        var st = el.style;
+        if (st) {
+            for (var i = 0; i < st.length; i++) {
+                var prop = st[i];
+                var val  = st.getPropertyValue(prop);
+                if (val && val !== 'initial') styles[prop] = val;
+            }
+        }
+        return { attrs: attrs, styles: styles };
+    }
+
+    function _diffSnapshot(ctx, tag, before, el) {
+        Object.keys(before.attrs).forEach(function (name) {
+            if (el.getAttribute(name) !== before.attrs[name]) _note(ctx, 'attr', tag, name);
+        });
+        Object.keys(before.styles).forEach(function (prop) {
+            if (!el.style || el.style.getPropertyValue(prop) !== before.styles[prop]) _note(ctx, 'style', tag, prop);
+        });
+    }
+
+    function _cleanNode(node, ctx) {
+        ctx = ctx || _makeCtx();
+        var isEmail  = ctx.profile === 'email';
         var children = Array.prototype.slice.call(node.childNodes);
 
         children.forEach(function (child) {
@@ -251,19 +424,26 @@
             var tag = child.tagName.toUpperCase();
 
             if (['SCRIPT','STYLE','IFRAME','OBJECT','EMBED','FORM','INPUT','BUTTON'].indexOf(tag) > -1) {
+                _note(ctx, 'element', tag);
                 node.removeChild(child); return;
             }
 
-            if (TAG_REPLACE[tag]) {
-                var rep = document.createElement(TAG_REPLACE[tag]);
+            /* perfil email: DIV fica DIV (cai no caminho normal abaixo) */
+            var replaceTo = (isEmail && tag === 'DIV') ? null : TAG_REPLACE[tag];
+            if (replaceTo) {
+                var beforeRep = _snapshot(child);
+                var rep = document.createElement(replaceTo);
                 while (child.firstChild) rep.appendChild(child.firstChild);
                 var align = child.style && child.style.textAlign;
                 if (align && ['left','center','right','justify'].indexOf(align) > -1) rep.style.textAlign = align;
                 node.replaceChild(rep, child);
-                _cleanNode(rep); return;
+                ctx.renamed.push({ from: tag, to: replaceTo });
+                _diffSnapshot(ctx, tag, beforeRep, rep);
+                _cleanNode(rep, ctx); return;
             }
 
-            if (!ALLOWED_TAGS[tag]) {
+            if (!ALLOWED_TAGS[tag] && !(isEmail && tag === 'DIV')) {
+                _note(ctx, 'unwrap', tag);
                 var frag = document.createDocumentFragment();
                 while (child.firstChild) frag.appendChild(child.firstChild);
                 node.replaceChild(frag, child); return;
@@ -274,6 +454,7 @@
             if (tag === 'A') {
                 var hrefCandidate = child.getAttribute('href') || '';
                 if (!_trim(hrefCandidate) || !_isSafeUrl(hrefCandidate)) {
+                    _note(ctx, 'unwrap', tag, 'href');
                     var fragA = document.createDocumentFragment();
                     while (child.firstChild) fragA.appendChild(child.firstChild);
                     node.replaceChild(fragA, child);
@@ -289,11 +470,15 @@
             if (tag === 'IMG') {
                 var srcCandidate = child.getAttribute('src') || '';
                 if (!_trim(srcCandidate) || !_isSafeUrl(srcCandidate)) {
+                    _note(ctx, 'element', tag, 'src');
                     node.removeChild(child);
                     return;
                 }
             }
 
+            var before      = _snapshot(child);
+            var savedEmail  = isEmail ? _emailStyleWhitelist(child) : null;
+            var savedTblAt  = (isEmail && EMAIL_TABLE_TAGS[tag]) ? _emailTableAttrs(child) : null;
             var savedAlign  = child.style && child.style.textAlign;
             var savedClass  = child.getAttribute('class') || '';
             var savedHref   = (tag === 'A')   ? child.getAttribute('href') : null;
@@ -331,8 +516,19 @@
                     child.style.setProperty(prop, savedImgSt[prop]);
                 });
             }
+            if (savedEmail) {
+                Object.keys(savedEmail).forEach(function (prop) {
+                    child.style.setProperty(prop, savedEmail[prop]);
+                });
+            }
+            if (savedTblAt) {
+                Object.keys(savedTblAt).forEach(function (name) {
+                    child.setAttribute(name, savedTblAt[name]);
+                });
+            }
 
-            _cleanNode(child);
+            _diffSnapshot(ctx, tag, before, child);
+            _cleanNode(child, ctx);
         });
     }
 
@@ -343,6 +539,9 @@
 
     var api = {
         sanitizeHtml:       _sanitizeHtml,
+        sanitize:           _sanitize,
+        PROFILES:           Object.keys(PROFILES),
+        isSafeLength:       _isSafeLength,
         isSafeUrl:          _isSafeUrl,
         isSafeColorValue:   _isSafeColorValue,
         isSafeDimension:    _isSafeDimension,

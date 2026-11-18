@@ -2,8 +2,8 @@
  * ------------------------------------------
  * ozi-editor
  * ------------------------------------------
- * Ver: 4.9.2
- * 2026-11-15
+ * Ver: 4.10.0
+ * 2026-11-18
  *
  * Editor WYSIWYG (contenteditable) com toolbar declarativa, modos html/md,
  * dropdowns de heading/classes, source view, sanitizacao e validacao.
@@ -15,9 +15,19 @@
  *   de camadas v2 §2). O motor (Selection/Range/execCommand/contentEditable)
  *   sempre foi nativo; a migracao trocou o encanamento de DOM/eventos.
  * Expoe: OZI.components.editor, window.OziEditor (compat)
- * Eventos: ozi:init, ozi:change, ozi:destroy (CustomEvent nativos, contrato v2)
+ * Eventos: ozi:init, ozi:change, ozi:destroy (CustomEvent nativos, contrato v2),
+ *   ozi:editor-sanitized (4.10.0)
  *
  * Changelog:
+ *   - v4.10.0: [FEAT] ([OZI-16] do SNDESK) `data-ozi-editor-sanitize="email"`: perfil do
+ *       sanitizador (ozi-editor-sanitize 1.2.0) que mantém DIV e o estilo inline de e-mail
+ *       (faixa, botão com padding/radius, tabela de layout). Padrão `"default"` sem mudança.
+ *       Valor desconhecido avisa no console e cai no padrão.
+ *       [FEAT] Perda de formatação no carregamento deixa de ser silenciosa: init, `setValue()`
+ *       e a saída do modo código emitem `ozi:editor-sanitized` (detail: `value` cru,
+ *       `sanitized`, `removed[]`, `renamed[]`, `profile`, `source`) quando o sanitizador
+ *       removeu algo; com `data-ozi-editor-log` também avisa no console. O último relatório
+ *       fica em `inst.lastSanitize`. Colar não emite (limpar o que vem de fora é o esperado).
  *   - v4.9.2: [FIX] O `max-height` do popover que não cabe na viewport ignorava padding e
  *       borda quando o popover é content-box (Blade sem o ozi-reset.css): a caixa ficava ~22px maior que o espaço medido e passava da
  *       borda da tela, escondendo Aplicar/Remover até rolar. Agora desconta os dois. Junto,
@@ -767,7 +777,7 @@
         return mod;
     }
 
-    function _sanitizeHtml(html) { return _sanitizerModule().sanitizeHtml(html); }
+    function _sanitizeHtml(html, profile) { return _sanitizerModule().sanitizeHtml(html, { profile: profile }); }
     function _isSafeUrl(url)     { return _sanitizerModule().isSafeUrl(url); }
 
     /* ─────────────────────────────────────────────
@@ -984,6 +994,18 @@
         this.isRequired      = _parseBool(this.textarea, 'data-ozi-editor-required', false);
         // debug local por instância (convenção `data-ozi-{plugin}-log`, espelha o zldLog do ozi-loaddata)
         this.debug           = _parseBool(this.textarea, 'data-ozi-editor-log', false);
+        /* [v4.10.0, OZI-16] perfil do sanitizador. Valor desconhecido avisa
+           SEMPRE (nao so com log ligado): config errada aqui apaga formatacao
+           em silencio, mesma classe de bug que o perfil veio resolver. */
+        var _profRaw = _trim(String(this.textarea.getAttribute('data-ozi-editor-sanitize') || 'default')).toLowerCase();
+        var _profOk  = _sanitizerModule().PROFILES || ['default'];
+        if (_profOk.indexOf(_profRaw) === -1) {
+            console.warn('[OZI:editor] data-ozi-editor-sanitize="' + _profRaw + '" desconhecido (use ' +
+                _profOk.join(' | ') + '); usando "default".');
+            _profRaw = 'default';
+        }
+        this.sanitizeProfile = _profRaw;
+        this.lastSanitize    = null;
         this.requiredMessage = this.textarea.getAttribute('data-ozi-editor-required-message') || _t('common.required');
 
         this.classDefs   = _parseClassDefs(this.textarea.getAttribute('data-ozi-editor-class') || '');
@@ -2872,7 +2894,7 @@
                 if (!htmlItem) return navigator.clipboard.readText().then(insertPlain, onClipboardError);
 
                 return htmlItem.getType('text/html').then(function (blob) { return blob.text(); }).then(function (html) {
-                    document.execCommand('insertHTML', false, _sanitizeHtml(html));
+                    document.execCommand('insertHTML', false, _sanitizeHtml(html, self.sanitizeProfile));
                     afterInsert();
                 });
             }).catch(onClipboardError);
@@ -2982,7 +3004,34 @@
     OziEditor.prototype._syncFromTextarea = function () {
         var raw  = this.textarea.value || '';
         var html = this._convertIn(raw);
-        this.content.innerHTML = _sanitizeHtml(html);
+        this.content.innerHTML = this._sanitizeLoad(html, 'api');
+    };
+
+    /* [v4.10.0, OZI-16] sanitiza conteudo que ENTRA no editor (init,
+       setValue, saida do modo codigo) e avisa quando algo se perdeu. Antes a
+       perda era silenciosa: o textarea seguia com o HTML cru e a primeira
+       tecla gravava a versao limpa no banco. Colar NAO passa por aqui — limpar
+       o que vem do Word e o esperado, avisar seria ruido. */
+    OziEditor.prototype._sanitizeLoad = function (html, source) {
+        var res = _sanitizerModule().sanitize(html, { profile: this.sanitizeProfile });
+        this.lastSanitize = { removed: res.removed, renamed: res.renamed, profile: res.profile };
+        if (res.removed.length) {
+            if (this.debug) {
+                console.warn('[OZI:editor#' + this.uid + '] sanitizador removeu ' + res.removed.length +
+                    ' item(ns) do conteudo carregado (perfil "' + res.profile + '"):', res.removed);
+            }
+            _emitEvent(this.textarea, 'ozi:editor-sanitized', {
+                component: 'ozi-editor',
+                name:      this.key,
+                value:     html,
+                sanitized: res.html,
+                removed:   res.removed,
+                renamed:   res.renamed,
+                profile:   res.profile,
+                source:    source || 'api'
+            });
+        }
+        return res.html;
     };
 
     OziEditor.prototype._syncToTextarea = function () {
@@ -3402,7 +3451,7 @@
     OziEditor.prototype._exitSourceMode = function () {
         var raw  = this.source.value;
         var html = this._convertIn(raw);
-        this.content.innerHTML = _sanitizeHtml(html);
+        this.content.innerHTML = this._sanitizeLoad(html, 'user');
         this.content.style.display = '';
         this.source.style.display = 'none';
         this._setToolActive('source', false);
@@ -4098,7 +4147,7 @@
             var clip = e.clipboardData || window.clipboardData;
             var html = clip ? clip.getData('text/html') : '';
             var text = clip ? clip.getData('text/plain') : '';
-            if (html)      { document.execCommand('insertHTML', false, _sanitizeHtml(html)); }
+            if (html)      { document.execCommand('insertHTML', false, _sanitizeHtml(html, self.sanitizeProfile)); }
             else if (text) { document.execCommand('insertText', false, text); }
             self._saveSelection();
             self._syncToTextarea();
@@ -4173,7 +4222,7 @@
 
     OziEditor.prototype.setValue = function (v) {
         var html      = this._convertIn(v || '');
-        var sanitized = _sanitizeHtml(html);
+        var sanitized = this._sanitizeLoad(html, 'api');
         this.content.innerHTML = sanitized;
         this.textarea.value = v || '';
         if (this.isSourceMode) this.source.value = v || '';
