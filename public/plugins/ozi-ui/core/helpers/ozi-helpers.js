@@ -2,8 +2,8 @@
  *  ------------------------------------------
  *  ozi-helpers
  *  ------------------------------------------
- *  Ver: 1.1.0
- *  2026-07-03
+ *  Ver: 1.2.0
+ *  2026-11-18
  *
  *
  *
@@ -25,6 +25,15 @@
  * Usado por: todos os plugins
  *
  * Changelog:
+ *   - v1.2.0: [PERF] icon(): (1) cache da Promise por URL — o mesmo icone em
+ *       varias instancias e pedidos simultaneos viram UMA requisicao (falha
+ *       nao fica no cache); (2) pacote por plugin `svg/icons.json` (editor,
+ *       audio; gerado por tools/build-icons.mjs): 1 requisicao no lugar de
+ *       uma por icone, com fallback pro arquivo avulso quando o nome nao esta
+ *       no pacote ou o pacote nao veio. `OZI.conf.core.iconBundle = false`
+ *       desliga o pacote (host que substituiu um icon-*.svg avulso).
+ *       Assinatura e saida no DOM iguais. Medido: aceite do audio 23 → 1
+ *       pedido de icone; editor com tabela 28 → 1.
  *   - v1.1.0: [V2-F1] Dependencia de jQuery removida por completo:
  *       - toElement(x) — normaliza Element | jQuery | seletor string
  *       - parseBool/parseInt/icon aceitam Element ou jQuery
@@ -422,6 +431,49 @@
      * OZI.helpers.icon(btn, 'bold', { plugin: 'editor' })
      * OZI.helpers.icon(btn, 'play', { plugin: 'audio', fallback: '▶' })
      */
+    /* [v1.2.0] cache de ICONE (unico estado deste arquivo — so texto de
+       SVG por URL, nada de DOM). Antes cada chamada fazia um fetch: o mesmo
+       icone em 2 editores ou 3 players de audio virava 2-3 requisicoes (a
+       pagina de aceite do audio fazia 23 pedidos para 7 arquivos).
+       Guarda a PROMISE, entao pedidos simultaneos do mesmo icone viram um so.
+       Falha nao fica no cache: a proxima chamada tenta de novo. */
+    var _iconText    = {};
+    var _iconBundles = {};
+
+    /* plugins que publicam svg/icons.json (gerado por tools/build-icons.mjs).
+       Lista fechada de proposito: tentar o pacote de um plugin que nao tem
+       seria um 404 no console do host em toda pagina. O check do build
+       (--check no CI) garante que o arquivo existe e esta em dia. */
+    var ICON_BUNDLES = { editor: true, audio: true };
+
+    function _fetchIconText(url) {
+        if (!_iconText[url]) {
+            _iconText[url] = fetch(url)
+                .then(function (res) {
+                    if (!res.ok) throw new Error('icon not found: ' + url);
+                    return res.text();
+                })
+                .catch(function (err) { delete _iconText[url]; throw err; });
+        }
+        return _iconText[url];
+    }
+
+    /* pacote do plugin: 1 requisicao no lugar de uma por icone. Resolve null
+       (e fica null — sem repetir o pedido) se o arquivo nao veio ou nao e o
+       formato esperado; quem chama cai no arquivo avulso. */
+    function _iconBundle(plugin, dirUrl, conf) {
+        if (!plugin || !ICON_BUNDLES[plugin]) return Promise.resolve(null);
+        if (conf && conf.core && conf.core.iconBundle === false) return Promise.resolve(null);
+        var url = dirUrl + 'icons.json';
+        if (!_iconBundles[url]) {
+            _iconBundles[url] = fetch(url)
+                .then(function (res) { return res.ok ? res.json() : null; })
+                .then(function (data) { return (data && data.icons && typeof data.icons === 'object') ? data.icons : null; })
+                .catch(function () { return null; });
+        }
+        return _iconBundles[url];
+    }
+
     function icon(el, name, options) {
         options = options || {};
         el = toElement(el);
@@ -437,14 +489,15 @@
         var urlBase = (conf && conf.core && conf.core.urlBase) || '/plugins/ozi-ui/';
         if (urlBase.charAt(urlBase.length - 1) !== '/') urlBase += '/';
 
-        var path = options.plugin
-            ? urlBase + 'components/ozi-' + options.plugin + '/svg/icon-' + name + '.svg'
-            : urlBase + 'core/svg/icon-' + name + '.svg';
+        var dir = options.plugin
+            ? urlBase + 'components/ozi-' + options.plugin + '/svg/'
+            : urlBase + 'core/svg/';
+        var path = dir + 'icon-' + name + '.svg';
 
-        return fetch(path)
-            .then(function (res) {
-                if (!res.ok) throw new Error('icon not found: ' + path);
-                return res.text();
+        return _iconBundle(options.plugin, dir, conf)
+            .then(function (bundle) {
+                if (bundle && typeof bundle[name] === 'string') return bundle[name];
+                return _fetchIconText(path);
             })
             .then(function (svg) {
                 if (options.size || options.color) {

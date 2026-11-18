@@ -81,6 +81,11 @@ jobs:
         with:
           node-version: '22'
 
+      # svg/icons.json (pacote de ícones por plugin) é gerado dos icon-*.svg: falha se alguém
+      # trocou um SVG e esqueceu de rodar `node tools/build-icons.mjs`
+      - name: Pacote de ícones em dia
+        run: node tools/build-icons.mjs --check
+
       # JS puro, sem build: cada página carrega só o ozi.js do pacote e escreve o veredito;
       # o runner lê o #veredito em tempo real via DevTools Protocol
       - name: Rodar aceites

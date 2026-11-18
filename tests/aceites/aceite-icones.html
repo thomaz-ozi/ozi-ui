@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite ozi-helpers 1.2.0 (ícones: cache + pacote por plugin)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .3rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+    .fixtures { border-top: 1px dashed #ddd; margin-top: 1rem; padding-top: 1rem; }
+    textarea { width: 100%; }
+</style>
+</head>
+<body>
+<h1>Aceite <code>OZI.helpers.icon</code> 1.2.0 <small>(cache + <code>svg/icons.json</code> por plugin)</small></h1>
+<p>Critério: dois editores com 8 ferramentas carregam os ícones com <b>1</b> requisição (o pacote do
+plugin), nenhum SVG avulso. Pedidos simultâneos do mesmo ícone viram um só. Nome fora do pacote cai
+no arquivo avulso, e <code>core.iconBundle:false</code> desliga o pacote. O SVG inserido é o mesmo do
+arquivo avulso.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<div class="fixtures">
+    <textarea data-ozi-editor-html="ed1" data-ozi-editor-tools="[bold,italic,underline,strike]; [left,center,right]; link">a</textarea>
+    <textarea data-ozi-editor-html="ed2" data-ozi-editor-tools="[bold,italic,underline,strike]; [left,center,right]; link">b</textarea>
+    <div id="soltos"></div>
+</div>
+
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['editor'], core: { log: true } });
+
+    var erros = [];
+    window.addEventListener('error', function (ev) {
+        var isOpaco = (ev.message === 'Script error.' && !ev.filename && !ev.lineno);
+        if (isOpaco) return;
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function waitFor(fn, ms) {
+        var t0 = Date.now();
+        return new Promise(function (res) {
+            (function loop() {
+                if (fn() || Date.now() - t0 > ms) return res(fn());
+                setTimeout(loop, 30);
+            })();
+        });
+    }
+    function pedidos(re) {
+        return performance.getEntriesByType('resource').filter(function (e) { return re.test(e.name); }).length;
+    }
+    function botoes() { return Array.prototype.slice.call(document.querySelectorAll('[data-ozi-editor-tool]')); }
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 8s';
+        vered.className = 'fail';
+    }, 8000);
+
+    OZI.ready(async function () {
+        try {
+            var todos = true;
+
+            // ---- 1. dois editores, ícones pelo pacote ----
+            var okIcones = await waitFor(function () {
+                var b = botoes();
+                return b.length >= 16 && b.every(function (x) { return x.querySelector('svg'); });
+            }, 4000);
+            todos = check('1a todos os botões dos 2 editores ganharam o SVG',
+                okIcones, botoes().filter(function (x) { return !x.querySelector('svg'); }).length + ' sem ícone de ' + botoes().length) && todos;
+            todos = check('1b uma requisição só: editor/svg/icons.json',
+                pedidos(/ozi-editor\/svg\/icons\.json/) === 1, String(pedidos(/ozi-editor\/svg\/icons\.json/))) && todos;
+            todos = check('1c nenhum SVG avulso do editor foi pedido',
+                pedidos(/ozi-editor\/svg\/icon-[^/]+\.svg/) === 0, String(pedidos(/ozi-editor\/svg\/icon-[^/]+\.svg/))) && todos;
+
+            // ---- 2. mesmo SVG do arquivo avulso ----
+            var avulso = (await (await fetch('../plugins/ozi-ui/components/ozi-editor/svg/icon-bold.svg')).text()).trim();
+            var btnBold = document.querySelector('[data-ozi-editor-tool="bold"]');
+            todos = check('2a o SVG inserido pelo pacote é igual ao do arquivo icon-bold.svg',
+                btnBold && btnBold.querySelector('svg') && btnBold.querySelector('svg').outerHTML.replace(/\s+/g, ' ') ===
+                (function () { var d = document.createElement('div'); d.innerHTML = avulso; return d.firstElementChild.outerHTML.replace(/\s+/g, ' '); })()) && todos;
+
+            // ---- 3. nome fora do pacote → arquivo avulso → fallback ----
+            var soltos = document.getElementById('soltos');
+            /* 404 não entra no Resource Timing do Chrome: conta pelo fetch */
+            var chamadas = [], _fetch = window.fetch;
+            window.fetch = function (u) { chamadas.push(String(u)); return _fetch.apply(window, arguments); };
+            var semIcone = document.createElement('span'); soltos.appendChild(semIcone);
+            await OZI.helpers.icon(semIcone, 'nao-existe', { plugin: 'editor', fallback: 'X' });
+            window.fetch = _fetch;
+            var avulsos = chamadas.filter(function (u) { return /icon-nao-existe\.svg$/.test(u); }).length;
+            todos = check('3a nome fora do pacote tenta o avulso (sem pedir o pacote de novo) e usa o fallback',
+                semIcone.textContent === 'X' && avulsos === 1 && chamadas.length === 1,
+                'texto=' + JSON.stringify(semIcone.textContent) + ' chamadas=' + JSON.stringify(chamadas)) && todos;
+
+            // ---- 4. pacote desligado: avulso com dedupe ----
+            OZI.conf.core.iconBundle = false;
+            var spans = [];
+            for (var i = 0; i < 5; i++) { var s = document.createElement('span'); soltos.appendChild(s); spans.push(s); }
+            await Promise.all(spans.map(function (s) { return OZI.helpers.icon(s, 'table', { plugin: 'editor' }); }));
+            todos = check('4a core.iconBundle:false busca o avulso',
+                spans.every(function (s) { return s.querySelector('svg'); }) && pedidos(/icon-table\.svg/) >= 1) && todos;
+            todos = check('4b 5 pedidos simultâneos do mesmo ícone = 1 requisição',
+                pedidos(/icon-table\.svg/) === 1, String(pedidos(/icon-table\.svg/))) && todos;
+            var mais = document.createElement('span'); soltos.appendChild(mais);
+            await OZI.helpers.icon(mais, 'table', { plugin: 'editor' });
+            todos = check('4c chamada posterior sai do cache (sem nova requisição)',
+                mais.querySelector('svg') && pedidos(/icon-table\.svg/) === 1) && todos;
+            delete OZI.conf.core.iconBundle;
+
+            // ---- 5. plugin sem pacote não tenta icons.json (sem 404 no console do host) ----
+            var core = document.createElement('span'); soltos.appendChild(core);
+            await OZI.helpers.icon(core, 'qualquer', { fallback: '?' });
+            todos = check('5a ícone do core (sem plugin) não pede icons.json',
+                pedidos(/core\/svg\/icons\.json/) === 0 && core.textContent === '?') && todos;
+
+            todos = check('zero erros JS', erros.length === 0, erros.join(' | ') || null) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ ACEITE ícones: PASSOU' : '✗ ACEITE ícones: FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+        } catch (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+            vered.textContent = '✗ ACEITE ícones: FALHOU (exceção)';
+            vered.className = 'fail';
+        }
+    });
+</script>
+</body>
+</html>
