@@ -42,6 +42,17 @@ const EMULATE_MEDIA = {
     'aceite-theme-sistema-escuro.html': [{ name: 'prefers-color-scheme', value: 'dark' }],
 };
 
+// Erro que escape (DevTools caiu, navegador morreu…): sem isto o processo morria com código 1
+// SEM anotação nem resumo, e o CI ficava vermelho sem dizer por quê (tag v2.8.2, 2026-11-18).
+function fatal(err) {
+    const msg = String((err && err.stack) || err).replace(/\r?\n/g, ' ⏎ ');
+    console.error(`\nErro fatal no runner: ${msg}`);
+    if (GH) console.log(`::error title=aceites (runner)::${msg.slice(0, 600)}`);
+    process.exit(1);
+}
+process.on('unhandledRejection', fatal);
+process.on('uncaughtException', fatal);
+
 const MIME = {
     '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript',
     '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml',
@@ -111,6 +122,11 @@ ws.onmessage = (ev) => {
         msg.error ? fail(new Error(msg.error.message)) : ok(msg.result);
     }
 };
+// navegador morreu no meio: rejeita o que estava pendente em vez de pendurar até o timeout do job
+ws.onclose = () => {
+    for (const { fail } of pending.values()) fail(new Error('DevTools desconectou (navegador caiu?)'));
+    pending.clear();
+};
 const cdp = (method, params = {}, sessionId) => new Promise((ok, fail) => {
     const id = ++seq;
     pending.set(id, { ok, fail });
@@ -159,15 +175,22 @@ const pages = process.argv.slice(2).length
 
 let passed = 0, failed = 0, known = 0, flaky = 0;
 
+// Exceção numa página (alvo fechado, comando do DevTools recusado) vira FALHA DAQUELA PÁGINA, com
+// o motivo — e entra na nova tentativa como qualquer falha. Antes derrubava a bateria inteira.
+async function runPageSafe(page) {
+    try { return await runPage(page); }
+    catch (e) { return { verdict: `exceção no runner: ${(e && e.message) || e}`, fails: [] }; }
+}
+
 for (const page of pages) {
     const isKnown = page in KNOWN_FAIL;
-    let r = await runPage(page);
+    let r = await runPageSafe(page);
     let firstVerdict = null;
 
     // uma nova tentativa para falha não conhecida: separa instável de quebrado
     if (!isKnown && !r.verdict.includes('PASSOU')) {
         firstVerdict = r.verdict;
-        r = await runPage(page);
+        r = await runPageSafe(page);
     }
 
     if (r.verdict.includes('PASSOU')) {
