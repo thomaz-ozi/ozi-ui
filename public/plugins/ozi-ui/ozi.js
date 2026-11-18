@@ -31,6 +31,11 @@
  *   6. Carrega plugins declarados (default: todos)
  *   7. OZI.isReady = true → dispara callbacks OZI.ready()
  *
+ * Pacote 2.9.1 (2026-11-18) — sem bump de OZI.version:
+ *   - [FIX] [OZI-11] OZI.hooks nasce como stub com fila (_hooksStub), nao `{}`:
+ *     plugin que registra antes do boot (wire:navigate) nao quebra nem perde o
+ *     registro; o boot repassa a fila ao ligar window.OziHooks.
+ *
  * Pacote 2.8.0 (2026-10-29) — sem bump de OZI.version (marcador da geração, só muda no MAJOR):
  *   - core/ozi-theme.js entra na lista de subsistemas (opcional) e em OZI.theme.
  *
@@ -94,7 +99,7 @@
         components:   {},
         behaviors:    {},
         lang:         {},
-        hooks:        {},
+        hooks:        _hooksStub(),
         integrations: {},
         loader:       {},
 
@@ -103,6 +108,48 @@
     };
 
     window.OZI = OZI;
+
+    /* [OZI-11, pacote 2.9.1] OZI.hooks ANTES do boot. Era `{}`: um plugin que
+       rodava antes do boot (wire:navigate — readyState ja 'complete', o plugin
+       roda na hora e o boot so no setTimeout) via OZI.hooks "truthy" e chamava
+       OZI.hooks.afterRender.register → TypeError em 6 plugins (validate,
+       actions, suggest, toggle, check, integrations); os outros 8, com guarda
+       completa, pulavam o registro EM SILENCIO e ficavam sem re-init naquela
+       visita. O stub tem a mesma forma dos canais reais e enfileira; o boot
+       repassa a fila quando liga window.OziHooks (_flush). Conserta os 14
+       pontos sem tocar em nenhum. */
+    function _hooksStub() {
+        var queue = [];
+        function channel(name) {
+            return {
+                _stub: true,
+                register:       function (id, fn) { queue.push([name, 'register', id, fn]); },
+                registerSource: function (id, fn) { queue.push([name, 'registerSource', id, fn]); },
+                unregister:     function (id) {
+                    queue = queue.filter(function (q) { return !(q[0] === name && q[1] === 'register' && q[2] === id); });
+                },
+                getRegistered:  function () {
+                    return queue.filter(function (q) { return q[0] === name && q[1] === 'register'; })
+                                .map(function (q) { return q[2]; });
+                },
+                run:            function () {}
+            };
+        }
+        return {
+            _stub:        true,
+            afterRender:  channel('afterRender'),
+            beforeRender: channel('beforeRender'),
+            _flush: function (real) {
+                var pending = queue;
+                queue = [];
+                pending.forEach(function (q) {
+                    var ch = real && real[q[0]];
+                    if (ch && typeof ch[q[1]] === 'function') ch[q[1]](q[2], q[3]);
+                });
+                return pending.length;
+            }
+        };
+    }
 
     /* ─────────────────────────────────────────────
      * [4] oziConf() GLOBAL
@@ -316,9 +363,12 @@
                 }
 
                 if (typeof window.OziHooks !== 'undefined') {
+                    var _stub = OZI.hooks;
                     OZI.hooks = window.OziHooks;
                     if (typeof OZI.hooks._boot === 'function') OZI.hooks._boot();
-                    _log('info', 'hooks: ok');
+                    /* registros feitos antes do boot (ver _hooksStub) */
+                    var _queued = (_stub && _stub._stub && typeof _stub._flush === 'function') ? _stub._flush(OZI.hooks) : 0;
+                    _log('info', 'hooks: ok' + (_queued ? ' — ' + _queued + ' registro(s) da fila pré-boot' : ''));
                 } else {
                     _log('warn', 'ozi-hooks.js não carregado.');
                 }

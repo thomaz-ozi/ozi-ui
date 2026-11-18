@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite OZI.hooks antes do boot ([OZI-11], pacote 2.9.1)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .3rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+</style>
+</head>
+<body>
+<h1>Aceite <code>OZI.hooks</code> antes do boot <small>([OZI-11] do SNDESK)</small></h1>
+<p>Critério: no <code>wire:navigate</code> o plugin roda antes do boot do <code>ozi.js</code>. Registrar em
+<code>OZI.hooks.afterRender</code> nesse momento não pode quebrar (os 6 plugins com guarda curta davam
+<code>TypeError</code>) nem ser perdido em silêncio (os 8 com guarda completa pulavam o registro).
+O registro entra numa fila e passa a valer quando o boot liga os hooks reais.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    /* roda ANTES do boot (o boot espera o DOMContentLoaded): é o momento do wire:navigate */
+    var pre = { erro: null, chamadas: [] };
+    try {
+        pre.antesDoBoot = !OZI.isReady;
+        // guarda curta (validate, actions, suggest, toggle, check, integrations)
+        if (window.OZI && window.OZI.hooks) {
+            window.OZI.hooks.afterRender.register('teste:curta', function (root) { pre.chamadas.push('curta'); });
+        }
+        // guarda completa (select, editor, search, audio…)
+        if (OZI && OZI.hooks && OZI.hooks.afterRender && typeof OZI.hooks.afterRender.register === 'function') {
+            OZI.hooks.afterRender.register('teste:completa', function (root) { pre.chamadas.push('completa'); });
+        }
+        OZI.hooks.afterRender.register('teste:removido', function () { pre.chamadas.push('removido'); });
+        OZI.hooks.afterRender.unregister('teste:removido');
+        pre.filaAntes = OZI.hooks.afterRender.getRegistered().slice();
+    } catch (e) { pre.erro = String(e); }
+</script>
+<script>
+    oziConf({ plugins: ['validate'], core: { log: true } });
+
+    var erros = [];
+    window.addEventListener('error', function (ev) {
+        var isOpaco = (ev.message === 'Script error.' && !ev.filename && !ev.lineno);
+        if (isOpaco) return;
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 6s';
+        vered.className = 'fail';
+    }, 6000);
+
+    OZI.ready(function () {
+        try {
+            var todos = true;
+            todos = check('1a o registro rodou mesmo antes do boot', pre.antesDoBoot === true) && todos;
+            todos = check('1b registrar antes do boot não lança erro (guarda curta)', pre.erro === null, pre.erro) && todos;
+            todos = check('1c a fila guarda os dois registros e respeita o unregister',
+                JSON.stringify(pre.filaAntes) === '["teste:curta","teste:completa"]', JSON.stringify(pre.filaAntes)) && todos;
+
+            var reg = OZI.hooks.afterRender.getRegistered();
+            todos = check('2a depois do boot, os hooks são os reais (não o stub)', !OZI.hooks._stub && !OZI.hooks.afterRender._stub) && todos;
+            todos = check('2b os registros da fila chegaram aos hooks reais',
+                reg.indexOf('teste:curta') > -1 && reg.indexOf('teste:completa') > -1 && reg.indexOf('teste:removido') === -1,
+                JSON.stringify(reg)) && todos;
+
+            OZI.hooks.afterRender.run(document);
+            todos = check('2c run() chama os hooks registrados antes do boot',
+                pre.chamadas.indexOf('curta') > -1 && pre.chamadas.indexOf('completa') > -1 && pre.chamadas.indexOf('removido') === -1,
+                JSON.stringify(pre.chamadas)) && todos;
+
+            todos = check('2d o plugin carregado no boot (validate) registrou normalmente',
+                reg.indexOf('module:validate') > -1, JSON.stringify(reg)) && todos;
+
+            todos = check('zero erros JS', erros.length === 0, erros.join(' | ') || null) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ ACEITE hooks pré-boot: PASSOU' : '✗ ACEITE hooks pré-boot: FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+        } catch (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+            vered.textContent = '✗ ACEITE hooks pré-boot: FALHOU (exceção)';
+            vered.className = 'fail';
+        }
+    });
+</script>
+</body>
+</html>
