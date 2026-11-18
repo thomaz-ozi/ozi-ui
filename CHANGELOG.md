@@ -6,6 +6,26 @@ listed where they changed.
 
 ## [Unreleased]
 
+## [2.9.0] — 2026-11-18
+
+### Added
+- `ozi-editor` 4.10.0 / `ozi-editor-sanitize` 1.2.0: `data-ozi-editor-sanitize="email"` keeps
+  the inline styles an email body needs: `<div>` blocks, padding, margin, borders, border radius,
+  fonts, widths, and layout table attributes. Every value is checked by its format, and `url()`,
+  `calc()`, `position`, `z-index` and event attributes are still removed. The default profile is
+  unchanged.
+- `ozi-editor` 4.10.0: new `ozi:editor-sanitized` event. It fires when content loaded into the
+  editor (on init, through `setValue()`, or when leaving source mode) loses something to the
+  sanitizer. The `removed` list in the event says what was dropped. Before this, the loss was
+  silent until the first keystroke saved the cleaned version. The last report is also available
+  as `instance.lastSanitize`.
+
+### Changed
+- `ozi-helpers` 1.2.0: SVG icons are cached per URL, and the editor and audio plugins load all
+  their icons from one `svg/icons.json` file instead of one request per icon. On a page with two
+  editors the icon requests drop from 28 to 1. Single `icon-*.svg` files are still shipped and used
+  as a fallback. Set `core.iconBundle: false` to load the single files only.
+
 ## [2.8.2] — 2026-11-18
 
 ### Fixed
@@ -215,7 +235,8 @@ Version 2: every plugin rewritten in plain JavaScript, no jQuery, zero runtime d
 A v1 compatibility ramp (jQuery shims, `zld*` aliases) is included and opt-in. `ozi-copy` and
 `ozi-paste` were discontinued. See the [migration guide](https://oziui.com/en/docs/migration).
 
-[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.8.2...HEAD
+[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.9.0...HEAD
+[2.9.0]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.8.2...v2.9.0
 [2.8.2]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.8.1...v2.8.2
 [2.8.1]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.8.0...v2.8.1
 [2.8.0]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.7.2...v2.8.0
