@@ -2,7 +2,7 @@
  * ------------------------------------------
  * ozi-editor-sanitize
  * ------------------------------------------
- * Ver: 1.2.0
+ * Ver: 1.2.1
  * 2026-11-18
  *
  * Responsabilidade:
@@ -29,6 +29,13 @@
  * Expoe: OZI.modules.editorSanitize, window.OziEditorSanitize (compat)
  *
  * Changelog:
+ *   - v1.2.1: [FIX] relatorio `removed` acusava perda falsa em Chrome mais
+ *       novo: ao expandir `border:none` ele grava os longhands de
+ *       border-image com o valor padrao explicito (none/100%/1/0/stretch),
+ *       nao `initial`. `_snapshot` ignora valor igual ao padrao do shorthand
+ *       (SHORTHAND_DEFAULTS: border-image, background, text-decoration).
+ *       So o relatorio muda; o HTML sanitizado e o mesmo. Pego pelo CI da
+ *       tag v2.9.0 (Linux); o Chrome local gravava `initial`.
  *   - v1.2.0: [FEAT] ([OZI-16] do SNDESK) perfil `email`, opt-in:
  *       `sanitizeHtml(html, { profile: 'email' })`. Mantem DIV (no padrao
  *       vira P) e uma whitelist de estilo inline validada por FORMA
@@ -387,6 +394,23 @@
        propriedade de estilo (longhand). `initial` e preenchimento de
        shorthand (`background:#fff` gera background-image:initial etc.), nao
        algo que o autor escreveu — fica de fora pra nao virar falsa perda. */
+    /* [1.2.1] valor padrao que o browser grava ao expandir um shorthand.
+       O Chrome local grava `initial`; o do CI (mais novo) grava o valor
+       explicito — `border:none` virou border-image-source:none,
+       -slice:100%, -width:1, -outset:0, -repeat:stretch, e o relatorio
+       acusava perda que o autor nao escreveu. Igual ao padrao = sem efeito
+       visual = nao e perda. Cobre os shorthands que um corpo de e-mail usa
+       (border, background, text-decoration). */
+    var SHORTHAND_DEFAULTS = {
+        'border-image-source': 'none', 'border-image-slice': '100%', 'border-image-width': '1',
+        'border-image-outset': '0', 'border-image-repeat': 'stretch',
+        'background-image': 'none', 'background-position-x': '0%', 'background-position-y': '0%',
+        'background-size': 'auto', 'background-repeat': 'repeat', 'background-attachment': 'scroll',
+        'background-origin': 'padding-box', 'background-clip': 'border-box',
+        'text-decoration-style': 'solid', 'text-decoration-color': 'currentcolor',
+        'text-decoration-thickness': 'auto'
+    };
+
     function _snapshot(el) {
         var attrs = {}, styles = {};
         Array.prototype.slice.call(el.attributes).forEach(function (a) {
@@ -397,7 +421,9 @@
             for (var i = 0; i < st.length; i++) {
                 var prop = st[i];
                 var val  = st.getPropertyValue(prop);
-                if (val && val !== 'initial') styles[prop] = val;
+                if (!val || val === 'initial') continue;
+                if (SHORTHAND_DEFAULTS[prop] === _trim(val).toLowerCase()) continue;
+                styles[prop] = val;
             }
         }
         return { attrs: attrs, styles: styles };

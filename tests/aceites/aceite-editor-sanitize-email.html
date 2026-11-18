@@ -104,6 +104,16 @@ script). No perfil padrão nada muda, mas a perda no carregamento deixa de ser s
                 mod.sanitize('<div style="border:none;padding:4px">x</div>', { profile: 'email' }).removed.length === 0,
                 JSON.stringify(mod.sanitize('<div style="border:none;padding:4px">x</div>', { profile: 'email' }).removed)) && todos;
 
+            /* 1.2.1: o Chrome do CI expande border:none com os valores padrão explícitos de
+               border-image (não `initial`). Escrever esses padrões à mão reproduz isso em
+               qualquer Chrome. */
+            var explicito = mod.sanitize('<div style="border:none;border-image:none 100% / 1 / 0 stretch;padding:4px">x</div>', { profile: 'email' });
+            todos = check('1e padrões explícitos de border-image (Chrome novo) não viram perda falsa',
+                explicito.removed.length === 0, JSON.stringify(explicito.removed)) && todos;
+            var real = mod.sanitize('<div style="border-image:url(x.png) 30 round">x</div>', { profile: 'email' });
+            todos = check('1f border-image de verdade continua relatado como perda',
+                real.removed.some(function (x) { return x.name === 'border-image-source'; }), JSON.stringify(real.removed)) && todos;
+
             // ---- 2. segurança no perfil email ----
             var mal = mod.sanitizeHtml('<div style="background:url(javascript:alert(1));position:fixed;top:0;z-index:9999;width:calc(100% - 1px);color:#fff" onclick="x()">a</div>' +
                 '<script>alert(1)<\/script><p><a href="javascript:alert(1)" style="padding:4px">b</a></p>', { profile: 'email' });
