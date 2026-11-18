@@ -1,8 +1,12 @@
 /**
  * components/ozi-select/css/ozi-select.css
- * Versão: 1.6.1
+ * Versão: 1.6.2
  *
  * Changelog:
+ *   - v1.6.2: [FIX] Ajuste da 1.6.1 (CI vermelho no Linux): o mínimo do valor no modo rótulo
+ *     era 2.75rem fixo, mas o rótulo é 2ch — com fonte mais larga o contador cortava ~3px. Agora
+ *     calc(2ch + 6px + 22px). E o gap ícone↔valor vira espaço interno do ícone (encolhe junto),
+ *     liberando 8px no estreito. Coluna larga: mesma posição de antes. Pacote 2.8.2.
  *   - v1.6.1: [FIX] Rótulo fixo do multiple (.is-multiple-label) sumia por inteiro em coluna
  *     estreita (ícone + contador + × + seta): sobrava ~20px, só o contador cabia. Agora, só nesse
  *     modo, o ícone cede o espaço primeiro (encolhe até 0, via :has), o valor tem mínimo de 2.75rem
@@ -226,10 +230,20 @@
    primeiro: o valor tem um mínimo (rótulo de 2ch + gap + contador) e, ao chegar nele, quem encolhe
    é o ícone, até 0. No extremo, o conteúdo corta dentro do valor e nunca invade o ×.
    Decisão do usuário (17/11): "ícone cede o espaço", só no modo rótulo fixo. */
+/* v1.6.2: o vão ícone↔valor (gap do control) passa para DENTRO do ícone (24px + .5rem, glifo
+   nos primeiros 24px), para encolher junto — antes sobravam 8px parados com o ícone em 0. O
+   mínimo do valor é em ch, como o rótulo: com fonte mais larga (Linux do CI) o 2.75rem fixo
+   cortava o contador em ~3px. */
+.ozi-select-control:has(> .ozi-select-value.is-multiple-label) { gap: 0; }
 .ozi-select-control:has(> .ozi-select-value.is-multiple-label) > .ozi-select-value-icon {
     flex-shrink: 1; min-width: 0; overflow: hidden;
+    width: calc(24px + 0.5rem); justify-content: flex-start;
 }
-.ozi-select-value.is-multiple-label { min-width: 2.75rem; }
+.ozi-select-control:has(> .ozi-select-value.is-multiple-label) > .ozi-select-value-icon > * {
+    flex: 0 0 24px; text-align: center;
+}
+/* 22px = contador de 1 dígito (min 20px; em fonte larga o dígito + padding passa de 20) */
+.ozi-select-value.is-multiple-label { min-width: calc(2ch + 6px + 22px); margin-right: 0.5rem; }
 .ozi-select-value.is-multiple-label .ozi-select-value-content { gap: 6px; overflow: hidden; }
 .ozi-select-value.is-multiple-label .ozi-select-value-label { min-width: 2ch; }
 .ozi-select-multiple-count {

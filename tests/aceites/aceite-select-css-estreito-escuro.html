@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>OZI-UI v2 — Aceite ozi-select 6.6.1 (CSS 1.6.1: rótulo estreito + barra escura)</title>
+<title>OZI-UI v2 — Aceite ozi-select 6.6.2 (CSS 1.6.2: rótulo estreito + barra escura)</title>
 <style>
     body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; }
     h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
@@ -13,7 +13,7 @@
 </style>
 </head>
 <body>
-<h1>OZI-UI v2 — Aceite ozi-select 6.6.1 <small>(CSS 1.6.1)</small></h1>
+<h1>OZI-UI v2 — Aceite ozi-select 6.6.2 <small>(CSS 1.6.2)</small></h1>
 <p>Critério: (1) no modo rótulo fixo + contador, numa coluna estreita com ícone, contador e ×, o
 rótulo <b>não some por inteiro</b> (largura mínima, corta com reticências) e o contador não invade o ×;
 (2) a barra de rolagem da lista usa <code>--ozi-select-scrollbar-color</code> no escuro e fica
@@ -32,6 +32,16 @@ rótulo <b>não some por inteiro</b> (largura mínima, corta com reticências) e
     </script>
 </div>
 
+<!-- 1W — mesmo caso com fonte LARGA (no Linux do CI o 2.75rem fixo da 1.6.1 cortava o contador) -->
+<div class="estreito" style="font-family: Verdana, 'DejaVu Sans', sans-serif">
+    <div data-ozi-select="vendFonte" data-ozi-select-multiple="true"
+         data-ozi-select-multiple-label="Vendedor" data-ozi-select-multiple-count="true"
+         data-ozi-select-value-icon="bi bi-person"></div>
+    <script type="application/json" data-ozi-select-options="vendFonte">
+    [{"value":"1","label":"Um","selected":true},{"value":"2","label":"Dois","selected":true},{"value":"3","label":"Três","selected":true}]
+    </script>
+</div>
+
 <!-- 1L — mesmo select em coluna larga: o ícone NÃO pode encolher (regressão) -->
 <div style="width: 320px">
     <div data-ozi-select="vendLargo" data-ozi-select-multiple="true"
@@ -39,6 +49,14 @@ rótulo <b>não some por inteiro</b> (largura mínima, corta com reticências) e
          data-ozi-select-value-icon="bi bi-person"></div>
     <script type="application/json" data-ozi-select-options="vendLargo">
     [{"value":"1","label":"Um","selected":true},{"value":"2","label":"Dois","selected":true}]
+    </script>
+</div>
+
+<!-- 1P — chips em coluna larga: referência de posição do valor para o 1h -->
+<div style="width: 320px">
+    <div data-ozi-select="chipsLargo" data-ozi-select-multiple="true" data-ozi-select-value-icon="bi bi-person"></div>
+    <script type="application/json" data-ozi-select-options="chipsLargo">
+    [{"value":"1","label":"Um","selected":true}]
     </script>
 </div>
 
@@ -116,9 +134,32 @@ rótulo <b>não some por inteiro</b> (largura mínima, corta com reticências) e
                 cr.width >= 19 && cr.right <= vr.right + 0.5 && cr.right <= xr.left + 0.5, medidas) && todos;
             todos = check('1e. o ícone cedeu o espaço (encolheu)', rect(icone).width < 24, medidas) && todos;
 
+            // 1W — fonte larga: mesmas garantias do 1b/1d
+            var vF = q('vendFonte').querySelector('.ozi-select-value');
+            var lF = rect(vF.querySelector('.ozi-select-value-label')), cF = rect(vF.querySelector('.ozi-select-multiple-count'));
+            var xF = rect(q('vendFonte').querySelector('.ozi-select-clear')), vFr = rect(vF);
+            var medF = 'rótulo ' + lF.width.toFixed(1) + ' | contador ' + cF.left.toFixed(1) + '→' + cF.right.toFixed(1) +
+                ' | valor →' + vFr.right.toFixed(1) + ' | × ' + xF.left.toFixed(1) +
+                ' | control →' + rect(q('vendFonte').querySelector('.ozi-select-control')).right.toFixed(1);
+            todos = check('1w. fonte larga: rótulo visível, contador inteiro e sem invadir o ×',
+                lF.width >= 12 && cF.width >= 19 && cF.right <= vFr.right + 0.5 && cF.right <= xF.left + 0.5, medF) && todos;
+            var ctlF = rect(q('vendFonte').querySelector('.ozi-select-control')), togF = rect(q('vendFonte').querySelector('.ozi-select-toggle'));
+            todos = check('1x. fonte larga: a seta continua dentro do control', togF.right <= ctlF.right + 0.5,
+                'seta →' + togF.right.toFixed(1) + ' | control →' + ctlF.right.toFixed(1)) && todos;
+
             var iconeLargo = q('vendLargo').querySelector('.ozi-select-value-icon');
-            todos = check('1f. coluna larga: ícone inteiro (24px) e rótulo sem corte',
-                rect(iconeLargo).width === 24 &&
+            var offLabel = rect(q('vendLargo').querySelector('.ozi-select-value')).left - rect(q('vendLargo').querySelector('.ozi-select-control')).left;
+            var offChips = rect(q('chipsLargo').querySelector('.ozi-select-value')).left - rect(q('chipsLargo').querySelector('.ozi-select-control')).left;
+            todos = check('1h. coluna larga: o valor começa no mesmo ponto que no modo chips (ícone + vão de sempre)',
+                Math.abs(offLabel - offChips) < 0.5, 'rótulo ' + offLabel.toFixed(1) + ' | chips ' + offChips.toFixed(1)) && todos;
+            // o glifo é centralizado na sua caixa: compara o CENTRO (é onde ele aparece)
+            function centro(el, ref) { var r = rect(el); return r.left + r.width / 2 - rect(ref).left; }
+            var icChips = q('chipsLargo').querySelector('.ozi-select-value-icon');
+            var cLabel = centro(iconeLargo.firstElementChild, iconeLargo), cChips = centro(icChips.firstElementChild, icChips);
+            todos = check('1i. coluna larga: glifo do ícone no mesmo centro do modo chips',
+                Math.abs(cLabel - cChips) < 0.5, 'rótulo ' + cLabel.toFixed(1) + ' | chips ' + cChips.toFixed(1)) && todos;
+            todos = check('1f. coluna larga: ícone sem corte e rótulo sem corte',
+                rect(iconeLargo).width >= 24 &&
                 q('vendLargo').querySelector('.ozi-select-value-label').scrollWidth <= q('vendLargo').querySelector('.ozi-select-value-label').clientWidth,
                 rect(iconeLargo).width.toFixed(1) + 'px') && todos;
             var iconeChips = q('chipsEstreito').querySelector('.ozi-select-value-icon');
@@ -142,13 +183,13 @@ rótulo <b>não some por inteiro</b> (largura mínima, corta com reticências) e
             todos = check('zero erros JS reais (opacos filtrados: ' + errosOpacos + ')', erros.length === 0, erros.join(' | ') || null) && todos;
 
             clearTimeout(watchdog);
-            vered.textContent = todos ? '✓ ACEITE ozi-select 6.6.1 (CSS 1.6.1): PASSOU' : '✗ ACEITE ozi-select 6.6.1 (CSS 1.6.1): FALHOU';
+            vered.textContent = todos ? '✓ ACEITE ozi-select 6.6.2 (CSS 1.6.2): PASSOU' : '✗ ACEITE ozi-select 6.6.2 (CSS 1.6.2): FALHOU';
             vered.className = todos ? 'pass' : 'fail';
             document.title = (todos ? 'DONE:PASS' : 'DONE:FAIL');
         })().catch(function (err) {
             clearTimeout(watchdog);
             check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
-            vered.textContent = '✗ ACEITE ozi-select 6.6.1 (CSS 1.6.1): FALHOU (exceção)';
+            vered.textContent = '✗ ACEITE ozi-select 6.6.2 (CSS 1.6.2): FALHOU (exceção)';
             vered.className = 'fail';
             document.title = 'DONE:FAIL';
         });

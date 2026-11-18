@@ -6,6 +6,13 @@ listed where they changed.
 
 ## [Unreleased]
 
+## [2.8.2] — 2026-11-18
+
+### Fixed
+- `ozi-select` 6.6.2 (CSS 1.6.2): completes the 2.8.1 narrow-label fix. With a wider font (for
+  example the default font on Linux) the count was still clipped by a few pixels. The minimum
+  space now scales with the font, and the gap after the icon shrinks together with the icon.
+
 ## [2.8.1] — 2026-11-17
 
 ### Fixed
@@ -208,7 +215,8 @@ Version 2: every plugin rewritten in plain JavaScript, no jQuery, zero runtime d
 A v1 compatibility ramp (jQuery shims, `zld*` aliases) is included and opt-in. `ozi-copy` and
 `ozi-paste` were discontinued. See the [migration guide](https://oziui.com/en/docs/migration).
 
-[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.8.1...HEAD
+[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.8.2...HEAD
+[2.8.2]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.8.1...v2.8.2
 [2.8.1]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.8.0...v2.8.1
 [2.8.0]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.7.2...v2.8.0
 [2.7.2]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.7.1...v2.7.2

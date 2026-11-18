@@ -2,10 +2,12 @@
  * ------------------------------------------
  * ozi-select
  * ------------------------------------------
- * Ver: 6.6.1
+ * Ver: 6.6.2
  * 2026-11-17
  *
  * Changelog:
+ *   - v6.6.2: [FIX] só CSS (ozi-select.css v1.6.2): o mínimo do rótulo estreito dependia da
+ *       fonte (contador cortado no Linux); o vão do ícone encolhe junto.
  *   - v6.6.1: [FIX] só CSS (ozi-select.css v1.6.1), este arquivo não mudou de lógica: rótulo
  *       fixo do multiple sumia em coluna estreita; barra de rolagem da lista branca no escuro.
  *   - v6.6.0: [FEAT] Caixinha de marcar no multiple — [OZI-12] do SNDESK, nome e desenho
