@@ -31,7 +31,8 @@ for (const comp of readdirSync(compDir).sort()) {
 
     const icons = {};
     for (const f of files) {
-        icons[f.slice(5, -4)] = readFileSync(join(svgDir, f), 'utf8').replace(/^﻿/, '').trim();
+        // CRLF→LF: checkout no Windows (autocrlf) e no Linux do CI têm que gerar o mesmo arquivo
+        icons[f.slice(5, -4)] = readFileSync(join(svgDir, f), 'utf8').replace(/^﻿/, '').replace(/\r\n?/g, '\n').trim();
     }
     const out = JSON.stringify({
         _: 'Gerado por tools/build-icons.mjs a partir dos icon-*.svg desta pasta. Não editar à mão.',
@@ -39,7 +40,7 @@ for (const comp of readdirSync(compDir).sort()) {
     }, null, 1) + '\n';
 
     const target = join(svgDir, 'icons.json');
-    const atual  = existsSync(target) ? readFileSync(target, 'utf8') : null;
+    const atual  = existsSync(target) ? readFileSync(target, 'utf8').replace(/\r\n/g, '\n') : null;
     if (atual === out) { console.log(`ok       ${comp}: ${files.length} ícones`); continue; }
     if (check) {
         stale++;
