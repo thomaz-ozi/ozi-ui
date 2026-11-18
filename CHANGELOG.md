@@ -6,6 +6,19 @@ listed where they changed.
 
 ## [Unreleased]
 
+## [2.9.1] — 2026-11-18
+
+### Fixed
+- `ozi.js`: `OZI.hooks` now exists before the boot as a queue with the same shape as the real
+  hooks, instead of an empty object. Before this, a plugin that ran before the boot (for example
+  after a Livewire `wire:navigate`) threw `Cannot read properties of undefined (reading 'register')`
+  or silently skipped its re-render hook. Queued registrations are applied when the boot connects
+  the real hooks.
+- `ozi-editor-sanitize` 1.2.1: newer Chrome versions expand `border:none` into explicit
+  `border-image-*` defaults. The `ozi:editor-sanitized` report counted them as lost formatting,
+  so the event fired for nothing. Default values from shorthand expansion are no longer reported.
+  The sanitized HTML is unchanged.
+
 ## [2.9.0] — 2026-11-18
 
 ### Added
@@ -235,7 +248,8 @@ Version 2: every plugin rewritten in plain JavaScript, no jQuery, zero runtime d
 A v1 compatibility ramp (jQuery shims, `zld*` aliases) is included and opt-in. `ozi-copy` and
 `ozi-paste` were discontinued. See the [migration guide](https://oziui.com/en/docs/migration).
 
-[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.9.0...HEAD
+[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.9.1...HEAD
+[2.9.1]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.9.0...v2.9.1
 [2.9.0]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.8.2...v2.9.0
 [2.8.2]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.8.1...v2.8.2
 [2.8.1]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.8.0...v2.8.1
