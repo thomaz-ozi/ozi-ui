@@ -6,6 +6,28 @@ listed where they changed.
 
 ## [Unreleased]
 
+## [2.9.2] — 2026-11-18
+
+### Security
+- `ozi-loaddata` 5.0.1: the CSRF `_token` no longer goes into the URL. In `window` mode and in
+  `page` mode with GET it was sent in the query string, where it ends up in browser history,
+  server logs and the `Referer` header. It is now sent only in the body of non-GET requests,
+  including a `_token` collected from an `@csrf` field inside the collected group.
+
+### Fixed
+- `ozi-loaddata` 5.0.1: `zldFormClear` now clears the fields only when the response is ok. Before
+  this, a network error or a 422 also cleared them and the user lost what they had typed.
+- `ozi-loaddata` 5.0.1: when the destination is replaced (no append/before), a new request to the
+  same destination aborts the previous one, so a slow old response can no longer overwrite a newer
+  one. The aborted call resolves with `aborted: true` and renders nothing.
+- `ozi-loaddata` 5.0.1: calling `oziLoadData()` from JavaScript no longer leaves an empty `<span>`
+  in the `<body>` on every call.
+- `ozi-loaddata` 5.0.1: when validation blocks a request with `zldFormBusy`, the button's
+  `aria-disabled` and `data-zld-busy` now match its visual state again.
+- `ozi-loaddata` 5.0.1: files in `page` mode with POST are sent as a real file field (multipart)
+  instead of the text `[object File]`. Where files can't be sent (`window`, `page` with GET), a
+  console warning says so instead of dropping them silently.
+
 ## [2.9.1] — 2026-11-18
 
 ### Fixed
@@ -248,7 +270,8 @@ Version 2: every plugin rewritten in plain JavaScript, no jQuery, zero runtime d
 A v1 compatibility ramp (jQuery shims, `zld*` aliases) is included and opt-in. `ozi-copy` and
 `ozi-paste` were discontinued. See the [migration guide](https://oziui.com/en/docs/migration).
 
-[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.9.1...HEAD
+[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.9.2...HEAD
+[2.9.2]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.9.1...v2.9.2
 [2.9.1]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.9.0...v2.9.1
 [2.9.0]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.8.2...v2.9.0
 [2.8.2]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.8.1...v2.8.2
