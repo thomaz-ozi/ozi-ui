@@ -207,7 +207,7 @@ Every push runs on GitHub Actions:
 
 - **PHPUnit** (via Orchestra Testbench) on PHP 8.2–8.4 × Laravel 10–13: asset resolution, Blade
   directives, the asset route, and `ozi:check`
-- **38 browser acceptance pages** in headless Chrome, one or more per plugin
+- **49 browser acceptance pages** in headless Chrome, one or more per plugin
 
 See [`tests/aceites/README.md`](tests/aceites/README.md) to run them locally.
 
