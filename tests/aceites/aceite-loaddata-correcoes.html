@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="csrf-token" content="TOKEN-SECRETO-123">
+<title>OZI-UI v2 — Aceite ozi-loaddata 5.0.1 (6 correções)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .35rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite <small>(ozi-loaddata 5.0.1: as 6 correções da análise de 2026-11-18)</small></h1>
+<p>Cada bloco tem o teste negativo: a asserção falha no 5.0.0. <code>fetch</code>,
+<code>window.open</code> e <code>form.submit</code> são simulados para controlar atraso, status e o
+que é enviado (o runner bloqueia rede externa).</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<!-- grupo com @csrf: o _token coletado do grupo também não pode ir para a URL -->
+<div id="grupo" data-ozi-validate>
+    <input type="hidden" name="_token" value="TOKEN-SECRETO-123">
+    <input name="nome" value="Ana">
+</div>
+
+<div id="grupo-invalido" data-ozi-validate>
+    <input name="obrigatorio" data-ozi-required="true" value="">
+</div>
+
+<!-- botão FORA do bind automático (sem data-zld-url): estado só vem do busy -->
+<button id="btn-busy" type="button">enviar</button>
+
+<div id="destino-troca"></div>
+<div id="destino-append"></div>
+
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['loaddata', 'validate'] });
+
+    var erros = [], errosOpacos = 0, _step = 'boot';
+    window.addEventListener('error', function (ev) {
+        if (ev.message === 'Script error.' && !ev.filename && !ev.lineno) { errosOpacos++; return; }
+        erros.push('[' + _step + '] ' + (ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+        return false;
+    });
+    var _origErr = console.error;
+    console.error = function () {
+        erros.push('[' + _step + '] console.error: ' + Array.prototype.slice.call(arguments).join(' '));
+        _origErr.apply(console, arguments);
+    };
+    var avisos = [];
+    var _origWarn = console.warn;
+    console.warn = function () {
+        avisos.push(Array.prototype.slice.call(arguments).join(' '));
+        _origWarn.apply(console, arguments);
+    };
+
+    // ── simulações ──────────────────────────────────────────────────────
+    // fetch: a URL diz o que responder. /ok?d=300&b=A → 200 "A" depois de 300 ms; /erro → 500
+    var pedidos = [];
+    window.fetch = function (url, opts) {
+        opts = opts || {};
+        pedidos.push({ url: url, opts: opts });
+        var u = new URL(url, location.href);
+        var atraso = Number(u.searchParams.get('d') || 0);
+        var corpo  = u.searchParams.get('b') || 'ok';
+        var status = u.pathname.indexOf('/erro') !== -1 ? 500 : 200;
+
+        return new Promise(function (resolve, reject) {
+            var t = setTimeout(function () {
+                resolve(new Response('<p class="r">' + corpo + '</p>', {
+                    status: status, headers: { 'content-type': 'text/html' }
+                }));
+            }, atraso);
+            if (opts.signal) {
+                opts.signal.addEventListener('abort', function () {
+                    clearTimeout(t);
+                    reject(new DOMException('Abortado', 'AbortError'));
+                });
+            }
+        });
+    };
+
+    var aberturas = [];
+    window.open = function (url) { aberturas.push(String(url)); return null; };
+
+    var submits = [];
+    HTMLFormElement.prototype.submit = function () {
+        var campos = {};
+        Array.prototype.forEach.call(this.elements, function (el) {
+            campos[el.name] = el.type === 'file' ? { type: 'file', n: el.files.length } : el.value;
+        });
+        submits.push({ method: this.method, enctype: this.enctype, campos: campos });
+    };
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    function waitFor(fn, ms) {
+        var t0 = Date.now();
+        return new Promise(function (res, rej) {
+            (function poll() {
+                if (fn()) return res();
+                if (Date.now() - t0 > ms) return rej(new Error('waitFor timeout'));
+                setTimeout(poll, 20);
+            })();
+        });
+    }
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 15s';
+        vered.className = 'fail';
+    }, 15000);
+
+    OZI.ready(function () {
+        (async function () {
+            var todos = true;
+            await waitFor(function () { return !!window.OziCollector; }, 3000);
+
+            // ── 1. CSRF fora da URL ─────────────────────────────────────
+            _step = 'csrf';
+            oziLoadData({ zldUrl: '/relatorio', zldMode: 'window', zldCatchGroupId: 'grupo' });
+            var urlW = aberturas[0] || '';
+            todos = check('[CSRF] window: _token NÃO vai para a URL', urlW.indexOf('_token') === -1 && urlW.indexOf('TOKEN-SECRETO') === -1, urlW) && todos;
+            todos = check('[CSRF] window: o campo comum continua indo (nome=Ana)', urlW.indexOf('nome=Ana') !== -1, urlW) && todos;
+
+            oziLoadData({ zldUrl: '/busca', zldMode: 'page', zldModeMethod: 'GET', zldCatchGroupId: 'grupo' });
+            var sGet = submits[0] || { campos: {} };
+            todos = check('[CSRF] page GET: sem _token no formulário', !('_token' in sGet.campos), JSON.stringify(sGet.campos)) && todos;
+
+            oziLoadData({ zldUrl: '/salvar', zldMode: 'page', zldModeMethod: 'POST', zldCatchGroupId: 'grupo' });
+            var sPost = submits[1] || { campos: {} };
+            todos = check('[CSRF] page POST: _token continua no corpo (não quebra o Laravel)', sPost.campos._token === 'TOKEN-SECRETO-123') && todos;
+
+            await oziLoadData({ zldUrl: '/ok', zldCatchGroupId: 'grupo' });
+            var pPost = pedidos[pedidos.length - 1];
+            todos = check('[CSRF] fetch POST: _token no corpo e no header X-CSRF-TOKEN',
+                pPost.opts.body && pPost.opts.body.get('_token') === 'TOKEN-SECRETO-123' &&
+                pPost.opts.headers['X-CSRF-TOKEN'] === 'TOKEN-SECRETO-123') && todos;
+
+            // ── 2. zldFormClear só com resposta ok ──────────────────────
+            _step = 'form-clear';
+            var nome = document.querySelector('#grupo [name="nome"]');
+            await oziLoadData({ zldUrl: '/erro', zldCatchGroupId: 'grupo', zldFormClear: true, zldDestinyId: 'destino-append', zldDestinyAppend: true });
+            todos = check('[formClear] resposta 500: o que o usuário digitou é mantido', nome.value === 'Ana', 'valor="' + nome.value + '"') && todos;
+
+            await oziLoadData({ zldUrl: '/ok', zldCatchGroupId: 'grupo', zldFormClear: true });
+            todos = check('[formClear] resposta 200: limpa normalmente', nome.value === '') && todos;
+            nome.value = 'Ana';
+
+            // ── 3. resposta antiga não sobrescreve a nova ───────────────
+            _step = 'corrida';
+            var lenta  = oziLoadData({ zldUrl: '/ok?d=400&b=ANTIGA', zldDestinyId: 'destino-troca' });
+            var rapida = oziLoadData({ zldUrl: '/ok?d=50&b=NOVA',    zldDestinyId: 'destino-troca' });
+            var rL = await lenta, rR = await rapida;
+            await wait(500);
+            var txt = document.getElementById('destino-troca').textContent.trim();
+            todos = check('[corrida] destino fica com a resposta NOVA', txt === 'NOVA', 'destino="' + txt + '"') && todos;
+            todos = check('[corrida] o envio antigo volta com aborted: true', rL.aborted === true && rR.aborted === false) && todos;
+            todos = check('[corrida] abortar não renderiza alerta de erro de conexão',
+                !document.querySelector('#destino-troca .ozi-alert')) && todos;
+
+            var a1 = oziLoadData({ zldUrl: '/ok?d=300&b=P1', zldDestinyId: 'destino-append', zldDestinyAppend: true });
+            var a2 = oziLoadData({ zldUrl: '/ok?d=50&b=P2',  zldDestinyId: 'destino-append', zldDestinyAppend: true });
+            await a1; await a2;
+            var partes = Array.prototype.map.call(document.querySelectorAll('#destino-append .r'), function (p) { return p.textContent; });
+            todos = check('[corrida] com append NÃO aborta: as duas partes chegam',
+                partes.indexOf('P1') !== -1 && partes.indexOf('P2') !== -1, JSON.stringify(partes)) && todos;
+
+            // ── 4. sem <span> órfão no body ─────────────────────────────
+            _step = 'span-orfao';
+            var antes = document.body.querySelectorAll('[id^="zld-script-"]').length;
+            await oziLoadData({ zldUrl: '/ok' });
+            await oziLoadData({ zldUrl: '/ok' });
+            var depois = document.body.querySelectorAll('[id^="zld-script-"]').length;
+            todos = check('[span] chamada por JS não deixa elemento no body', depois === antes, antes + ' → ' + depois) && todos;
+
+            // ── 5. botão coerente quando a validação barra o envio ──────
+            _step = 'botao';
+            var btn = document.getElementById('btn-busy');
+            var r5 = oziLoadData({ zldUrl: '/ok', zldCatchGroupId: 'grupo-invalido', zldFormBusy: true }, null, btn);
+            todos = check('[botão] validação barrou o envio (perm > 0)', r5 && r5.perm > 0) && todos;
+            todos = check('[botão] data-zld-busy volta a "false"', btn.getAttribute('data-zld-busy') === 'false',
+                'data-zld-busy=' + btn.getAttribute('data-zld-busy')) && todos;
+            todos = check('[botão] aria-disabled acompanha a classe (sem classe → "false")',
+                !btn.classList.contains('ozi-disabled') && btn.getAttribute('aria-disabled') === 'false',
+                'classe=' + btn.classList.contains('ozi-disabled') + ' aria=' + btn.getAttribute('aria-disabled')) && todos;
+
+            // ── 6. arquivos nos modos page/window ───────────────────────
+            _step = 'arquivos';
+            var arq = new File(['conteudo'], 'doc.txt', { type: 'text/plain' });
+            submits.length = 0; avisos.length = 0; aberturas.length = 0;
+
+            oziLoadData({ zldUrl: '/upload', zldMode: 'page', zldModeMethod: 'POST', zldFiles: [{ name: 'doc', file: arq }] });
+            var sUp = submits[0] || { campos: {} };
+            todos = check('[arquivo] page POST: vai num <input type=file> com o arquivo',
+                sUp.campos.doc && sUp.campos.doc.type === 'file' && sUp.campos.doc.n === 1, JSON.stringify(sUp.campos.doc)) && todos;
+            todos = check('[arquivo] page POST: enctype multipart/form-data', sUp.enctype === 'multipart/form-data', sUp.enctype) && todos;
+
+            oziLoadData({ zldUrl: '/abrir', zldMode: 'window', zldFiles: [{ name: 'doc', file: arq }] });
+            todos = check('[arquivo] window: avisa no console em vez de sumir em silêncio',
+                avisos.some(function (a) { return a.indexOf('"doc"') !== -1; })) && todos;
+            todos = check('[arquivo] window: não manda "[object File]" na URL',
+                (aberturas[0] || '').indexOf('object') === -1, aberturas[0]) && todos;
+
+            await wait(50);
+            todos = check('[arquivo] page: o <form> temporário sai do DOM', document.querySelectorAll('body > form').length === 0) && todos;
+
+            _step = 'fim';
+            await wait(1200); // finishUi (400 ms) e progress bar (600 ms)
+            todos = check('zero erros JS reais (opacos filtrados: ' + errosOpacos + ')', erros.length === 0, erros.join(' | ') || null) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ ACEITE ozi-loaddata 5.0.1: PASSOU' : '✗ ACEITE ozi-loaddata 5.0.1: FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+        })().catch(function (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err && err.stack || err));
+            vered.textContent = '✗ ACEITE ozi-loaddata 5.0.1: FALHOU (exceção)';
+            vered.className = 'fail';
+        });
+    });
+</script>
+</body>
+</html>

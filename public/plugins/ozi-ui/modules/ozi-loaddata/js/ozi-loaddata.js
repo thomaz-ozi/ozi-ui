@@ -2,8 +2,8 @@
  * ------------------------------------------
  * ozi-loaddata
  * ------------------------------------------
- * Ver: 5.0.0
- * 2026-07-03
+ * Ver: 5.0.1
+ * 2026-11-18
  *
  * Responsabilidade:
  *   - Orquestra fetch, UI, progress bar, busy state, actions
@@ -24,6 +24,20 @@
  * Expoe: window.oziLoadData, window.__zldConf
  *
  * Changelog:
+ *   - v5.0.1: 6 correcoes (analise de 2026-11-18), sem mudar a API:
+ *       - [SEGURANCA] _token (CSRF) nao vai mais para a URL: modo 'window' e modo 'page'
+ *         com GET removem o _token do envio (vinha do meta e de um @csrf no grupo).
+ *       - zldFormClear so limpa quando a resposta e ok (antes limpava no .finally e o
+ *         usuario perdia o que digitou quando a rede caia ou o servidor dava 422).
+ *       - Resposta antiga nao sobrescreve a nova: no modo de substituicao do destino
+ *         (sem append/before), um envio novo ao mesmo destino aborta o anterior
+ *         (AbortController). Resultado abortado: dataResponse.aborted = true.
+ *       - Chamada por JS sem clickedEl nao cria mais um <span> orfao no <body>.
+ *       - Validacao barrando o envio devolve o botao ao estado coerente
+ *         (aria-disabled e data-zld-busy acompanham a classe), via _releaseButton.
+ *       - Arquivos no modo 'page' (POST) vao num <input type=file> real com
+ *         enctype multipart; onde nao cabem (GET, 'window'), console.warn em vez
+ *         de sumirem em silencio. O <form> temporario e removido apos o submit.
  *   - v5.0.0: [V2-F2] Migracao para JS puro (docs/ozi-ui-v2-contratos.md, dev-hard):
  *       - Motor 100% nativo: querySelector/querySelectorAll/classList/insertAdjacentHTML
  *         no lugar de jQuery; AJAX ja era via fetch (sem mudanca).
@@ -333,6 +347,31 @@
             '</div>';
     }
 
+    // [5.0.1] envio em andamento por destino (modo de substituicao): o novo aborta o anterior
+    var _inflight = {};
+
+    // [5.0.1] devolve o botao ao estado coerente com a validade atual dele: classe,
+    // aria-disabled e data-zld-busy andam juntos (antes a classe saia e o aria ficava).
+    function _releaseButton(button) {
+        var stillInvalid = button.getAttribute('data-zld-disabled') === 'true';
+
+        if (zldConf.zldButtonDisabledClass) _classListOp(button, zldConf.zldButtonDisabledClass, stillInvalid ? 'add' : 'remove');
+        if (zldConf.zldButtonEnabledClass)  _classListOp(button, zldConf.zldButtonEnabledClass,  stillInvalid ? 'remove' : 'add');
+        if (zldConf.zldAriaDisabled)        button.setAttribute('aria-disabled', stillInvalid ? 'true' : 'false');
+
+        button.setAttribute('data-zld-busy', 'false');
+    }
+
+    function _isFile(value) {
+        return typeof Blob === 'function' && value instanceof Blob;
+    }
+
+    // falha alto: arquivo que nao cabe no modo de envio nao some em silencio
+    function _warnFileDropped(field, where) {
+        console.warn('[oziLoadData] arquivo do campo "' + field + '" NAO foi enviado: ' + where +
+            ' nao transporta arquivos. Use zldMode "fetch" ou "page" com POST.');
+    }
+
 
     // ---------------------------------------------
     // [5] PROGRESS BAR
@@ -566,7 +605,7 @@
 
         var dataResponse = {
             perm: 0, isJson: false, ok: false,
-            status: 0, data: null, html: null, error: null
+            status: 0, data: null, html: null, error: null, aborted: false
         };
 
         var loadData = {
@@ -600,18 +639,15 @@
         loadData.zldCatchGroupId  = zldParseList(loadData.zldCatchGroupId);
         loadData.zldCatchItemName = zldParseList(loadData.zldCatchItemName);
 
-        var elementData = clickedEl;
-        if (!elementData) {
-            elementData = document.createElement('span');
-            elementData.id = 'zld-script-' + Date.now();
-            document.body.appendChild(elementData);
-        }
-        if (!elementData.id || elementData.id.trim() === '') {
+        // [5.0.1] sem clickedEl (chamada por JS) nao cria mais um <span> no <body>:
+        // cada chamada deixava um elemento orfao. zldId continua existindo (ctx das actions).
+        var elementData = clickedEl || null;
+        if (elementData && (!elementData.id || elementData.id.trim() === '')) {
             elementData.id = zldGenerateId();
         }
-        loadData.zldId = elementData.id;
+        loadData.zldId = elementData ? elementData.id : 'zld-script-' + zldGenerateId();
 
-        var button = zldSafeById(loadData.zldId, loadData.zldLog);
+        var button = elementData ? zldSafeById(loadData.zldId, loadData.zldLog) : null;
 
         // ── busy state ────────────────────────────────────────────
         if (loadData.zldFormBusy === true && button) {
@@ -651,9 +687,19 @@
         }
 
         // ── CSRF ──────────────────────────────────────────────────
-        var csrfMeta = document.querySelector('meta[name="csrf-token"]');
-        var token    = csrfMeta ? csrfMeta.getAttribute('content') : null;
-        if (token && !formData.has('_token')) formData.append('_token', token);
+        // [5.0.1][SEGURANCA] o _token so viaja no CORPO de um envio nao-GET. Em 'window'
+        // (sempre query string) e em 'page' com GET ele ia para a URL: historico, logs do
+        // servidor e Referer. Remove tambem o _token coletado de um @csrf dentro do grupo.
+        var csrfMeta    = document.querySelector('meta[name="csrf-token"]');
+        var token       = csrfMeta ? csrfMeta.getAttribute('content') : null;
+        var sendMethod  = (loadData.zldModeMethod || 'POST').toUpperCase();
+        var tokenInBody = (loadData.zldMode === 'fetch' || loadData.zldMode === 'page') && sendMethod !== 'GET';
+
+        if (!tokenInBody) {
+            formData.delete('_token');
+        } else if (token && !formData.has('_token')) {
+            formData.append('_token', token);
+        }
 
         // ── arquivos ──────────────────────────────────────────────
         if (Array.isArray(loadData.zldFiles) && loadData.zldFiles.length) {
@@ -672,34 +718,45 @@
 
         // ── bloqueio de validacao ─────────────────────────────────
         if (!collected.isValid) {
-            if (button) _classListOp(button, zldConf.zldButtonDisabledClass, 'remove');
+            // [5.0.1] antes so tirava a classe: aria-disabled e data-zld-busy ficavam "true"
+            // e o leitor de tela seguia anunciando o botao como desabilitado.
+            if (button && button.getAttribute('data-zld-busy') === 'true') _releaseButton(button);
             dataResponse.perm = collected.ldValidate;
             return dataResponse;
         }
 
         var v_url = loadData.zldUrl;
 
+        // [5.0.1] resposta antiga nao sobrescreve a nova: so no modo de SUBSTITUICAO do
+        // destino. Com append/before cada resposta acrescenta conteudo (ex.: "carregar
+        // mais") e abortar a anterior perderia dados.
+        var destKey    = loadData.zldDestinyId || '';
+        var replaces   = !!destKey && !loadData.zldDestinyAppend && !loadData.zldDestinyBefore;
+        var controller = (replaces && loadData.zldMode === 'fetch' && typeof AbortController === 'function')
+            ? new AbortController()
+            : null;
+
+        if (controller) {
+            if (_inflight[destKey]) _inflight[destKey].abort();
+            _inflight[destKey] = controller;
+        }
+
+        var isAborted = function () { return !!(controller && controller.signal.aborted); };
+
         zldProgressStart();
 
         var finishUi = function (success) {
-            zldProgressFinish(success !== false);
+            // abortado: a barra de progresso pertence ao envio mais novo, nao mexe nela
+            if (!isAborted()) zldProgressFinish(success !== false);
 
             if (button) {
-                setTimeout(function () {
-                    if (zldConf.zldButtonDisabledClass) _classListOp(button, zldConf.zldButtonDisabledClass, 'remove');
-                    if (zldConf.zldButtonEnabledClass)  _classListOp(button, zldConf.zldButtonEnabledClass, 'add');
-
-                    if (zldConf.zldAriaDisabled) {
-                        var isStillInvalid = button.getAttribute('data-zld-disabled') === 'true';
-                        button.setAttribute('aria-disabled', isStillInvalid ? 'true' : 'false');
-                    }
-
-                    button.setAttribute('data-zld-busy', 'false');
-                }, 400);
+                setTimeout(function () { _releaseButton(button); }, 400);
             }
         };
 
         var renderToDestiny = function (html) {
+            if (isAborted()) return;
+
             var ld_destiny = loadData.zldDestinyId;
             if (!ld_destiny) return;
 
@@ -721,6 +778,7 @@
         };
 
         var handleHttpErrorHtml = function (status, html) {
+            if (isAborted()) return;
             renderToDestiny(zldBuildAlertHtml('warning', 'Erro ao carregar.', 'Status ' + status));
 
             var titleEl = document.getElementById('logErrorLaravelOziTitle');
@@ -752,10 +810,15 @@
                 ? { method: method, headers: headers }
                 : { method: method, headers: headers, body: formData };
 
+            if (controller) fetchOptions.signal = controller.signal;
+
             return fetch(v_url, fetchOptions)
                 .then(function (response) {
                     dataResponse.ok     = response.ok;
                     dataResponse.status = response.status;
+
+                    // superado por um envio mais novo enquanto o servidor respondia
+                    if (isAborted()) { dataResponse.aborted = true; return dataResponse; }
 
                     var ct = String(response.headers.get('content-type') || '').toLowerCase();
                     dataResponse.isJson = ct.indexOf('application/json') !== -1;
@@ -763,6 +826,8 @@
                     if (dataResponse.isJson) {
                         return response.json().then(function (json) {
                             dataResponse.data = json;
+
+                            if (isAborted()) { dataResponse.aborted = true; return dataResponse; }
 
                             if (loadData.zldLog) {
                                 console.log('[oziLoadData] JSON response:', { status: response.status, ok: response.ok, json: json });
@@ -783,6 +848,7 @@
                             return dataResponse;
                         }).catch(function (err) {
                             dataResponse.error = err;
+                            if (isAborted()) { dataResponse.aborted = true; return dataResponse; }
                             renderToDestiny(zldBuildAlertHtml('danger', 'Resposta JSON invalida.', 'Verifique o retorno da rota.'));
                             return dataResponse;
                         });
@@ -790,6 +856,7 @@
 
                     return response.text().then(function (html) {
                         dataResponse.html = html;
+                        if (isAborted()) { dataResponse.aborted = true; return dataResponse; }
                         if (!response.ok) { handleHttpErrorHtml(response.status, html); return dataResponse; }
                         renderToDestiny(html);
                         return dataResponse;
@@ -797,14 +864,19 @@
                 })
                 .catch(function (err) {
                     dataResponse.error = err;
+                    if (isAborted()) { dataResponse.aborted = true; return dataResponse; }
                     if (loadData.zldLog) console.error('[oziLoadData] fetch falhou:', err);
                     renderToDestiny(zldBuildAlertHtml('danger', 'Nao foi possivel carregar.', 'Verifique sua conexao.'));
                     return dataResponse;
                 })
                 .finally(function () {
+                    if (controller && _inflight[destKey] === controller) delete _inflight[destKey];
+
                     finishUi(dataResponse.ok);
 
-                    if (loadData.zldFormClear) {
+                    // [5.0.1] so limpa com resposta ok: antes limpava no erro de rede e no 422,
+                    // e o usuario perdia o que tinha digitado.
+                    if (loadData.zldFormClear && dataResponse.ok && !dataResponse.aborted) {
                         (loadData.zldCatchGroupId || []).forEach(function (groupId) {
                             if (!groupId) return;
                             var group = document.getElementById(groupId);
@@ -828,6 +900,8 @@
         } else if (loadData.zldMode === 'window') {
             var qs = '';
             formData.forEach(function (value, key) {
+                // [5.0.1] arquivo nao cabe numa query string: avisa em vez de enviar "[object File]"
+                if (_isFile(value)) { _warnFileDropped(key, "zldMode 'window'"); return; }
                 qs += encodeURIComponent(key) + '=' + encodeURIComponent(value) + '&';
             });
             window.open(loadData.zldUrl + '?' + qs, '_blank', 'noopener,noreferrer');
@@ -835,20 +909,37 @@
 
         } else if (loadData.zldMode === 'page') {
             var form = document.createElement('form');
-            form.method = (loadData.zldModeMethod || 'POST').toUpperCase();
+            form.method = sendMethod;
             form.target = loadData.zldModePageTarget || '_self';
             form.action = loadData.zldUrl;
 
             formData.forEach(function (value, key) {
-                var input  = document.createElement('input');
-                input.type  = 'hidden';
-                input.name  = key;
-                input.value = value;
+                var input = document.createElement('input');
+                input.name = key;
+
+                if (_isFile(value)) {
+                    // [5.0.1] antes virava um hidden com "[object File]". Com POST vai num
+                    // <input type=file> de verdade (DataTransfer); com GET nao ha como enviar.
+                    if (sendMethod === 'GET' || typeof DataTransfer !== 'function') {
+                        _warnFileDropped(key, "zldMode 'page' com GET");
+                        return;
+                    }
+                    var dt = new DataTransfer();
+                    dt.items.add(value);
+                    input.type  = 'file';
+                    input.files = dt.files;
+                    form.enctype = 'multipart/form-data';
+                } else {
+                    input.type  = 'hidden';
+                    input.value = value;
+                }
                 form.appendChild(input);
             });
 
             document.body.appendChild(form);
             form.submit();
+            // com target _self a pagina navega; com _blank o <form> ficava no DOM para sempre
+            setTimeout(function () { if (form.parentNode) form.parentNode.removeChild(form); }, 0);
             finishUi();
 
         } else {
