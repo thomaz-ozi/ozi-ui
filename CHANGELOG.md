@@ -6,6 +6,21 @@ listed where they changed.
 
 ## [Unreleased]
 
+## [2.9.3] — 2026-11-19
+
+### Security
+- `ozi-editor-sanitize` 1.2.2 fixes three XSS issues in the `ozi-editor` HTML sanitizer, found
+  in an audit against known XSS payloads. **Everyone using `ozi-editor` should update.** Clean
+  content is sanitized exactly as before.
+  - HTML was parsed in the page's own document, so a discarded `<img>`, `<video>` or `<audio>` still
+    loaded and its `onerror` ran while the sanitizer worked. Content saved through a direct request
+    could run script for whoever opened it in the editor. Parsing now happens in an inert document.
+  - The children of a removed wrapper tag (for example `<font>` or an `<a>` with an unsafe link)
+    were moved up without being cleaned, so their event attributes survived. They are now cleaned
+    before being kept, and SVG/MathML elements are always unwrapped.
+  - Link and image URLs were checked with a regular expression that accepted `java<TAB>script:`
+    and similar forms. The scheme now comes from the browser's own URL parser.
+
 ## [2.9.2] — 2026-11-18
 
 ### Security
@@ -270,7 +285,8 @@ Version 2: every plugin rewritten in plain JavaScript, no jQuery, zero runtime d
 A v1 compatibility ramp (jQuery shims, `zld*` aliases) is included and opt-in. `ozi-copy` and
 `ozi-paste` were discontinued. See the [migration guide](https://oziui.com/en/docs/migration).
 
-[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.9.2...HEAD
+[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.9.3...HEAD
+[2.9.3]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.9.2...v2.9.3
 [2.9.2]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.9.1...v2.9.2
 [2.9.1]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.9.0...v2.9.1
 [2.9.0]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.8.2...v2.9.0
