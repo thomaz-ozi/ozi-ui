@@ -6,6 +6,40 @@ listed where they changed.
 
 ## [Unreleased]
 
+## [2.9.4] — 2026-11-19
+
+Closes the security audit of `ozi-select`, `ozi-loaddata`, `ozi-actions` and `ozi-auth`. Each one
+now has an attack page that runs real payloads in CI.
+
+### Security
+- `ozi-loaddata` 5.0.2: the CSRF token (`X-CSRF-TOKEN` header and `_token` in the body) was sent to
+  any `zldUrl`, including another domain or `//host`, handing the session token to third parties.
+  It is now sent only to the same origin.
+- `ozi-loaddata` 5.0.2: the server's `json.message` (a Laravel 422 often echoes what the user typed)
+  was inserted as HTML in the error alert and could run script. It is now escaped.
+- `ozi-loaddata` 5.0.2: the debug error page (`#logErrorLaravelOzi`) was written into a same-origin
+  iframe, where a reflected `<img onerror>` ran with access to the page. The iframe is now sandboxed
+  and receives the HTML through `srcdoc`.
+- `ozi-actions` 2.0.1: toast messages went to `innerHTML`, so a message such as "Client *<name>*
+  saved" ran a malicious name (stored XSS). The message is now text; HTML requires `html: true` in
+  the payload. `toastr` receives the message escaped.
+- `ozi-actions` 2.0.1: the `redirect` action accepted `javascript:` URLs, even disguised with a TAB.
+  It now accepts only http(s) or relative URLs and warns in the console otherwise.
+
+### Changed
+- **Possible impact:** a backend that sends HTML in a toast on purpose now sees it escaped and must
+  add `html: true` to the action payload.
+
+### Fixed
+- `ozi-select` 6.6.3: creating an option whose text contained `$&` or `$'` displayed the wrong
+  label. No injection was found in the audit.
+
+### Notes
+- `ozi-auth`: no issue found. With debug on, the password does not reach browser storage, DOM
+  attributes, console logs, event details or the URL, and typed HTML is not rendered.
+- The `eval` action is unchanged by design: it runs code from your own server. Never build an
+  `eval` action from user data.
+
 ## [2.9.3] — 2026-11-19
 
 ### Security
