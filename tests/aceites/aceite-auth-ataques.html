@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Auditoria ozi-auth (a senha não vaza)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 980px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .3rem 0; word-break: break-all; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+</style>
+</head>
+<body>
+<h1>Auditoria <code>ozi-auth</code> <small>(a senha não vaza; o texto digitado não vira HTML)</small></h1>
+<p>Critério: com o debug ligado, uma senha conhecida digitada nos campos <b>não aparece</b> em
+<code>localStorage</code>/<code>sessionStorage</code>/cookie, em nenhum atributo do DOM, em nenhum log do
+console, no <code>detail</code> dos eventos do ozi-auth nem na URL. Um e-mail ou usuário com HTML não
+executa nas listas de regras, no dropdown ou no resumo.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<form id="f" action="#" onsubmit="return false">
+    <input id="u" type="text" data-ozi-auth-user data-ozi-auth-user-caracter="3" data-ozi-auth-log="true">
+    <input id="m" type="email" data-ozi-auth-mail>
+    <input id="p" type="password" data-ozi-auth-pass="bi bi-eye-slash,bi bi-eye" autocomplete="new-password">
+    <input id="c" type="password" data-ozi-auth-confirm="bi bi-eye-slash,bi bi-eye" autocomplete="new-password">
+    <button type="submit" data-ozi-auth-submit data-ozi-auth-list-id="regras" data-ozi-auth-dropdown>Salvar</button>
+    <div id="regras"></div>
+</form>
+
+<script>
+    window.__hits = [];
+    window.__x = function (id) { window.__hits.push(id); };
+    var SENHA = 'Zx9#SegredoUnico!42';
+
+    /* tudo que vai para o console, com o debug ligado */
+    var logs = [];
+    ['log', 'info', 'warn', 'error', 'debug', 'trace'].forEach(function (k) {
+        var orig = console[k];
+        console[k] = function () {
+            try { logs.push(Array.prototype.map.call(arguments, function (a) { return typeof a === 'string' ? a : JSON.stringify(a); }).join(' ')); } catch (e) { logs.push('[não serializável]'); }
+            return orig.apply(console, arguments);
+        };
+    });
+    var eventos = [];
+    ['ozi:auth-change', 'ozi:auth-ready', 'ozi:auth-broken', 'ozi:init', 'ozi:change'].forEach(function (n) {
+        document.addEventListener(n, function (e) { try { eventos.push(JSON.stringify(e.detail)); } catch (er) { eventos.push('[detail não serializável]'); } });
+    });
+</script>
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['auth'], core: { log: true } });
+
+    var erros = [];
+    window.addEventListener('error', function (ev) {
+        if (ev.message === 'Script error.' && !ev.filename && !ev.lineno) return;
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    function digita(id, v) {
+        var el = document.getElementById(id);
+        el.focus(); el.value = v;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('keyup', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        el.blur();
+    }
+    function atributosCom(s) {
+        var achados = [];
+        Array.prototype.forEach.call(document.querySelectorAll('*'), function (el) {
+            Array.prototype.forEach.call(el.attributes, function (a) {
+                if (a.value.indexOf(s) > -1) achados.push(el.tagName + '[' + a.name + ']');
+            });
+        });
+        return achados;
+    }
+    function armazenado(s) {
+        var onde = [];
+        try { for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); if ((k + localStorage.getItem(k)).indexOf(s) > -1) onde.push('localStorage:' + k); } } catch (e) {}
+        try { for (var j = 0; j < sessionStorage.length; j++) { var k2 = sessionStorage.key(j); if ((k2 + sessionStorage.getItem(k2)).indexOf(s) > -1) onde.push('sessionStorage:' + k2); } } catch (e) {}
+        if (document.cookie.indexOf(s) > -1) onde.push('cookie');
+        return onde;
+    }
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 10s';
+        vered.className = 'fail';
+    }, 10000);
+
+    OZI.ready(async function () {
+        try {
+            var todos = true;
+            await wait(200);
+
+            // ---- a senha digitada, com mostrar/ocultar no meio ----
+            digita('u', 'joaozinho');
+            digita('m', 'joao@empresa.com');
+            digita('p', SENHA);
+            digita('c', SENHA);
+            var toggles = document.querySelectorAll('#f button[type=button], #f [class*="toggle"]');
+            Array.prototype.forEach.call(toggles, function (t) { t.click(); t.click(); });
+            await wait(300);
+
+            todos = check('1 a senha não está em localStorage/sessionStorage/cookie', armazenado(SENHA).length === 0, armazenado(SENHA).join(', ')) && todos;
+            todos = check('2 a senha não está em nenhum atributo do DOM (value, data-*, aria-*, title)',
+                atributosCom(SENHA).length === 0, atributosCom(SENHA).join(', ')) && todos;
+            var logComSenha = logs.filter(function (l) { return l.indexOf(SENHA) > -1; });
+            todos = check('3 a senha não aparece em nenhum log do console (debug ligado)', logComSenha.length === 0,
+                logComSenha.slice(0, 2).join(' | ')) && todos;
+            var evComSenha = eventos.filter(function (e) { return e.indexOf(SENHA) > -1; });
+            todos = check('4 a senha não vai no detail dos eventos do ozi-auth', eventos.length > 0 && evComSenha.length === 0,
+                eventos.length + ' eventos; com senha: ' + evComSenha.length) && todos;
+            todos = check('5 a senha não foi para a URL', location.href.indexOf(SENHA) === -1 && location.href.indexOf(encodeURIComponent(SENHA)) === -1) && todos;
+            todos = check('5b mostrar/ocultar devolve o campo para type=password',
+                document.getElementById('p').type === 'password' && document.getElementById('c').type === 'password') && todos;
+
+            // ---- texto digitado com HTML ----
+            digita('u', '<img src=x onerror="__x(\'USER\')">');
+            digita('m', '"><img src=x onerror="__x(\'MAIL\')">@x.com');
+            digita('p', '<svg onload="__x(\'PASS\')">A1!aaaaaaaaaaaa');
+            await wait(400);
+            var injetado = document.querySelectorAll('#f img, #f svg, #regras img, #regras svg, .ozi-auth-dropdown img, .ozi-auth-dropdown svg');
+            todos = check('6 HTML digitado não vira elemento nas regras/dropdown/resumo', injetado.length === 0, injetado.length + ' elementos') && todos;
+            await wait(600);
+            todos = check('7 nenhuma carga executou', window.__hits.length === 0, JSON.stringify(window.__hits)) && todos;
+            todos = check('zero erros JS', erros.length === 0, erros.join(' | ') || null) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ AUDITORIA auth: PASSOU' : '✗ AUDITORIA auth: FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+        } catch (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+            vered.textContent = '✗ AUDITORIA auth: FALHOU (exceção)';
+            vered.className = 'fail';
+        }
+    });
+</script>
+</body>
+</html>

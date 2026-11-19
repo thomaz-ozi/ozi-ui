@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="csrf-token" content="TOKEN-DA-SESSAO">
+<title>OZI-UI v2 — Auditoria ozi-loaddata + ozi-actions</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 980px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .3rem 0; word-break: break-all; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+</style>
+</head>
+<body>
+<h1>Auditoria <code>ozi-loaddata</code> + <code>ozi-actions</code></h1>
+<p>Critério: (1) o token CSRF da sessão só vai para a <b>mesma origem</b>; (2) texto vindo do
+servidor (mensagem de erro, mensagem de toast) vira texto, não HTML; (3) a página de erro do servidor
+não executa código na página; (4) <code>redirect</code> não aceita <code>javascript:</code>. O HTML
+de sucesso no destino continua HTML (é o contrato do plugin: o servidor manda HTML escapado).</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<div id="destino"></div>
+<iframe id="logErrorLaravelOzi" style="width:300px;height:60px"></iframe>
+<div id="logErrorLaravelOziTitle"></div>
+
+<script>
+    window.__hits = [];
+    window.__x = function (id) { window.__hits.push(id); };
+    var XSS = '<img src=x onerror="__x(\'@\')">';
+    function carga(id) { return XSS.replace('@', id); }
+
+    /* fetch simulado: a URL diz o que responder; guarda headers e corpo de cada pedido */
+    var pedidos = [];
+    window.fetch = function (url, opts) {
+        opts = opts || {};
+        var corpo = {};
+        if (opts.body && typeof opts.body.forEach === 'function') opts.body.forEach(function (v, k) { corpo[k] = v; });
+        pedidos.push({ url: String(url), headers: opts.headers || {}, corpo: corpo });
+        var u = new URL(url, location.href), r;
+        if (u.pathname === '/msg422') {
+            r = new Response(JSON.stringify({ message: 'O nome ' + carga('MSG') + ' é inválido.' }),
+                { status: 422, headers: { 'content-type': 'application/json' } });
+        } else if (u.pathname === '/toast') {
+            r = new Response(JSON.stringify({ actions: [{ type: 'toast', payload: { message: 'Cliente ' + carga('TOAST') + ' salvo' } }] }),
+                { status: 200, headers: { 'content-type': 'application/json' } });
+        } else if (u.pathname === '/toast-html') {
+            r = new Response(JSON.stringify({ actions: [{ type: 'toast', payload: { message: '<b>negrito</b>', html: true } }] }),
+                { status: 200, headers: { 'content-type': 'application/json' } });
+        } else if (u.pathname === '/redirect') {
+            r = new Response(JSON.stringify({ actions: [{ type: 'redirect', payload: { url: 'java\tscript:__x(\'REDIR\')' } }] }),
+                { status: 200, headers: { 'content-type': 'application/json' } });
+        } else if (u.pathname === '/erro500') {
+            r = new Response('<h1>Exception</h1><p>input: ' + carga('IFRAME').replace('__x', 'parent.__x') + '</p>',
+                { status: 500, headers: { 'content-type': 'text/html' } });
+        } else {
+            r = new Response('<p class="ok">ok</p>', { status: 200, headers: { 'content-type': 'text/html' } });
+        }
+        return Promise.resolve(r);
+    };
+</script>
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['loaddata', 'actions'] });
+
+    var erros = [];
+    window.addEventListener('error', function (ev) {
+        if (ev.message === 'Script error.' && !ev.filename && !ev.lineno) return;
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    function ultimo() { return pedidos[pedidos.length - 1]; }
+    function temToken(p) { return !!(p && (p.headers['X-CSRF-TOKEN'] || p.corpo._token)); }
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 12s';
+        vered.className = 'fail';
+    }, 12000);
+
+    OZI.ready(async function () {
+        try {
+            var todos = true;
+            await wait(300);
+
+            // ---- 1. token CSRF só para a mesma origem ----
+            await oziLoadData({ zldUrl: '/salvar', zldDestinyId: 'destino' });
+            todos = check('1a mesma origem (relativa): leva o token (header e corpo)',
+                temToken(ultimo()) && ultimo().headers['X-CSRF-TOKEN'] === 'TOKEN-DA-SESSAO' && ultimo().corpo._token === 'TOKEN-DA-SESSAO',
+                JSON.stringify(ultimo().headers)) && todos;
+            await oziLoadData({ zldUrl: location.origin + '/salvar', zldDestinyId: 'destino' });
+            todos = check('1b mesma origem (absoluta): leva o token', temToken(ultimo())) && todos;
+            await oziLoadData({ zldUrl: 'https://outro-dominio.invalid/coleta', zldDestinyId: 'destino' });
+            todos = check('1c OUTRA origem: não leva o token (nem header, nem corpo)', !temToken(ultimo()),
+                JSON.stringify({ h: ultimo().headers['X-CSRF-TOKEN'] || null, c: ultimo().corpo._token || null })) && todos;
+            await oziLoadData({ zldUrl: '//outro-dominio.invalid/coleta', zldDestinyId: 'destino' });
+            todos = check('1d outra origem sem esquema (//host): não leva o token', !temToken(ultimo())) && todos;
+
+            // ---- 2. mensagem de erro do servidor vira texto ----
+            await oziLoadData({ zldUrl: '/msg422', zldDestinyId: 'destino' });
+            var dest = document.getElementById('destino');
+            todos = check('2 json.message (422) aparece como texto, sem HTML',
+                !dest.querySelector('img') && dest.textContent.indexOf('<img') > -1, dest.innerHTML.slice(0, 160)) && todos;
+
+            // ---- 3. toast do ozi-actions ----
+            await oziLoadData({ zldUrl: '/toast', zldDestinyId: 'destino' });
+            await wait(100);
+            var toasts = document.querySelectorAll('.ozi-toast');
+            var t = toasts[toasts.length - 1];
+            todos = check('3a toast com dado do servidor aparece como texto',
+                !!t && !t.querySelector('img') && t.textContent.indexOf('<img') > -1, t ? t.innerHTML.slice(0, 120) : 'sem toast') && todos;
+            await oziLoadData({ zldUrl: '/toast-html', zldDestinyId: 'destino' });
+            await wait(100);
+            toasts = document.querySelectorAll('.ozi-toast');
+            t = toasts[toasts.length - 1];
+            todos = check('3b toast com html:true (opt-in) renderiza HTML', !!t && !!t.querySelector('b')) && todos;
+
+            // ---- 4. redirect com javascript: disfarçado ----
+            await oziLoadData({ zldUrl: '/redirect', zldDestinyId: 'destino' });
+            await wait(200);
+            todos = check('4 redirect para javascript: é recusado', window.__hits.indexOf('REDIR') === -1) && todos;
+
+            // ---- 5. página de erro do servidor no iframe de debug ----
+            await oziLoadData({ zldUrl: '/erro500', zldDestinyId: 'destino' });
+            await wait(800);
+            var ifr = document.getElementById('logErrorLaravelOzi');
+            var mostrou = (ifr.getAttribute('srcdoc') || '') + ((ifr.contentDocument && ifr.contentDocument.body) ? ifr.contentDocument.body.innerHTML : '');
+            todos = check('5a erro 500: o HTML do servidor ainda aparece no iframe de debug', mostrou.indexOf('Exception') > -1, mostrou.slice(0, 80)) && todos;
+            todos = check('5b erro 500: nada do HTML de erro executa', window.__hits.indexOf('IFRAME') === -1) && todos;
+
+            // ---- 6. nada executou ----
+            await wait(800);
+            todos = check('6 nenhuma carga executou', window.__hits.length === 0, JSON.stringify(window.__hits)) && todos;
+            todos = check('zero erros JS', erros.length === 0, erros.join(' | ') || null) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ AUDITORIA loaddata/actions: PASSOU' : '✗ AUDITORIA loaddata/actions: FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+        } catch (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+            vered.textContent = '✗ AUDITORIA loaddata/actions: FALHOU (exceção)';
+            vered.className = 'fail';
+        }
+    });
+</script>
+</body>
+</html>

@@ -2,8 +2,8 @@
  * ------------------------------------------
  * ozi-actions
  * ------------------------------------------
- * Ver: 2.0.0
- * 2026-07-04
+ * Ver: 2.0.1
+ * 2026-11-19
  *
  * Responsabilidade:
  *   - Executar acoes declarativas retornadas pelo backend Laravel
@@ -21,6 +21,14 @@
  * Expoe: OZI.modules.actions, window.OziActions, window.zldActions (compat)
  *
  * Changelog:
+ *   - v2.0.1: [SEGURANCA] auditoria 2026-11-19 (aceite-loaddata-ataques.html):
+ *       (1) mensagem de toast ia para innerHTML nos adapters default e bootstrap5 —
+ *       "Cliente <nome> salvo" com nome malicioso executava. Agora texto; HTML so com
+ *       `html: true` no payload. toastr (que renderiza HTML) recebe a mensagem escapada.
+ *       UIToast (tema do host) recebe como antes. (2) `redirect` aceitava `javascript:`
+ *       (inclusive disfarcado com TAB); agora so http(s)/relativo, pelo parser de URL.
+ *       `eval` continua existindo por desenho: executa codigo do SEU servidor — nunca
+ *       devolva action `eval` montada com dado de usuario.
  *   - v2.0.0: [V2-F2] Zero jQuery. Adapters de tema (bootstrap5/default/tailwind)
  *       reescritos em DOM nativo (createElement/querySelector/classList/style).
  *       Toast BS5 via document.body.appendChild; toast default troca $.fadeOut por
@@ -98,6 +106,27 @@
         return Array.prototype.slice.call(document.querySelectorAll(selector));
     }
 
+    /* [2.0.1, SEGURANCA] mensagem do servidor costuma levar dado de usuario
+       ("Cliente <nome> salvo"): vira TEXTO. HTML so com `html: true` no payload,
+       opt-in do backend. Antes ia direto para innerHTML (auditoria 2026-11-19). */
+    var _escMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+    function _escape(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return _escMap[c]; }); }
+    function _setMessage(el, p, message) {
+        if (p && p.html === true) el.innerHTML = String(message);
+        else el.textContent = String(message);
+    }
+
+    /* [2.0.1, SEGURANCA] destino de redirect: so http(s) ou relativo, decidido pelo parser
+       de URL do navegador (`java<TAB>script:` passa numa regex e executa no location). */
+    function _isSafeNavUrl(url) {
+        var clean = String(url == null ? '' : url).replace(/[\t\n\r]/g, '').replace(/^[\u0000- ]+|[\u0000- ]+$/g, '');
+        if (!clean) return false;
+        try {
+            var proto = new URL(clean, window.location.href).protocol;
+            return proto === 'http:' || proto === 'https:';
+        } catch (e) { return false; }
+    }
+
 
     // ---------------------------------------------
     // [4] ADAPTERS DE TEMA — BUILT-IN
@@ -122,9 +151,9 @@
                 window.UIToast({ message: message, type: level, delay: delay });
                 return;
             }
-            // toastr
+            // toastr (renderiza HTML: escapa, a nao ser com html:true)
             if (window.toastr && typeof window.toastr[level] === 'function') {
-                window.toastr[level](message);
+                window.toastr[level](p.html === true ? message : _escape(message));
                 return;
             }
             // bootstrap 5 toast nativo
@@ -135,9 +164,10 @@
                 toast.setAttribute('role', 'alert');
                 toast.innerHTML =
                     '<div class="d-flex">' +
-                    '<div class="toast-body">' + message + '</div>' +
+                    '<div class="toast-body"></div>' +
                     '<button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>' +
                     '</div>';
+                _setMessage(toast.querySelector('.toast-body'), p, message);
                 document.body.appendChild(toast);
                 var t = new window.bootstrap.Toast(toast, { delay: delay });
                 t.show();
@@ -207,7 +237,7 @@
             var level   = p.level || 'info';
             var toast   = document.createElement('div');
             toast.className = 'ozi-toast ozi-toast-' + level;
-            toast.innerHTML = message;
+            _setMessage(toast, p, message);
             document.body.appendChild(toast);
             setTimeout(function () {
                 toast.style.transition = 'opacity 300ms';
@@ -267,6 +297,10 @@
             var p      = action.payload || action;
             var url    = p.url || p.href || '';
             if (!url) return;
+            if (!_isSafeNavUrl(url)) {
+                console.warn('[OZI:actions] redirect recusado: so http(s) ou caminho relativo —', String(url).slice(0, 80));
+                return;
+            }
             var target = p.target || '_self';
             if (target === '_blank') {
                 window.open(url, '_blank');

@@ -2,8 +2,8 @@
  * ------------------------------------------
  * ozi-loaddata
  * ------------------------------------------
- * Ver: 5.0.1
- * 2026-11-18
+ * Ver: 5.0.2
+ * 2026-11-19
  *
  * Responsabilidade:
  *   - Orquestra fetch, UI, progress bar, busy state, actions
@@ -24,6 +24,15 @@
  * Expoe: window.oziLoadData, window.__zldConf
  *
  * Changelog:
+ *   - v5.0.2: [SEGURANCA] auditoria de 2026-11-19 (aceite-loaddata-ataques.html):
+ *       - token CSRF (header X-CSRF-TOKEN e _token no corpo) so para a MESMA ORIGEM;
+ *         antes ia para qualquer zldUrl, inclusive de outro dominio ou `//host`.
+ *       - alerta de erro escapa titulo/meta: o json.message do servidor (que repete o
+ *         que o usuario digitou) executava como HTML.
+ *       - pagina de erro no iframe #logErrorLaravelOzi: `sandbox` + srcdoc em vez de
+ *         innerHTML no body de um iframe de mesma origem (onde <img onerror> rodava).
+ *       Sem mudanca: o HTML de SUCESSO continua entrando no destino como HTML — e o
+ *       contrato do plugin; escapar dado de usuario nesse HTML e papel do Blade ({{ }}).
  *   - v5.0.1: 6 correcoes (analise de 2026-11-18), sem mudar a API:
  *       - [SEGURANCA] _token (CSRF) nao vai mais para a URL: modo 'window' e modo 'page'
  *         com GET removem o _token do envio (vinha do meta e de um @csrf no grupo).
@@ -334,6 +343,12 @@
             : String(v == null ? '' : v).trim().replace(/^['"]|['"]$/g, '').replace(/^#/, '');
     }
 
+    /* [5.0.2, SEGURANCA] titulo e meta do alerta sao TEXTO. O titulo pode ser o
+       `json.message` do servidor, que costuma repetir o que o usuario digitou
+       ("O nome <x> e invalido"); antes entrava cru no HTML e executava. */
+    var _zldEscMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+    function _zldEscape(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return _zldEscMap[c]; }); }
+
     function zldBuildAlertHtml(type, title, meta) {
         var isDanger    = String(type || '').toLowerCase() === 'danger';
         var alertClass  = [
@@ -341,10 +356,18 @@
             isDanger ? zldConf.zldAlertDangerClass : zldConf.zldAlertWarningClass
         ].filter(Boolean).join(' ');
 
-        return '<div class="' + alertClass + '">' +
-            '<b>' + (title || '') + '</b>' +
-            (meta ? '<div class="' + zldConf.zldAlertMetaClass + '">' + meta + '</div>' : '') +
+        return '<div class="' + _zldEscape(alertClass) + '">' +
+            '<b>' + _zldEscape(title || '') + '</b>' +
+            (meta ? '<div class="' + _zldEscape(zldConf.zldAlertMetaClass) + '">' + _zldEscape(meta) + '</div>' : '') +
             '</div>';
+    }
+
+    /* [5.0.2, SEGURANCA] o token CSRF da sessao so vai para a MESMA ORIGEM. Antes o
+       header X-CSRF-TOKEN e o _token no corpo seguiam para qualquer zldUrl — uma URL de
+       outro dominio (ou `//host`) recebia o token da sessao do usuario. */
+    function _zldSameOrigin(url) {
+        try { return new URL(String(url || ''), window.location.href).origin === window.location.origin; }
+        catch (e) { return false; }
     }
 
     // [5.0.1] envio em andamento por destino (modo de substituicao): o novo aborta o anterior
@@ -693,7 +716,8 @@
         var csrfMeta    = document.querySelector('meta[name="csrf-token"]');
         var token       = csrfMeta ? csrfMeta.getAttribute('content') : null;
         var sendMethod  = (loadData.zldModeMethod || 'POST').toUpperCase();
-        var tokenInBody = (loadData.zldMode === 'fetch' || loadData.zldMode === 'page') && sendMethod !== 'GET';
+        var tokenInBody = (loadData.zldMode === 'fetch' || loadData.zldMode === 'page') && sendMethod !== 'GET' &&
+                          _zldSameOrigin(loadData.zldUrl);
 
         if (!tokenInBody) {
             formData.delete('_token');
@@ -782,12 +806,16 @@
             renderToDestiny(zldBuildAlertHtml('warning', 'Erro ao carregar.', 'Status ' + status));
 
             var titleEl = document.getElementById('logErrorLaravelOziTitle');
-            if (titleEl) titleEl.innerHTML = status;
+            if (titleEl) titleEl.textContent = String(status);
 
+            /* [5.0.2, SEGURANCA] a pagina de erro do servidor (ex.: debug do Laravel) pode
+               repetir o que o usuario enviou. Antes ia para o body de um iframe de MESMA
+               origem via innerHTML: um <img onerror> ali executava com acesso a pagina.
+               Agora o iframe recebe `sandbox` (sem allow-scripts) e o HTML por srcdoc. */
             var iframe = document.getElementById('logErrorLaravelOzi');
-            if (iframe && iframe.contentDocument) {
-                var body = iframe.contentDocument.querySelector('body');
-                if (body) body.innerHTML = html;
+            if (iframe) {
+                iframe.setAttribute('sandbox', '');
+                iframe.setAttribute('srcdoc', String(html == null ? '' : html));
             }
         };
 
@@ -804,7 +832,7 @@
             };
 
             var csrf = document.querySelector('meta[name="csrf-token"]');
-            if (csrf) headers['X-CSRF-TOKEN'] = csrf.getAttribute('content');
+            if (csrf && _zldSameOrigin(v_url)) headers['X-CSRF-TOKEN'] = csrf.getAttribute('content');
 
             var fetchOptions = method === 'GET'
                 ? { method: method, headers: headers }
