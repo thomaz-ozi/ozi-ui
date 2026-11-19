@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Auditoria ozi-editor-sanitize (ataques XSS)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 980px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .3rem 0; word-break: break-all; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+    #palco { position: absolute; left: -9999px; top: 0; width: 400px; }
+</style>
+</head>
+<body>
+<h1>Auditoria <code>ozi-editor-sanitize</code> <small>(cargas XSS conhecidas)</small></h1>
+<p>Critério: nenhuma carga executa código, nem durante a sanitização (no documento da página,
+um <code>&lt;img&gt;</code> descartado com <code>onerror</code> ainda carrega) nem depois que a saída é
+colocada na página. Toda URL que sobra tem esquema seguro <b>pelo parser de URL do navegador</b>
+(não por regex). Vale para os perfis <code>default</code> e <code>email</code>, e para o editor real
+carregando conteúdo salvo (XSS armazenado).</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+<div id="palco"></div>
+
+<script>
+    /* toda carga chama __x(id): se alguma rodar, o id cai aqui */
+    window.__hits = [];
+    window.__x = function (id) { window.__hits.push(id); };
+</script>
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['editor'], core: { log: true } });
+
+    var erros = [];
+    window.addEventListener('error', function (ev) {
+        var isOpaco = (ev.message === 'Script error.' && !ev.filename && !ev.lineno);
+        if (isOpaco) return;
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+    var TAB = '\t', NL = '\n', C1 = '\u0001';
+    /* [id, html]. O id vai dentro do handler: se executar, aparece em __hits */
+    var CARGAS = [
+        // — executam DURANTE a sanitização se o parse for no documento vivo —
+        ['A1 img data: + onerror',        '<img src="data:image/png;base64,xx" onerror="__x(\'A1\')">'],
+        ['A2 img vbscript: + onerror',    '<img src="vbscript:x" onerror="__x(\'A2\')">'],
+        ['A3 img src vazio + onerror',    '<img src onerror="__x(\'A3\')">'],
+        ['A4 img sem src + onerror',      '<img onerror="__x(\'A4\')">'],
+        ['A5 video desembrulhado',        '<video src="x.mp4" onerror="__x(\'A5\')"></video>'],
+        ['A6 audio desembrulhado',        '<audio src="x.mp3" onerror="__x(\'A6\')"></audio>'],
+        ['A7 details ontoggle',           '<details open ontoggle="__x(\'A7\')">x</details>'],
+        ['A8 svg image onerror',          '<svg><image href="x.png" onerror="__x(\'A8\')"></image></svg>'],
+        ['A9 img dentro de tag removida', '<span><b><img src="https://x.invalid/a.png" onerror="__x(\'A9\')"></b></span>'],
+        ['A10 iframe javascript:',        '<iframe src="javascript:__x(\'A10\')"></iframe>'],
+        ['A11 object data javascript:',   '<object data="javascript:__x(\'A11\')"></object>'],
+        ['A12 math/style mXSS',           '<math><mtext><table><mglyph><style><img src=x onerror="__x(\'A12\')"></style></mglyph></table></mtext></math>'],
+        ['A13 noscript mXSS',             '<noscript><p title="</noscript><img src=x onerror=__x(\'A13\')>"></p></noscript>'],
+        ['A14 template',                  '<template><img src=x onerror="__x(\'A14\')"></template>'],
+        ['A15 marquee onstart',           '<marquee onstart="__x(\'A15\')">x</marquee>'],
+        ['A16 input autofocus',           '<input autofocus onfocus="__x(\'A16\')">'],
+        ['A17 body onload (ignorado)',    '<body onload="__x(\'A17\')">x</body>'],
+        ['A18 a com onclick',             '<a href="https://ok.com" onclick="__x(\'A18\')">ok</a>'],
+        ['A19 p com onmouseover',         '<p onmouseover="__x(\'A19\')">x</p>'],
+        ['A20 img srcset javascript:',    '<img src="https://x.invalid/a.png" srcset="javascript:__x(\'A20\')">'],
+        // — filhos de tag desembrulhada (antes subiam sem limpeza) —
+        ['A21 font com img onerror',      '<font color="red"><img src=x onerror="__x(\'A21\')"></font>'],
+        ['A22 a javascript: com img',     '<a href="javascript:void(0)"><img src=x onerror="__x(\'A22\')"></a>'],
+        ['A23 tag inventada com onclick', '<x-y><p onclick="__x(\'A23\')">z</p></x-y>'],
+        ['A24 desembrulho aninhado',      '<center><font><u><img src=x onerror="__x(\'A24\')"></u></font></center>'],
+        // — URL disfarçada: o navegador limpa, a regex não —
+        ['U1 href com TAB no esquema',    '<a href="java' + TAB + 'script:__x(\'U1\')">x</a>'],
+        ['U2 href com NL no esquema',     '<a href="java' + NL + 'script:__x(\'U2\')">x</a>'],
+        ['U3 href com controle na frente','<a href="' + C1 + 'javascript:__x(\'U3\')">x</a>'],
+        ['U4 href entidade &#9;',         '<a href="java&#9;script:__x(\'U4\')">x</a>'],
+        ['U5 href &colon;',               '<a href="javascript&colon;__x(\'U5\')">x</a>'],
+        ['U6 href maiúsculas',            '<a href="JaVaScRiPt:__x(\'U6\')">x</a>'],
+        ['U7 href espaço na frente',      '<a href="  javascript:__x(\'U7\')">x</a>'],
+        ['U8 href data:text/html',        '<a href="data:text/html,<script>__x(\'U8\')<\/script>">x</a>'],
+        ['U9 img src com TAB',            '<img src="java' + TAB + 'script:__x(\'U9\')">'],
+        ['U10 href vbscript',             '<a href="vbscript:msgbox(1)">x</a>'],
+        // — CSS —
+        ['S1 style background url()',     '<p style="background:url(javascript:__x(\'S1\'))">x</p>'],
+        ['S2 style expression()',         '<span style="color: expression(__x(\'S2\'))">x</span>'],
+        ['S3 email: background-image',    '<div style="width:100px;background-image:url(https://x.invalid/t.png)">x</div>'],
+        ['S4 email: position fixed',      '<div style="position:fixed;top:0;left:0;width:100%;height:100%">x</div>'],
+        ['S5 email: table background',    '<table background="javascript:__x(\'S5\')"><tbody><tr><td>x</td></tr></tbody></table>'],
+        // — atributos —
+        ['T1 a target/rel',               '<a href="https://ok.com" target="_blank">x</a>'],
+        ['T2 form/button formaction',     '<form><button formaction="javascript:__x(\'T2\')">x</button></form>'],
+        ['T3 a xlink em svg',             '<svg><a xlink:href="javascript:__x(\'T3\')"><text>x</text></a></svg>']
+    ];
+
+    var SAFE = { 'http:': true, 'https:': true, 'mailto:': true, 'tel:': true };
+    var DANGER_TAGS = 'script,style,iframe,object,embed,form,input,button,svg,math,template,video,audio,noscript,base,meta,link';
+
+    /* inspeciona a SAÍDA com o parser do navegador, num documento inerte */
+    function inspeciona(out) {
+        var doc = document.implementation.createHTMLDocument('');
+        var box = doc.createElement('div');
+        box.innerHTML = out;
+        var problemas = [];
+        if (box.querySelector(DANGER_TAGS)) problemas.push('tag perigosa: ' + box.querySelector(DANGER_TAGS).tagName);
+        Array.prototype.forEach.call(box.querySelectorAll('*'), function (el) {
+            Array.prototype.forEach.call(el.attributes, function (a) {
+                var n = a.name.toLowerCase();
+                if (n.indexOf('on') === 0) problemas.push('atributo ' + n);
+                if (n === 'srcset' || n === 'formaction' || n === 'background' || n === 'xlink:href') problemas.push('atributo ' + n);
+                if (n === 'href' || n === 'src') {
+                    var proto;
+                    try { proto = new URL(a.value, location.href).protocol; } catch (e) { proto = 'inválida'; }
+                    if (!SAFE[proto]) problemas.push(n + ' com esquema ' + proto);
+                }
+                if (n === 'style' && /url\s*\(|expression|javascript|position\s*:\s*fixed/i.test(a.value)) problemas.push('style: ' + a.value);
+            });
+        });
+        return problemas;
+    }
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 15s';
+        vered.className = 'fail';
+    }, 15000);
+
+    OZI.ready(async function () {
+        try {
+            var todos = true;
+            var mod = window.OziEditorSanitize;
+            var saidas = [];
+
+            // ---- 1. sanitizar (é aqui que o parse no documento vivo dispara eventos) ----
+            ['default', 'email'].forEach(function (perfil) {
+                CARGAS.forEach(function (c) {
+                    var out = mod.sanitizeHtml(c[1], { profile: perfil });
+                    saidas.push({ perfil: perfil, id: c[0], out: out });
+                });
+            });
+            await wait(1500);
+            var durante = window.__hits.slice();
+            todos = check('1 nenhuma carga executa DURANTE a sanitização (parse inerte)',
+                durante.length === 0, 'executaram: ' + JSON.stringify(durante)) && todos;
+
+            // ---- 2. a saída não carrega nada perigoso ----
+            saidas.forEach(function (s) {
+                var p = inspeciona(s.out);
+                todos = check('2 [' + s.perfil + '] ' + s.id, p.length === 0,
+                    p.length ? p.join('; ') + ' | saída: ' + s.out : null) && todos;
+            });
+
+            // ---- 3. a saída, posta na página e clicada, não executa ----
+            window.__hits = [];
+            var palco = document.getElementById('palco');
+            palco.innerHTML = saidas.map(function (s) { return s.out; }).join('');
+            Array.prototype.forEach.call(palco.querySelectorAll('a'), function (a) {
+                a.addEventListener('click', function (e) {
+                    /* não navegar para http(s); javascript: executaria aqui */
+                    var proto = '';
+                    try { proto = new URL(a.getAttribute('href'), location.href).protocol; } catch (er) {}
+                    if (SAFE[proto]) e.preventDefault();
+                });
+                a.click();
+            });
+            await wait(1500);
+            todos = check('3 nenhuma carga executa com a saída na página (e links clicados)',
+                window.__hits.length === 0, 'executaram: ' + JSON.stringify(window.__hits)) && todos;
+            palco.innerHTML = '';
+
+            // ---- 4. idempotência (mXSS): sanitizar a saída não muda nada ----
+            var naoIdem = saidas.filter(function (s) {
+                return mod.sanitizeHtml(s.out, { profile: s.perfil }) !== s.out;
+            }).map(function (s) { return s.perfil + ':' + s.id; });
+            todos = check('4 sanitizar de novo a saída dá o mesmo resultado (sem mXSS)',
+                naoIdem.length === 0, naoIdem.join(', ')) && todos;
+
+            // ---- 5. XSS armazenado: o editor real abrindo conteúdo salvo ----
+            window.__hits = [];
+            var ta = document.createElement('textarea');
+            ta.setAttribute('data-ozi-editor-html', 'auditoria');
+            ta.setAttribute('data-ozi-editor-tools', '[bold]');
+            ta.value = CARGAS.map(function (c) { return c[1]; }).join('');
+            palco.appendChild(ta);
+            OZI.components.editor.init(palco);
+            await wait(1500);
+            todos = check('5 editor abrindo conteúdo salvo malicioso não executa nada',
+                window.__hits.length === 0, 'executaram: ' + JSON.stringify(window.__hits)) && todos;
+            var ed = OZI.components.editor.get('auditoria');
+            todos = check('5b o conteúdo do editor também passa na inspeção',
+                ed && inspeciona(ed.content.innerHTML).length === 0,
+                ed ? inspeciona(ed.content.innerHTML).join('; ') : 'editor não montou') && todos;
+
+            // ---- 6. isSafeUrl usa o parser do navegador ----
+            var urls = ['java' + TAB + 'script:x', 'java' + NL + 'script:x', C1 + 'javascript:x', ' javascript:x', 'JAVASCRIPT:x', 'data:text/html,x', 'vbscript:x'];
+            var aceitas = urls.filter(function (u) { return mod.isSafeUrl(u); });
+            todos = check('6 isSafeUrl recusa esquema disfarçado', aceitas.length === 0, JSON.stringify(aceitas)) && todos;
+            todos = check('6b isSafeUrl aceita o legítimo (https, relativo, âncora, mailto, tel)',
+                ['https://a.com', '/x', '#y', 'mailto:a@b.c', 'tel:+55', 'pagina.html', ''].every(mod.isSafeUrl)) && todos;
+
+            todos = check('zero erros JS', erros.length === 0, erros.join(' | ') || null) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ AUDITORIA sanitize: PASSOU' : '✗ AUDITORIA sanitize: FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+        } catch (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+            vered.textContent = '✗ AUDITORIA sanitize: FALHOU (exceção)';
+            vered.className = 'fail';
+        }
+    });
+</script>
+</body>
+</html>

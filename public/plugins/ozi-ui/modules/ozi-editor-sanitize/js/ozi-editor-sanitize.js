@@ -2,8 +2,8 @@
  * ------------------------------------------
  * ozi-editor-sanitize
  * ------------------------------------------
- * Ver: 1.2.1
- * 2026-11-18
+ * Ver: 1.2.2
+ * 2026-11-19
  *
  * Responsabilidade:
  *   - Motor puro de sanitizacao de HTML para o ozi-editor (whitelist de tags,
@@ -29,6 +29,19 @@
  * Expoe: OZI.modules.editorSanitize, window.OziEditorSanitize (compat)
  *
  * Changelog:
+ *   - v1.2.2: [SEGURANCA] 3 falhas de XSS achadas na auditoria de 2026-11-19
+ *       (aceite-editor-sanitize-ataques.html, 40+ cargas nos dois perfis):
+ *       (1) parse no documento da pagina: <img>/<video>/<audio>/<details>
+ *       descartados ainda carregavam e o onerror/ontoggle rodava DURANTE a
+ *       sanitizacao — XSS armazenado ao abrir no editor conteudo gravado por
+ *       POST direto. Agora o parse e num documento inerte (_inertDoc).
+ *       (2) tag desembrulhada subia os filhos SEM limpar: `<font><img src=x
+ *       onerror=…></font>` saia com o onerror intacto. Agora _unwrap limpa o
+ *       fragmento antes; SVG/MathML (namespace != XHTML) sempre desembrulha.
+ *       (3) _isSafeUrl por regex aceitava `java<TAB>script:` e
+ *       `\x01javascript:` como relativos; agora o esquema vem de `new URL()`.
+ *       Saida para conteudo legitimo: identica (todos os aceites anteriores
+ *       passam sem mudanca). Afeta todas as versoes desde a 1.0.0.
  *   - v1.2.1: [FIX] relatorio `removed` acusava perda falsa em Chrome mais
  *       novo: ao expandir `border:none` ele grava os longhands de
  *       border-image com o valor padrao explicito (none/100%/1/0/stretch),
@@ -143,12 +156,29 @@
        ATENCAO: URL vazia retorna true (nao tem esquema perigoso) — quem
        tambem exige um src/href nao-vazio precisa checar isso separado, ver
        o branch de IMG em _cleanNode. */
+    /* [1.2.2, SEGURANCA] o esquema vem do PARSER DE URL do navegador, nao de
+       regex. O navegador descarta TAB/quebra de linha em qualquer ponto e
+       caracteres de controle nas pontas: `java<TAB>script:x` e `\x01javascript:x`
+       passavam na regex como "relativo" e executavam no clique (auditoria de
+       2026-11-19, cargas U1-U4/U9). Relativo resolve contra uma base https fixa,
+       entao continua aceito; URL que o parser recusa e recusada aqui tambem. */
+    var _URL_BASE = 'https://ozi-ui.invalid/';
+
     function _isSafeUrl(url) {
-        url = _trim(url);
-        if (!url) return true;
-        var m = /^([a-zA-Z][a-zA-Z0-9+.\-]*:)/.exec(url);
-        if (!m) return true;
-        return !!SAFE_URL_SCHEMES[m[1].toLowerCase()];
+        var raw = String(url == null ? '' : url);
+        /* mesma limpeza que o parser faz, para o teste de "vazio" bater com ele */
+        var clean = raw.replace(/[\t\n\r]/g, '').replace(/^[\u0000- ]+|[\u0000- ]+$/g, '');
+        if (!clean) return true;
+        var proto;
+        try {
+            proto = new URL(clean, _URL_BASE).protocol;
+        } catch (e) {
+            /* sem URL nativo (muito antigo) cai na regex sobre o texto ja limpo */
+            var m = /^([a-zA-Z][a-zA-Z0-9+.\-]*:)/.exec(clean);
+            if (typeof URL === 'function') return false;
+            proto = m ? m[1] : 'https:';
+        }
+        return !!SAFE_URL_SCHEMES[String(proto).toLowerCase()];
     }
 
     /* valida a FORMA do valor de cor (hex #rgb/#rrggbb ou rgb(r,g,b) com
@@ -373,14 +403,43 @@
         return { profile: PROFILES[p] ? p : 'default', removed: [], renamed: [] };
     }
 
+    /* [1.2.2, SEGURANCA] documento INERTE para o parse. Antes era
+       `document.createElement('div').innerHTML = html` no documento da pagina:
+       la, um <img>/<video>/<audio> comeca a carregar mesmo fora da tela, e o
+       que era descartado (src inseguro, tag desembrulhada) saia com o
+       `onerror` ainda nele — o handler rodava. Era XSS armazenado: conteudo
+       gravado no banco por POST direto executava em quem abria o registro no
+       editor (auditoria de 2026-11-19, cargas A1-A8). Um documento criado por
+       createHTMLDocument nao tem contexto de navegacao: nao carrega recurso
+       nem roda handler. Mesmo principio do DOMPurify. */
+    function _inertDoc() {
+        return (document.implementation && typeof document.implementation.createHTMLDocument === 'function')
+            ? document.implementation.createHTMLDocument('')
+            : document;
+    }
+
     function _sanitize(html, opts) {
         var ctx = _makeCtx(opts);
         if (!html) return { html: '', removed: [], renamed: [], profile: ctx.profile };
-        var tmp = document.createElement('div');
+        var tmp = _inertDoc().createElement('div');
         tmp.innerHTML = html;
         _cleanNode(tmp, ctx);
         return { html: tmp.innerHTML, removed: ctx.removed, renamed: ctx.renamed, profile: ctx.profile };
     }
+
+    /* [1.2.2, SEGURANCA] desembrulhar = trocar o elemento pelos filhos, e os
+       filhos sao LIMPOS antes de subir. Antes subiam sem passar pela limpeza (o
+       laco do pai ja tinha a lista de filhos dele): `<font><img onerror></font>`,
+       `<svg><image onerror></svg>` e `<a href="javascript:"><img onerror></a>`
+       entregavam o onerror intacto (cargas A8, A12, T3). */
+    function _unwrap(node, child, ctx) {
+        var frag = child.ownerDocument.createDocumentFragment();
+        while (child.firstChild) frag.appendChild(child.firstChild);
+        _cleanNode(frag, ctx);
+        node.replaceChild(frag, child);
+    }
+
+    var XHTML_NS = 'http://www.w3.org/1999/xhtml';
 
     function _sanitizeHtml(html, opts) {
         return _sanitize(html, opts).html;
@@ -454,11 +513,19 @@
                 node.removeChild(child); return;
             }
 
+            /* [1.2.2] elemento SVG/MathML nunca e mantido, mesmo com nome de tag
+               permitida (`<svg><a>` tem tagName "a"): troca de namespace e a
+               origem classica de mXSS. Desembrulha (com limpeza dos filhos). */
+            if (child.namespaceURI && child.namespaceURI !== XHTML_NS) {
+                _note(ctx, 'unwrap', tag);
+                _unwrap(node, child, ctx); return;
+            }
+
             /* perfil email: DIV fica DIV (cai no caminho normal abaixo) */
             var replaceTo = (isEmail && tag === 'DIV') ? null : TAG_REPLACE[tag];
             if (replaceTo) {
                 var beforeRep = _snapshot(child);
-                var rep = document.createElement(replaceTo);
+                var rep = child.ownerDocument.createElement(replaceTo);
                 while (child.firstChild) rep.appendChild(child.firstChild);
                 var align = child.style && child.style.textAlign;
                 if (align && ['left','center','right','justify'].indexOf(align) > -1) rep.style.textAlign = align;
@@ -470,9 +537,7 @@
 
             if (!ALLOWED_TAGS[tag] && !(isEmail && tag === 'DIV')) {
                 _note(ctx, 'unwrap', tag);
-                var frag = document.createDocumentFragment();
-                while (child.firstChild) frag.appendChild(child.firstChild);
-                node.replaceChild(frag, child); return;
+                _unwrap(node, child, ctx); return;
             }
 
             /* <a> com href fora da whitelist de esquemas (ou vazio) vira
@@ -481,9 +546,7 @@
                 var hrefCandidate = child.getAttribute('href') || '';
                 if (!_trim(hrefCandidate) || !_isSafeUrl(hrefCandidate)) {
                     _note(ctx, 'unwrap', tag, 'href');
-                    var fragA = document.createDocumentFragment();
-                    while (child.firstChild) fragA.appendChild(child.firstChild);
-                    node.replaceChild(fragA, child);
+                    _unwrap(node, child, ctx);
                     return;
                 }
             }
