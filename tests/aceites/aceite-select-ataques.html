@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Auditoria ozi-select (injeção de conteúdo)</title>
+<link rel="stylesheet" href="../plugins/ozi-ui/components/ozi-select/css/ozi-select.css">
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 980px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .3rem 0; word-break: break-all; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+    .fixtures > div { margin: .5rem 0; max-width: 360px; }
+</style>
+</head>
+<body>
+<h1>Auditoria <code>ozi-select</code> <small>(injeção de conteúdo nas opções)</small></h1>
+<p>Critério: dado que vem do servidor ou do usuário (label, subLabel, value, image, nome de ação,
+resposta da busca remota, texto digitado no "criar opção") <b>nunca</b> vira HTML nem executa código,
+na lista, no valor escolhido, nas tags, no rótulo fixo e nos inputs hidden. Só o opt-in
+<code>labelHtml</code>/<code>optionHtml</code> renderiza HTML, porque o desenvolvedor pediu.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<script>
+    window.__hits = [];
+    window.__x = function (id) { window.__hits.push(id); };
+    var P = {
+        img:   '<img src=x onerror="__x(\'IMG\')">',
+        svg:   '<svg onload="__x(\'SVG\')"></svg>',
+        quote: '"><img src=x onerror="__x(\'QUOTE\')">',
+        js:    'javascript:__x(\'JS\')'
+    };
+    var MAL = [
+        { value: 'v1' + P.quote, label: 'L1 ' + P.img, subLabel: 'S1 ' + P.svg, image: P.js,
+          actions: [{ name: 'A1 ' + P.img, icon: 'x" onmouseover="__x(\'ICON\')', ariaLabel: P.quote }] },
+        { value: 'v2', label: P.quote, subLabel: P.img, image: 'x" onerror="__x(\'IMGATTR\')' },
+        { value: 'v3', label: '<script>__x("SCRIPT")<\/script>', group: P.img }
+    ];
+</script>
+
+<div class="fixtures">
+    <div data-ozi-select="single" data-ozi-select-image-dimension="20px,20px"></div>
+    <script type="application/json" data-ozi-select-options="single"></script>
+
+    <div data-ozi-select="multi" data-ozi-select-multiple></div>
+    <script type="application/json" data-ozi-select-options="multi"></script>
+
+    <div data-ozi-select="rotulo" data-ozi-select-multiple data-ozi-select-multiple-label="Itens"
+         data-ozi-select-multiple-count data-ozi-select-check></div>
+    <script type="application/json" data-ozi-select-options="rotulo"></script>
+
+    <div data-ozi-select="criar" data-ozi-select-creatable
+         data-ozi-select-creatable-label="Adicionar «{query}»" data-ozi-select-creatable-sublabel="novo: {query}"></div>
+    <script type="application/json" data-ozi-select-options="criar">[{"value":"a","label":"A"}]</script>
+
+    <div data-ozi-select="remoto" data-ozi-select-multiple
+         data-ozi-select-zld-url="/fake/remoto" data-ozi-select-zld-min="1" data-ozi-select-zld-delay="0"></div>
+    <script type="application/json" data-ozi-select-options="remoto">[]</script>
+
+    <div data-ozi-select="optin"></div>
+    <script type="application/json" data-ozi-select-options="optin">[{"value":"h","label":"<b>negrito</b>","labelHtml":true}]</script>
+</div>
+
+<script>
+    /* opções maliciosas entram como JSON de verdade, como viriam do servidor */
+    ['single', 'multi', 'rotulo'].forEach(function (k) {
+        document.querySelector('[data-ozi-select-options="' + k + '"]').textContent = JSON.stringify(MAL);
+    });
+    var _origFetch = window.fetch;
+    window.fetch = function (url) {
+        if (String(url).indexOf('/fake/remoto') === 0) {
+            return Promise.resolve({ ok: true, json: function () { return Promise.resolve({ options: MAL }); } });
+        }
+        return _origFetch.apply(window, arguments);
+    };
+</script>
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['select'], lang: 'pt-BR' });
+
+    var erros = [];
+    window.addEventListener('error', function (ev) {
+        var isOpaco = (ev.message === 'Script error.' && !ev.filename && !ev.lineno);
+        if (isOpaco) return;
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    function root(k) { return document.querySelector('[data-ozi-select="' + k + '"]'); }
+    function abre(k) { root(k).querySelector('.ozi-select-control').dispatchEvent(new MouseEvent('click', { bubbles: true })); }
+    function digita(k, t) {
+        abre(k);
+        var i = root(k).querySelector('.ozi-select-search');
+        i.value = t; i.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    /* elementos que NÃO deveriam existir dentro do widget (vindos dos dados) */
+    function injetados(el) {
+        var bad = [];
+        Array.prototype.forEach.call(el.querySelectorAll('script, svg, b, img'), function (n) {
+            /* <img> legítima do componente: as de imagem de opção, com classe própria */
+            if (n.tagName === 'IMG' && /ozi-select-(option|tag|value)-image/.test(n.className)) return;
+            bad.push(n.tagName + (n.outerHTML ? ' ' + n.outerHTML.slice(0, 60) : ''));
+        });
+        Array.prototype.forEach.call(el.querySelectorAll('*'), function (n) {
+            Array.prototype.forEach.call(n.attributes, function (a) {
+                if (/^on/i.test(a.name)) bad.push('atributo ' + a.name + ' em ' + n.tagName);
+            });
+        });
+        return bad;
+    }
+    function textoTem(el, s) { return (el.textContent || '').indexOf(s) > -1; }
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 12s';
+        vered.className = 'fail';
+    }, 12000);
+
+    OZI.ready(async function () {
+        try {
+            var todos = true, sel = OZI.components.select;
+            await wait(200);
+
+            // ---- 1. lista: label/subLabel/grupo/ação viram texto ----
+            abre('single'); await wait(150);
+            var lista = root('single');
+            todos = check('1a lista: nenhum elemento ou atributo on* injetado pelos dados',
+                injetados(lista).length === 0, injetados(lista).join(' | ')) && todos;
+            todos = check('1b lista: o texto malicioso aparece como texto (escapado, não sumiu)',
+                textoTem(lista, 'L1 <img') && textoTem(lista, 'S1 <svg') && textoTem(lista, '<script>')) && todos;
+
+            // ---- 2. valor escolhido (single), tags (multiple), rótulo fixo ----
+            sel.value('single', 'v1' + P.quote);
+            sel.value('multi', ['v1' + P.quote, 'v2', 'v3']);
+            sel.value('rotulo', ['v1' + P.quote, 'v2']);
+            await wait(150);
+            ['single', 'multi', 'rotulo'].forEach(function (k) {
+                var r = root(k);
+                todos = check('2 [' + k + '] valor/tags sem injeção', injetados(r).length === 0, injetados(r).join(' | ')) && todos;
+            });
+            todos = check('2b [multi] tag mostra o texto literal', textoTem(root('multi'), '">')) && todos;
+
+            // ---- 3. inputs hidden: o valor vai literal, sem quebrar o atributo ----
+            var hid = document.querySelectorAll('[data-ozi-select-generated-hidden="single"] input[type=hidden]');
+            var vals = Array.prototype.map.call(hid, function (i) { return i.value; });
+            todos = check('3 input hidden guarda o value literal (aspas não fecham o atributo)',
+                vals.indexOf('v1' + P.quote) > -1, JSON.stringify(vals)) && todos;
+
+            // ---- 4. criar opção: texto digitado escapado e literal ----
+            var consultas = [P.img, "x$'y", 'a$&b', 'c$`d', '{query}'];
+            for (var i = 0; i < consultas.length; i++) {
+                digita('criar', consultas[i]); await wait(120);
+                var op = root('criar').querySelector('.ozi-select-option-creatable');
+                var lab = op && op.querySelector('.ozi-select-option-label');
+                var sub = op && op.querySelector('.ozi-select-option-sublabel');
+                todos = check('4 criar opção com ' + JSON.stringify(consultas[i]) + ': texto literal, sem HTML',
+                    !!lab && lab.textContent === 'Adicionar «' + consultas[i] + '»' &&
+                    !!sub && sub.textContent === 'novo: ' + consultas[i] && injetados(op).length === 0,
+                    lab ? JSON.stringify(lab.textContent) + ' / ' + (sub ? JSON.stringify(sub.textContent) : '-') : 'sem opção') && todos;
+            }
+
+            // ---- 5. busca remota com resposta maliciosa ----
+            /* "v" casa com o value das 3 opções (a lista remota também é filtrada pelo texto) */
+            digita('remoto', 'v'); await wait(400);
+            var rem = root('remoto');
+            todos = check('5 busca remota: resposta maliciosa vira texto',
+                rem.querySelectorAll('.ozi-select-option').length >= 3 && injetados(rem).length === 0,
+                injetados(rem).join(' | ') || (rem.querySelectorAll('.ozi-select-option').length + ' opções')) && todos;
+
+            // ---- 6. o opt-in continua funcionando (é o desenvolvedor que pediu HTML) ----
+            sel.value('optin', 'h'); await wait(100);
+            todos = check('6 labelHtml:true (opt-in) renderiza o HTML do desenvolvedor',
+                !!root('optin').querySelector('.ozi-select-value b')) && todos;
+
+            // ---- 7. nada executou ----
+            await wait(1200);
+            todos = check('7 nenhuma carga executou', window.__hits.length === 0, JSON.stringify(window.__hits)) && todos;
+            todos = check('zero erros JS', erros.length === 0, erros.join(' | ') || null) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ AUDITORIA select: PASSOU' : '✗ AUDITORIA select: FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+        } catch (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+            vered.textContent = '✗ AUDITORIA select: FALHOU (exceção)';
+            vered.className = 'fail';
+        }
+    });
+</script>
+</body>
+</html>

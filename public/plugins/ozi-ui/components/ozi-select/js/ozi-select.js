@@ -2,10 +2,14 @@
  * ------------------------------------------
  * ozi-select
  * ------------------------------------------
- * Ver: 6.6.2
- * 2026-11-17
+ * Ver: 6.6.3
+ * 2026-11-19
  *
  * Changelog:
+ *   - v6.6.3: [FIX] "criar opção": `$'`, `$&` e `$\`` digitados viravam padrões do
+ *       String.replace e o rótulo mostrava pedaços do modelo; agora split/join (e troca todas as
+ *       ocorrências de {query}). Achado na auditoria de injeção (aceite-select-ataques.html), que
+ *       confirmou o resto: dado de opção, resposta remota e texto digitado nunca viram HTML.
  *   - v6.6.2: [FIX] só CSS (ozi-select.css v1.6.2): o mínimo do rótulo estreito dependia da
  *       fonte (contador cortado no Linux); o vão do ícone encolhe junto.
  *   - v6.6.1: [FIX] só CSS (ozi-select.css v1.6.1), este arquivo não mudou de lógica: rótulo
@@ -1080,11 +1084,14 @@
 
         var texts = _make('div', { class: 'ozi-select-option-texts' });
         var label = _make('div', { class: 'ozi-select-option-label' });
-        label.innerHTML = labelTpl.replace('{query}', safe);
+        /* [6.6.3] split/join e não String.replace(str, str): com replace, `$'`, `$&` e `$\``
+           digitados viravam padrões especiais e o rótulo mostrava pedaços do modelo
+           ("a$&b" → "a{query}amp;b"). Também troca TODAS as ocorrências de {query}. */
+        label.innerHTML = labelTpl.split('{query}').join(safe);
         texts.appendChild(label);
         if (subTpl) {
             var sub = _make('div', { class: 'ozi-select-option-sublabel' });
-            sub.innerHTML = subTpl.replace('{query}', safe);
+            sub.innerHTML = subTpl.split('{query}').join(safe);
             texts.appendChild(sub);
         }
         content.appendChild(texts); option.appendChild(content);
