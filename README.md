@@ -10,6 +10,12 @@
 Selects, a rich-text editor, form validation, AJAX forms and more, declared with `data-ozi-*`
 attributes. No JavaScript to write, no build step, no jQuery, and zero runtime dependencies.
 
+**Who it is for:** Blade or Livewire apps without a Tailwind-native UI kit (Bootstrap 5 or your own
+CSS), and teams leaving jQuery and Select2 behind without a rewrite. **Not for:** 100% Tailwind
+projects already using Flux, TallStackUI, MaryUI or Filament (they fit that case better), or Vue,
+React and Inertia. Planning a large project? Read
+[Adopting in a large project](https://oziui.com/en/docs/adoption).
+
 <p align="center">
   <img src="https://raw.githubusercontent.com/thomaz-ozi/ozi-ui/master/.github/art/select.png" alt="ozi-select: single and grouped multiple select with search" width="760">
 </p>
@@ -207,7 +213,8 @@ Every push runs on GitHub Actions:
 
 - **PHPUnit** (via Orchestra Testbench) on PHP 8.2–8.4 × Laravel 10–13: asset resolution, Blade
   directives, the asset route, and `ozi:check`
-- **49 browser acceptance pages** in headless Chrome, one or more per plugin
+- **54 browser acceptance pages** in headless Chrome, one or more per plugin, including attack pages
+  with real XSS payloads for the editor sanitizer, select, loaddata, actions and auth
 
 See [`tests/aceites/README.md`](tests/aceites/README.md) to run them locally.
 
@@ -221,6 +228,9 @@ Full documentation: **[oziui.com/en/docs](https://oziui.com/en/docs/introduction
 - [Contributing](CONTRIBUTING.md)
 - [Security policy](SECURITY.md)
 - [Upgrading from v1](https://oziui.com/en/docs/migration)
+- [Adopting in a large project](https://oziui.com/en/docs/adoption): maintainer, versioning, tests,
+  what happens if the project stops
+- [llms.txt](https://oziui.com/llms.txt): a short summary of the package for AI coding agents
 
 ## Background
 
