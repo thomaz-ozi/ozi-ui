@@ -1,6 +1,6 @@
 /**
  * themes/tailwind/overrides.css
- * Versão: 1.0.2
+ * Versão: 1.0.3
  *
  * Ajustes dos componentes OZI-UI para integração com Tailwind CSS.
  * Faz os componentes OZI se comportarem visualmente como controles de
@@ -17,6 +17,11 @@
  * oziConf({ theme })).
  *
  * Changelog:
+ *   - v1.0.3: [FIX] Borda de inválido no select, no autocomplete e na moldura do editor. O
+ *     classmap.js marca com a utility `border-red-500`, mas a ordem documentada é framework →
+ *     componentes → tema: a borda declarada aqui e no CSS do componente (mesma especificidade,
+ *     carregada depois do Tailwind) vencia a utility e a borda ficava cinza. Só o conteúdo do
+ *     editor já ficava vermelho. Aceite: teste-v2/aceite-temas-layout-invalido.html.
  *   - v1.0.2: [FIX] White-label: o ring de foco é um color-mix 40% da --ozi-color-primary
  *     (antes rgba(59,130,246,.4) fixo; igual com a primária padrão).
  *   - v1.0.1: [FIX] .ozi-select-control não recebe mais display:block (só o
@@ -171,21 +176,33 @@
 
 /* ─── VALIDAÇÃO — integração com Tailwind ───────────────── */
 
-/* Select/autocomplete: markInvalid() aplica `.ozi-invalid` no controle
- * (coberto por default/overrides.css — border-color: var(--ozi-invalid-border)).
- * Reforço opcional do ring vermelho no foco de um controle inválido: */
-.ozi-select-control.ozi-invalid:focus,
-.ozi-autocomplete-input.ozi-invalid:focus {
-    box-shadow: 0 0 0 3px rgba(239, 68, 68, .35);   /* ring red-500 */
-}
-
-/* Editor: _markInvalid() aplica classMap.invalid no .ozi-editor-wrap.
- * No tema Tailwind o classMap.invalid inclui `border-red-500`; propagamos a
- * cor de erro para content/toolbar. Também cobrimos o marcador semântico
- * `.ozi-invalid` (temas que o usem). */
+/* [FIX v1.0.3] O classMap.invalid deste tema é `border-red-500 text-red-600 ring-1 ring-red-500`,
+ * aplicado no controle do select, no input do autocomplete e na raiz `.ozi-editor-wrap`.
+ * A utility sozinha perde para a borda declarada acima e no CSS do componente (mesma
+ * especificidade, carregados depois do Tailwind), então a cor de erro é reafirmada aqui.
+ * Também cobrimos o marcador semântico `.ozi-invalid` (quem troca o classMap). */
+.ozi-select-control.border-red-500,
+.ozi-select-control.ozi-invalid,
+.ozi-autocomplete-input.border-red-500,
+.ozi-autocomplete-input.ozi-invalid,
+.ozi-editor-wrap.border-red-500,
+.ozi-editor-wrap.ozi-invalid,
 .ozi-editor-wrap.border-red-500 .ozi-editor-content,
+.ozi-editor-wrap.border-red-500 .ozi-editor-source,
 .ozi-editor-wrap.border-red-500 .ozi-editor-toolbar,
 .ozi-editor-wrap.ozi-invalid .ozi-editor-content,
+.ozi-editor-wrap.ozi-invalid .ozi-editor-source,
 .ozi-editor-wrap.ozi-invalid .ozi-editor-toolbar {
     border-color: var(--ozi-color-danger);
+}
+
+/* ring vermelho no foco de um controle inválido (focus:ring-red-500) */
+.ozi-select-control.border-red-500:focus,
+.ozi-select-control.border-red-500:focus-within,
+.ozi-select-control.ozi-invalid:focus,
+.ozi-select-control.ozi-invalid:focus-within,
+.ozi-autocomplete-input.border-red-500:focus,
+.ozi-autocomplete-input.ozi-invalid:focus {
+    border-color: var(--ozi-color-danger);
+    box-shadow:   0 0 0 3px color-mix(in srgb, var(--ozi-color-danger) 35%, transparent);   /* ring red-500 */
 }

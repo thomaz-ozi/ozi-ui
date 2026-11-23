@@ -1,6 +1,6 @@
 /**
  * themes/bootstrap5/overrides.css
- * Versão: 1.0.2
+ * Versão: 1.0.3
  *
  * Ajustes de componentes OZI-UI para integração com Bootstrap 5.
  * Garante que os componentes OZI se comportem visualmente
@@ -9,6 +9,16 @@
  * Carregue APÓS bootstrap.css e default/overrides.css.
  *
  * Changelog:
+ *   - v1.0.3: [FIX] .ozi-select-control não recebe mais display:block (só o
+ *     .ozi-autocomplete-input, que é um <input>): o block vencia o display:flex do componente
+ *     e empilhava ícone/valor/ações (96px de altura em vez de ~42). Mesmo defeito que a
+ *     tailwind corrigiu na 1.0.1.
+ *     [FIX] Borda de inválido: o classmap.js deste tema marca `is-invalid`, e nenhuma regra
+ *     pintava `.ozi-select-control.is-invalid`, `.ozi-autocomplete-input.is-invalid` nem
+ *     `.ozi-editor-wrap.is-invalid` (o Bootstrap só pinta `.is-invalid` junto de
+ *     `.form-control`/`.form-select`). As regras antigas eram mortas: `.ozi-select-root.ozi-invalid`
+ *     (a classe vai no controle, não na raiz) e `.ozi-editor-root` (classe que nunca existiu;
+ *     a raiz do editor é `.ozi-editor-wrap`). Aceite: teste-v2/aceite-temas-layout-invalido.html.
  *   - v1.0.2: [FIX] White-label: o anel de foco é um color-mix 25% da --ozi-color-primary (ligada
  *     ao --bs-primary no tokens.css); antes rgba(13,110,253,.25) fixo, igual com o azul padrão.
  *   - v1.0.1: [FIX-P5] Seletores atualizados para v1.0.0.
@@ -24,7 +34,6 @@
 /* oziSelect visual alinhado ao .form-control do BS5 */
 .ozi-select-control,
 .ozi-autocomplete-input {
-    display:          block;
     width:            100%;
     padding:          .375rem .75rem;
     font-size:        var(--ozi-font-size-base);
@@ -37,6 +46,11 @@
     transition:       border-color .15s ease-in-out, box-shadow .15s ease-in-out;
     cursor:           pointer;
 }
+
+/* [FIX v1.0.3] Só o input real do autocomplete recebe display:block.
+   O .ozi-select-control mantém o display:flex do componente (ícone + valor +
+   ações lado a lado); o block anterior empilhava esse layout. */
+.ozi-autocomplete-input { display: block; }
 
 .ozi-select-control:focus,
 .ozi-autocomplete-input:focus {
@@ -178,18 +192,35 @@
 
 /* ─── VALIDAÇÃO — integração com BS5 ────────────────── */
 
-/* [FIX-P5] Seletores atualizados para v1.0.0:
- * - 'ozi-select-root' substitui 'ozi-select-wrap' (v0.x)
- * - 'ozi-editor-root' substitui 'ozi-editor-wrap' (v0.x)
- * - Removido [data-ozi-select].is-invalid — markInvalid() aplica
- *   .ozi-invalid no .ozi-select-control diretamente (coberto em ozi-select.css)
+/* [FIX v1.0.3] O classmap.js deste tema troca `ozi-invalid` por `is-invalid`:
+ * - ozi-select e ozi-autocomplete marcam o próprio controle/input;
+ * - ozi-editor marca a raiz `.ozi-editor-wrap` (conteúdo e barra têm borda própria aqui).
+ * `.ozi-invalid` fica junto para quem troca o classMap e mantém o marcador neutro.
+ * Ficam no fim do arquivo: mesma especificidade do :focus acima, vence pela ordem.
  */
 
-.ozi-select-root.ozi-invalid .ozi-select-control {
+.ozi-select-control.is-invalid,
+.ozi-select-control.ozi-invalid,
+.ozi-autocomplete-input.is-invalid,
+.ozi-autocomplete-input.ozi-invalid,
+.ozi-editor-wrap.is-invalid,
+.ozi-editor-wrap.ozi-invalid,
+.ozi-editor-wrap.is-invalid .ozi-editor-content,
+.ozi-editor-wrap.is-invalid .ozi-editor-source,
+.ozi-editor-wrap.is-invalid .ozi-editor-toolbar,
+.ozi-editor-wrap.ozi-invalid .ozi-editor-content,
+.ozi-editor-wrap.ozi-invalid .ozi-editor-source,
+.ozi-editor-wrap.ozi-invalid .ozi-editor-toolbar {
     border-color: var(--ozi-color-danger);
 }
 
-.ozi-editor-root.ozi-invalid .ozi-editor-content,
-.ozi-editor-root.ozi-invalid .ozi-editor-toolbar {
+/* anel de foco vermelho no inválido, como o .form-control.is-invalid:focus do BS5 */
+.ozi-select-control.is-invalid:focus,
+.ozi-select-control.ozi-invalid:focus,
+.ozi-autocomplete-input.is-invalid:focus,
+.ozi-autocomplete-input.ozi-invalid:focus,
+.ozi-editor-wrap.is-invalid .ozi-editor-content:focus,
+.ozi-editor-wrap.ozi-invalid .ozi-editor-content:focus {
     border-color: var(--ozi-color-danger);
+    box-shadow:   0 0 0 .25rem color-mix(in srgb, var(--ozi-color-danger) 25%, transparent);
 }
