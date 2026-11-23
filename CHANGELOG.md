@@ -6,6 +6,24 @@ listed where they changed.
 
 ## [Unreleased]
 
+## [2.10.4] — 2026-11-23
+
+### Fixed
+- **`bootstrap5` theme: the `ozi-select` control no longer stacks.** `themes/bootstrap5/overrides.css`
+  set `display: block` on `.ozi-select-control`, which overrode the component's flex layout and put the
+  icon, the value and the actions on separate lines (96px tall instead of ~42px). Only the
+  autocomplete `<input>` keeps `display: block`. The `tailwind` theme had the same defect, fixed in
+  its 1.0.1.
+- **`bootstrap5` theme: the invalid border now shows.** The theme's class map marks invalid fields with
+  `is-invalid`, but no rule styled it on `ozi-select`, `ozi-autocomplete` or `ozi-editor` (Bootstrap only
+  styles `.is-invalid` together with `.form-control`/`.form-select`). The border turns red, with a red
+  focus ring.
+- **`tailwind` theme: the invalid border now shows.** The class map marks invalid fields with the
+  `border-red-500` utility, which lost to the component and theme borders loaded after Tailwind.
+  `ozi-select`, `ozi-autocomplete` and the `ozi-editor` frame stayed gray.
+- CSS only, in the theme files you link by hand (`themes/bootstrap5/overrides.css` 1.0.3,
+  `themes/tailwind/overrides.css` 1.0.3). With `@oziStyles` alone, nothing changes.
+
 ## [2.10.3] — 2026-11-23
 
 ### Fixed
@@ -412,7 +430,8 @@ Version 2: every plugin rewritten in plain JavaScript, no jQuery, zero runtime d
 A v1 compatibility ramp (jQuery shims, `zld*` aliases) is included and opt-in. `ozi-copy` and
 `ozi-paste` were discontinued. See the [migration guide](https://oziui.com/en/docs/migration).
 
-[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.3...HEAD
+[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.4...HEAD
+[2.10.4]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.3...v2.10.4
 [2.10.3]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.2...v2.10.3
 [2.10.2]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.1...v2.10.2
 [2.10.1]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.0...v2.10.1
