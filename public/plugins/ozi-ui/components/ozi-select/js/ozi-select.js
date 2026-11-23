@@ -2,10 +2,19 @@
  * ------------------------------------------
  * ozi-select
  * ------------------------------------------
- * Ver: 6.6.4
+ * Ver: 6.6.5
  * 2026-11-22
  *
  * Changelog:
+ *   - v6.6.5: [FIX] No `data-ozi-select-multiple-group`, o cabeçalho do grupo nunca ganhava
+ *       `is-group-selected`/`is-group-partial` (o CSS existe desde sempre): o estado era calculado
+ *       procurando o grupo em this.list, esvaziada pelo renderOptions() e ainda sem ele. Agora vem
+ *       de block.options (as opções do grupo que passaram na busca). Achado numa revisão externa.
+ *       [A11Y] `aria-activedescendant` no combobox e no campo de busca aponta para a opção
+ *       destacada pelas setas (cada opção ganha `id`); o campo de busca ganha `aria-controls` e
+ *       `aria-autocomplete="list"`. Antes o leitor de tela não anunciava a navegação.
+ *       [PERF] renderOptions() monta a lista num DocumentFragment e insere uma vez só.
+ *       Envio do formulário, eventos e API iguais.
  *   - v6.6.4: [SEGURANCA] busca remota: o token CSRF da sessão (header X-CSRF-TOKEN e _token
  *       no corpo) ia para QUALQUER `zld-url`, inclusive outro domínio ou `//host`. Agora só
  *       para a mesma origem da página (mesmo critério do ozi-loaddata 5.0.2). Busca para a
@@ -553,7 +562,10 @@
             class:        'ozi-select-search',
             name:         this.key + '_select_search',
             placeholder:  this.searchPlaceholder,
-            autocomplete: 'off'
+            autocomplete: 'off',
+            // v6.6.5: é aqui que fica o foco ao navegar; aponta para a mesma lista do combobox
+            'aria-controls':     listId,
+            'aria-autocomplete': 'list'
         });
 
         if (this.searchIcon) {
@@ -796,6 +808,7 @@
         this.lastSearchQuery = '';
         this.renderOptions('');
         Array.prototype.forEach.call(this.list.querySelectorAll('.ozi-select-option'), function (o) { o.classList.remove('is-highlighted'); });
+        this.setActiveDescendant(null);
         if (focusControl && !this.isDisabled()) this.control.focus();
         this.emit('ozi:close');
     };
@@ -1000,8 +1013,15 @@
     };
 
     OziSelect.prototype.renderGroupBlock = function (block) {
-        var groupSelected = this.groupToggleEnabled && this.mode === 'multiple' ? this.isGroupFullySelected(block.group, true) : false;
-        var groupPartial  = this.groupToggleEnabled && this.mode === 'multiple' ? this.isGroupPartiallySelected(block.group, true) : false;
+        // v6.6.5: o estado vem de block.options (as opções do grupo que passaram na busca). Antes
+        // era isGroupFullySelected(grupo, true), que procura o grupo em this.list — esvaziada pelo
+        // renderOptions() e ainda sem este grupo — e respondia sempre "nenhum".
+        var self = this, groupSelected = false, groupPartial = false;
+        if (this.groupToggleEnabled && this.mode === 'multiple' && block.options.length) {
+            var marked = block.options.filter(function (item) { return self.isSelected(item.value); }).length;
+            groupSelected = marked === block.options.length;
+            groupPartial  = marked > 0 && marked < block.options.length;
+        }
         var group = _make('div', { class: 'ozi-select-group', 'data-ozi-group': block.group });
         var label = _make('div', {
             class: 'ozi-select-group-label' + (groupSelected ? ' is-group-selected' : '') + (groupPartial ? ' is-group-partial' : ''),
@@ -1010,7 +1030,7 @@
         label.textContent = block.group;
         if (this.groupToggleEnabled && this.mode === 'multiple' && !this.isDisabled()) label.setAttribute('data-ozi-group-toggle', block.group);
         group.appendChild(label);
-        var self = this; block.options.forEach(function (item) { group.appendChild(self.buildOption(item)); });
+        block.options.forEach(function (item) { group.appendChild(self.buildOption(item)); });
         return group;
     };
 
@@ -1048,6 +1068,7 @@
     OziSelect.prototype.renderOptions = function (query) {
         var self = this; var rawQuery = String(query || '').trim(); var normalizedQuery = this.normalize(query || '');
         this.list.innerHTML = '';
+        this.setActiveDescendant(null);   // as opções antigas (e os ids delas) acabaram de sair
         var filtered = this.options.filter(function (item) {
             if (!normalizedQuery) return true;
             return self.normalize(self.flattenSearchText(item)).indexOf(normalizedQuery) !== -1;
@@ -1066,11 +1087,14 @@
             this.list.appendChild(empty);
             return;
         }
+        // v6.6.5: monta tudo fora do DOM e insere uma vez só (lista longa = um reflow, não um por opção)
+        var frag   = document.createDocumentFragment();
         var blocks = this.buildRenderBlocks(filtered);
         blocks.forEach(function (block) {
-            if (block.type === 'option') { self.list.appendChild(self.buildOption(block.item)); return; }
-            if (block.type === 'group')  { self.list.appendChild(self.renderGroupBlock(block)); }
+            if (block.type === 'option') { frag.appendChild(self.buildOption(block.item)); return; }
+            if (block.type === 'group')  { frag.appendChild(self.renderGroupBlock(block)); }
         });
+        this.list.appendChild(frag);
     };
 
     /* ─── creatable (v6.3.0) ────────────────────────────────────────── */
@@ -1083,6 +1107,7 @@
 
         var option = _make('div', {
             class:        'ozi-select-option ozi-select-option-creatable',
+            id:           this.nextOptionId(),
             'data-value': text,
             'data-ozi-select-creatable-option': 'true',
             role:         'option',
@@ -1147,6 +1172,7 @@
         var selected = this.isSelected(item.value);
         var option = _make('div', {
             class:         'ozi-select-option' + (selected ? ' is-selected' : ''),
+            id:            this.nextOptionId(),   // v6.6.5: alvo do aria-activedescendant
             'data-value':  item.value,
             role:          'option',
             'aria-selected': selected ? 'true' : 'false'
@@ -1334,6 +1360,22 @@
     OziSelect.prototype.highlightOption = function (opt) {
         Array.prototype.forEach.call(this.list.querySelectorAll('.ozi-select-option'), function (o) { o.classList.remove('is-highlighted'); });
         if (opt) { opt.classList.add('is-highlighted'); this.ensureOptionVisible(opt); }
+        this.setActiveDescendant(opt && opt.id ? opt.id : null);
+    };
+
+    // v6.6.5: o leitor de tela anuncia a opção destacada pelas setas. Vai no combobox e no campo de
+    // busca (é nele que o foco fica com a lista aberta); sem destaque, o atributo sai.
+    OziSelect.prototype.setActiveDescendant = function (id) {
+        [this.control, this.search].forEach(function (el) {
+            if (!el) return;
+            if (id) el.setAttribute('aria-activedescendant', id);
+            else    el.removeAttribute('aria-activedescendant');
+        });
+    };
+
+    OziSelect.prototype.nextOptionId = function () {
+        this._optionSeq = (this._optionSeq || 0) + 1;
+        return this.uid + '-opt-' + this._optionSeq;
     };
 
     OziSelect.prototype.highlightFirstVisible = function () { var v = this.getVisibleOptions(); this.highlightOption(v[0] || null); };

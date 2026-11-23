@@ -6,6 +6,18 @@ listed where they changed.
 
 ## [Unreleased]
 
+## [2.10.2] — 2026-11-22
+
+### Fixed
+- `ozi-select` 6.6.5: with `data-ozi-select-multiple-group`, the group header now shows the
+  `is-group-selected` (all checked) and `is-group-partial` (some checked) states. They were computed
+  against a list that had just been cleared, so they never appeared.
+
+### Changed
+- `ozi-select` 6.6.5: screen readers now announce arrow-key navigation (`aria-activedescendant` on the
+  combobox and the search field, an `id` on each option). The option list is built in a
+  `DocumentFragment` and inserted once. Form submission, events and the JS API are unchanged.
+
 ## [2.10.1] — 2026-11-22
 
 ### Fixed
@@ -372,7 +384,8 @@ Version 2: every plugin rewritten in plain JavaScript, no jQuery, zero runtime d
 A v1 compatibility ramp (jQuery shims, `zld*` aliases) is included and opt-in. `ozi-copy` and
 `ozi-paste` were discontinued. See the [migration guide](https://oziui.com/en/docs/migration).
 
-[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.1...HEAD
+[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.2...HEAD
+[2.10.2]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.1...v2.10.2
 [2.10.1]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.0...v2.10.1
 [2.10.0]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.9.6...v2.10.0
 [2.9.6]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.9.5...v2.9.6

@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite ozi-select 6.6.5 (estado do grupo + aria-activedescendant)</title>
+<link rel="stylesheet" href="../plugins/ozi-ui/components/ozi-select/css/ozi-select.css">
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 980px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .3rem 0; word-break: break-all; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+    .fixtures > div { margin: .5rem 0; max-width: 360px; }
+</style>
+</head>
+<body>
+<h1>Aceite <code>ozi-select</code> 6.6.5 <small>(estado do cabeçalho do grupo; navegação para leitor de tela)</small></h1>
+<p>Critério: (1) no <code>data-ozi-select-multiple-group</code>, o cabeçalho do grupo ganha
+<code>is-group-selected</code> com todas as opções visíveis marcadas e <code>is-group-partial</code> com só
+parte, também quando a busca filtra o grupo. Até a 6.6.4 o estado era calculado procurando o grupo numa
+lista que acabara de ser esvaziada, e nunca aparecia. (2) A opção destacada pelas setas é anunciada:
+cada opção tem <code>id</code> e o combobox aponta para ela em <code>aria-activedescendant</code>.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<div class="fixtures">
+    <div data-ozi-select="grp" data-ozi-select-multiple-group></div>
+    <script type="application/json" data-ozi-select-options="grp">[
+        {"value":"a","label":"Ana","group":"Vendas"},
+        {"value":"b","label":"Bruno","group":"Vendas"},
+        {"value":"c","label":"Carla","group":"Suporte"},
+        {"value":"d","label":"Davi","group":"Suporte"}
+    ]</script>
+
+    <div data-ozi-select="nav"></div>
+    <script type="application/json" data-ozi-select-options="nav">[
+        {"value":"1","label":"Um"},{"value":"2","label":"Dois"},{"value":"3","label":"Três"}
+    ]</script>
+</div>
+
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['select'], lang: 'pt-BR' });
+
+    var erros = [];
+    window.addEventListener('error', function (ev) {
+        if (ev.message === 'Script error.' && !ev.filename && !ev.lineno) return;
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    function root(k) { return document.querySelector('[data-ozi-select="' + k + '"]'); }
+    function abre(k) { root(k).querySelector('.ozi-select-control').dispatchEvent(new MouseEvent('click', { bubbles: true })); }
+    function busca(k, t) { var i = root(k).querySelector('.ozi-select-search'); i.value = t; i.dispatchEvent(new Event('input', { bubbles: true })); }
+    function tecla(el, key) { el.dispatchEvent(new KeyboardEvent('keydown', { key: key, bubbles: true, cancelable: true })); }
+    function estado(grupo) {
+        var l = root('grp').querySelector('.ozi-select-group[data-ozi-group="' + grupo + '"] .ozi-select-group-label');
+        if (!l) return 'sem cabeçalho';
+        return l.classList.contains('is-group-selected') ? 'cheio' : l.classList.contains('is-group-partial') ? 'parcial' : 'vazio';
+    }
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 12s';
+        vered.className = 'fail';
+    }, 12000);
+
+    OZI.ready(async function () {
+        try {
+            var todos = true, sel = OZI.components.select;
+            await wait(200);
+
+            // ---- 1. estado do cabeçalho do grupo ----
+            abre('grp'); await wait(100);
+            todos = check('1a nada marcado: Vendas vazio, Suporte vazio', estado('Vendas') === 'vazio' && estado('Suporte') === 'vazio',
+                estado('Vendas') + ' / ' + estado('Suporte')) && todos;
+
+            sel.value('grp', ['a']); busca('grp', ''); await wait(80);
+            todos = check('1b só Ana: Vendas parcial', estado('Vendas') === 'parcial', estado('Vendas')) && todos;
+
+            sel.value('grp', ['a', 'b', 'c']); busca('grp', ''); await wait(80);
+            todos = check('1c Ana e Bruno: Vendas cheio; Carla: Suporte parcial',
+                estado('Vendas') === 'cheio' && estado('Suporte') === 'parcial', estado('Vendas') + ' / ' + estado('Suporte')) && todos;
+
+            /* busca filtra o grupo: "carla" deixa só Carla visível em Suporte, e ela está marcada */
+            busca('grp', 'carla'); await wait(80);
+            todos = check('1d com a busca "carla", Suporte conta só as visíveis: cheio', estado('Suporte') === 'cheio', estado('Suporte')) && todos;
+
+            /* clique no cabeçalho continua funcionando e o estado acompanha */
+            busca('grp', ''); await wait(50);
+            root('grp').querySelector('[data-ozi-group-toggle="Suporte"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+            await wait(80);
+            var v = sel.value('grp');
+            todos = check('1e clique no cabeçalho de Suporte (parcial) marca o grupo todo, e ele fica cheio',
+                Array.isArray(v) && v.indexOf('d') > -1 && estado('Suporte') === 'cheio', JSON.stringify(v) + ' / ' + estado('Suporte')) && todos;
+
+            // ---- 2. aria-activedescendant ----
+            abre('nav'); await wait(100);
+            var ctrl = root('nav').querySelector('.ozi-select-control');
+            var srch = root('nav').querySelector('.ozi-select-search');
+            tecla(srch, 'ArrowDown'); await wait(50);
+            var h = root('nav').querySelector('.ozi-select-option.is-highlighted');
+            var ad = ctrl.getAttribute('aria-activedescendant');
+            todos = check('2a cada opção tem id único', (function () {
+                var ids = Array.prototype.map.call(root('nav').querySelectorAll('.ozi-select-option'), function (o) { return o.id; });
+                return ids.length === 3 && ids.every(Boolean) && new Set(ids).size === 3 && !document.querySelector('[data-ozi-select="grp"] #' + ids[0]);
+            })()) && todos;
+            todos = check('2b seta para baixo: o combobox aponta para a opção destacada',
+                !!h && !!ad && ad === h.id && document.getElementById(ad) === h, JSON.stringify({ ad: ad, h: h && h.id })) && todos;
+            tecla(srch, 'ArrowDown'); await wait(50);
+            var h2 = root('nav').querySelector('.ozi-select-option.is-highlighted');
+            todos = check('2c segunda seta: acompanha', !!h2 && h2 !== h && ctrl.getAttribute('aria-activedescendant') === h2.id) && todos;
+            todos = check('2d o campo de busca (onde está o foco) aponta para a mesma opção',
+                srch.getAttribute('aria-activedescendant') === h2.id && srch.getAttribute('aria-controls') === ctrl.getAttribute('aria-controls'),
+                JSON.stringify({ s: srch.getAttribute('aria-activedescendant'), c: srch.getAttribute('aria-controls') })) && todos;
+            tecla(srch, 'Escape'); await wait(80);
+            todos = check('2e fechou: aria-activedescendant sai', !ctrl.hasAttribute('aria-activedescendant') && !srch.hasAttribute('aria-activedescendant'),
+                ctrl.getAttribute('aria-activedescendant')) && todos;
+
+            todos = check('zero erros JS', erros.length === 0, erros.join(' | ') || null) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ ACEITE select 6.6.5: PASSOU' : '✗ ACEITE select 6.6.5: FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+        } catch (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+            vered.textContent = '✗ ACEITE select 6.6.5: FALHOU (exceção)';
+            vered.className = 'fail';
+        }
+    });
+</script>
+</body>
+</html>
