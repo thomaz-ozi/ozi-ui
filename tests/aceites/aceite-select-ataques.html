@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="csrf-token" content="TOKEN-DA-SESSAO">
 <title>OZI-UI v2 — Auditoria ozi-select (injeção de conteúdo)</title>
 <link rel="stylesheet" href="../plugins/ozi-ui/components/ozi-select/css/ozi-select.css">
 <style>
@@ -18,7 +19,8 @@
 <p>Critério: dado que vem do servidor ou do usuário (label, subLabel, value, image, nome de ação,
 resposta da busca remota, texto digitado no "criar opção") <b>nunca</b> vira HTML nem executa código,
 na lista, no valor escolhido, nas tags, no rótulo fixo e nos inputs hidden. Só o opt-in
-<code>labelHtml</code>/<code>optionHtml</code> renderiza HTML, porque o desenvolvedor pediu.</p>
+<code>labelHtml</code>/<code>optionHtml</code> renderiza HTML, porque o desenvolvedor pediu.
+E o token CSRF da sessão, na busca remota, só vai para a <b>mesma origem</b> (6.6.4).</p>
 <ul id="resultados"></ul>
 <div id="veredito">aguardando boot…</div>
 
@@ -58,6 +60,19 @@ na lista, no valor escolhido, nas tags, no rótulo fixo e nos inputs hidden. Só
          data-ozi-select-zld-url="/fake/remoto" data-ozi-select-zld-min="1" data-ozi-select-zld-delay="0"></div>
     <script type="application/json" data-ozi-select-options="remoto">[]</script>
 
+    <!-- token CSRF: mesma origem (relativa, absoluta) x outra origem (POST, //host, GET) -->
+    <div data-ozi-select="csrfabs" data-ozi-select-zld-min="1" data-ozi-select-zld-delay="0"></div>
+    <script type="application/json" data-ozi-select-options="csrfabs">[]</script>
+    <div data-ozi-select="csrffora" data-ozi-select-zld-url="https://outro-dominio.invalid/coleta"
+         data-ozi-select-zld-min="1" data-ozi-select-zld-delay="0"></div>
+    <script type="application/json" data-ozi-select-options="csrffora">[]</script>
+    <div data-ozi-select="csrfsemesq" data-ozi-select-zld-url="//outro-dominio.invalid/coleta"
+         data-ozi-select-zld-min="1" data-ozi-select-zld-delay="0"></div>
+    <script type="application/json" data-ozi-select-options="csrfsemesq">[]</script>
+    <div data-ozi-select="csrfget" data-ozi-select-zld-url="https://outro-dominio.invalid/coleta"
+         data-ozi-select-zld-method="GET" data-ozi-select-zld-min="1" data-ozi-select-zld-delay="0"></div>
+    <script type="application/json" data-ozi-select-options="csrfget">[]</script>
+
     <div data-ozi-select="optin"></div>
     <script type="application/json" data-ozi-select-options="optin">[{"value":"h","label":"<b>negrito</b>","labelHtml":true}]</script>
 </div>
@@ -67,10 +82,17 @@ na lista, no valor escolhido, nas tags, no rótulo fixo e nos inputs hidden. Só
     ['single', 'multi', 'rotulo'].forEach(function (k) {
         document.querySelector('[data-ozi-select-options="' + k + '"]').textContent = JSON.stringify(MAL);
     });
+    document.querySelector('[data-ozi-select="csrfabs"]').setAttribute('data-ozi-select-zld-url', location.origin + '/fake/abs');
     var _origFetch = window.fetch;
-    window.fetch = function (url) {
-        if (String(url).indexOf('/fake/remoto') === 0) {
-            return Promise.resolve({ ok: true, json: function () { return Promise.resolve({ options: MAL }); } });
+    window.__pedidos = [];
+    window.fetch = function (url, cfg) {
+        var u = String(url);
+        if (u.indexOf('/fake/') === 0 || u.indexOf(location.origin + '/fake/') === 0 || u.indexOf('outro-dominio.invalid') > -1) {
+            var corpo = cfg && cfg.body instanceof FormData ? cfg.body : null;
+            window.__pedidos.push({ url: u, header: (cfg && cfg.headers && cfg.headers['X-CSRF-TOKEN']) || null,
+                corpo: corpo ? corpo.get('_token') : null });
+            var opts = u.indexOf('/fake/remoto') > -1 ? MAL : [];
+            return Promise.resolve({ ok: true, json: function () { return Promise.resolve({ options: opts }); } });
         }
         return _origFetch.apply(window, arguments);
     };
@@ -174,6 +196,28 @@ na lista, no valor escolhido, nas tags, no rótulo fixo e nos inputs hidden. Só
             todos = check('5 busca remota: resposta maliciosa vira texto',
                 rem.querySelectorAll('.ozi-select-option').length >= 3 && injetados(rem).length === 0,
                 injetados(rem).join(' | ') || (rem.querySelectorAll('.ozi-select-option').length + ' opções')) && todos;
+
+            // ---- 5b. token CSRF da sessão só para a mesma origem (6.6.4) ----
+            function pedidoDe(trecho) {
+                return window.__pedidos.filter(function (p) { return p.url.indexOf(trecho) > -1; }).pop() || null;
+            }
+            var pRel = pedidoDe('/fake/remoto');
+            todos = check('5b mesma origem (relativa): leva o token (header e corpo)',
+                !!pRel && pRel.header === 'TOKEN-DA-SESSAO' && pRel.corpo === 'TOKEN-DA-SESSAO', JSON.stringify(pRel)) && todos;
+            digita('csrfabs', 'x'); await wait(200);
+            var pAbs = pedidoDe(location.origin + '/fake/abs');
+            todos = check('5c mesma origem (absoluta): leva o token',
+                !!pAbs && pAbs.header === 'TOKEN-DA-SESSAO' && pAbs.corpo === 'TOKEN-DA-SESSAO', JSON.stringify(pAbs)) && todos;
+            var foras = [['csrffora', 'https://outro-dominio.invalid', 'OUTRA origem (POST)'],
+                         ['csrfsemesq', '//outro-dominio.invalid', 'outra origem sem esquema (//host)'],
+                         ['csrfget', 'https://outro-dominio.invalid/coleta?', 'OUTRA origem (GET)']];
+            for (var f = 0; f < foras.length; f++) {
+                var antes = window.__pedidos.length;
+                digita(foras[f][0], 'x'); await wait(200);
+                var pF = window.__pedidos.length > antes ? window.__pedidos[window.__pedidos.length - 1] : null;
+                todos = check('5' + 'def'[f] + ' ' + foras[f][2] + ': não leva o token (nem header, nem corpo)',
+                    !!pF && !pF.header && !pF.corpo && pF.url.indexOf('_token') < 0, JSON.stringify(pF)) && todos;
+            }
 
             // ---- 6. o opt-in continua funcionando (é o desenvolvedor que pediu HTML) ----
             sel.value('optin', 'h'); await wait(100);

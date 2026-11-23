@@ -2,10 +2,14 @@
  * ------------------------------------------
  * ozi-select
  * ------------------------------------------
- * Ver: 6.6.3
- * 2026-11-19
+ * Ver: 6.6.4
+ * 2026-11-22
  *
  * Changelog:
+ *   - v6.6.4: [SEGURANCA] busca remota: o token CSRF da sessão (header X-CSRF-TOKEN e _token
+ *       no corpo) ia para QUALQUER `zld-url`, inclusive outro domínio ou `//host`. Agora só
+ *       para a mesma origem da página (mesmo critério do ozi-loaddata 5.0.2). Busca para a
+ *       própria aplicação não muda. Caso novo na aceite-select-ataques.html (falha na 6.6.3).
  *   - v6.6.3: [FIX] "criar opção": `$'`, `$&` e `$\`` digitados viravam padrões do
  *       String.replace e o rótulo mostrava pedaços do modelo; agora split/join (e troca todas as
  *       ocorrências de {query}). Achado na auditoria de injeção (aceite-select-ataques.html), que
@@ -224,6 +228,13 @@
     // o template em si segue livre, como os demais labels/subLabels do componente.
     function _escapeHtml(value) {
         return String(value == null ? '' : value).replace(/[&<>"']/g, function (c) { return _htmlEscapeMap[c]; });
+    }
+
+    // [6.6.4, SEGURANCA] mesma origem da pagina? (relativa, absoluta ou `//host`). URL
+    // invalida = outra origem: sem token.
+    function _sameOrigin(url) {
+        try { return new URL(String(url || ''), window.location.href).origin === window.location.origin; }
+        catch (e) { return false; }
     }
 
     /* ─── construtor ───────────────────────────────────────────────── */
@@ -1516,13 +1527,15 @@
         this.remoteAbortController = typeof AbortController !== 'undefined' ? new AbortController() : null;
         this.setRemoteLoading(true);
 
-        var csrfMeta = document.querySelector('meta[name="csrf-token"]');
+        // [6.6.4, SEGURANCA] o token CSRF da sessao so vai para a MESMA ORIGEM (mesmo
+        // criterio do ozi-loaddata 5.0.2). Antes ia para qualquer zld-url.
+        var url      = this.zldUrl;
+        var csrfMeta = _sameOrigin(url) ? document.querySelector('meta[name="csrf-token"]') : null;
         var csrf     = csrfMeta ? csrfMeta.getAttribute('content') : null;
         var method   = this.zldMethod === 'GET' ? 'GET' : 'POST';
         var headers  = { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' };
         if (csrf) headers['X-CSRF-TOKEN'] = csrf;
 
-        var url = this.zldUrl;
         var fetchConfig = { method: method, headers: headers };
         if (this.remoteAbortController) fetchConfig.signal = this.remoteAbortController.signal;
 

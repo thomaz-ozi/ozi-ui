@@ -6,6 +6,14 @@ listed where they changed.
 
 ## [Unreleased]
 
+## [2.9.5] — 2026-11-22
+
+### Security
+- `ozi-select` 6.6.4: remote search sent the CSRF token (`X-CSRF-TOKEN` header and `_token` in the
+  body) to any `data-ozi-select-zld-url`, including another domain or `//host`, handing the session
+  token to third parties. It is now sent only to the same origin, with the same rule as
+  `ozi-loaddata` 5.0.2. Searches against your own application are unchanged.
+
 ## [2.9.4] — 2026-11-19
 
 Closes the security audit of `ozi-select`, `ozi-loaddata`, `ozi-actions` and `ozi-auth`. Each one
@@ -319,7 +327,9 @@ Version 2: every plugin rewritten in plain JavaScript, no jQuery, zero runtime d
 A v1 compatibility ramp (jQuery shims, `zld*` aliases) is included and opt-in. `ozi-copy` and
 `ozi-paste` were discontinued. See the [migration guide](https://oziui.com/en/docs/migration).
 
-[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.9.3...HEAD
+[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.9.5...HEAD
+[2.9.5]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.9.4...v2.9.5
+[2.9.4]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.9.3...v2.9.4
 [2.9.3]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.9.2...v2.9.3
 [2.9.2]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.9.1...v2.9.2
 [2.9.1]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.9.0...v2.9.1
