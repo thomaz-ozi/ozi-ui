@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite ozi-select 6.6.5 (submit-mode="value" e submit-extra)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 980px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .3rem 0; word-break: break-all; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+</style>
+</head>
+<body>
+<h1>Aceite <code>ozi-select</code> 6.6.5 <small>(o que vai no formulário: <code>submit-mode</code> e <code>submit-extra</code>)</small></h1>
+<p>Critério: o padrão (<code>value-label</code>) segue enviando todo campo simples da opção, como sempre.
+<code>data-ozi-select-submit-mode="value"</code> envia só o valor; com <code>data-ozi-select-submit-extra</code>,
+o valor e os campos pedidos (sem diferença de maiúscula: <code>sublabel</code> casa com <code>subLabel</code>).
+Até a 6.6.4 o <code>value</code> e o <code>submit-extra</code> não tinham efeito nenhum.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<form id="f">
+    <div data-ozi-select="padrao"></div>
+    <div data-ozi-select="soValor" data-ozi-select-submit-mode="value"></div>
+    <div data-ozi-select="comExtra" data-ozi-select-submit-mode="value" data-ozi-select-submit-extra="sublabel, image, naoExiste"></div>
+    <div data-ozi-select="multi" data-ozi-select-multiple data-ozi-select-submit-mode="value" data-ozi-select-submit-extra="cidade"></div>
+</form>
+<script>
+    var OPCOES = [
+        { value: '7', label: 'Ana', subLabel: 'Vendas', image: '/a.png', cidade: 'Santos', extra: { nivel: 1 } },
+        { value: '9', label: 'Bruno', subLabel: 'Suporte', image: '/b.png', cidade: 'Niterói' }
+    ];
+    ['padrao', 'soValor', 'comExtra', 'multi'].forEach(function (k) {
+        var s = document.createElement('script');
+        s.type = 'application/json'; s.setAttribute('data-ozi-select-options', k);
+        s.textContent = JSON.stringify(OPCOES);
+        document.getElementById('f').appendChild(s);
+    });
+</script>
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['select'], lang: 'pt-BR' });
+
+    var erros = [];
+    window.addEventListener('error', function (ev) {
+        if (ev.message === 'Script error.' && !ev.filename && !ev.lineno) return;
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    /* o que o formulário enviaria por este select (nome=valor, na ordem) */
+    function enviado(k) {
+        return Array.prototype.map.call(
+            document.querySelectorAll('[data-ozi-select-generated-hidden="' + k + '"] input[type=hidden]'),
+            function (i) { return i.name + '=' + i.value; });
+    }
+    function igual(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 12s';
+        vered.className = 'fail';
+    }, 12000);
+
+    OZI.ready(async function () {
+        try {
+            var todos = true, sel = OZI.components.select;
+            await wait(200);
+            ['padrao', 'soValor', 'comExtra'].forEach(function (k) { sel.value(k, '7'); });
+            sel.value('multi', ['7', '9']);
+            await wait(100);
+
+            var p = enviado('padrao');
+            todos = check('1 padrão (value-label): todo campo simples, como sempre (objeto fica de fora)',
+                igual(p, ['padrao=7', 'padrao_label=Ana', 'padrao_subLabel=Vendas', 'padrao_image=/a.png', 'padrao_cidade=Santos']),
+                JSON.stringify(p)) && todos;
+
+            var v = enviado('soValor');
+            todos = check('2 submit-mode="value": só o valor', igual(v, ['soValor=7']), JSON.stringify(v)) && todos;
+
+            var e = enviado('comExtra');
+            todos = check('3 value + submit-extra="sublabel, image, naoExiste": valor + os pedidos (sem diferença de maiúscula; o que não existe não sai)',
+                igual(e, ['comExtra=7', 'comExtra_subLabel=Vendas', 'comExtra_image=/a.png']), JSON.stringify(e)) && todos;
+
+            var m = enviado('multi');
+            todos = check('4 multiple + value + extra: um valor e um extra por item, com []',
+                igual(m, ['multi[]=7', 'multi_cidade[]=Santos', 'multi[]=9', 'multi_cidade[]=Niterói']), JSON.stringify(m)) && todos;
+
+            /* o que o servidor recebe de verdade */
+            var fd = new FormData(document.getElementById('f'));
+            todos = check('5 FormData do formulário confere (soValor sem _label)',
+                fd.get('soValor') === '7' && fd.get('soValor_label') === null && fd.getAll('multi[]').join(',') === '7,9',
+                JSON.stringify({ v: fd.get('soValor'), l: fd.get('soValor_label'), m: fd.getAll('multi[]') })) && todos;
+
+            todos = check('zero erros JS', erros.length === 0, erros.join(' | ') || null) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ ACEITE select submit-mode: PASSOU' : '✗ ACEITE select submit-mode: FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+        } catch (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+            vered.textContent = '✗ ACEITE select submit-mode: FALHOU (exceção)';
+            vered.className = 'fail';
+        }
+    });
+</script>
+</body>
+</html>

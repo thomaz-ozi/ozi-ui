@@ -14,7 +14,11 @@
  *       destacada pelas setas (cada opção ganha `id`); o campo de busca ganha `aria-controls` e
  *       `aria-autocomplete="list"`. Antes o leitor de tela não anunciava a navegação.
  *       [PERF] renderOptions() monta a lista num DocumentFragment e insere uma vez só.
- *       Envio do formulário, eventos e API iguais.
+ *       [FIX] `data-ozi-select-submit-mode="value"` passa a enviar só o valor, e o
+ *       `data-ozi-select-submit-extra` acrescenta os campos pedidos (sem diferença de maiúscula).
+ *       Os dois eram lidos e ignorados desde a v1.0.0. O padrão (`value-label`) NÃO muda: segue
+ *       enviando todo campo escalar da opção (`nome`, `nome_label`, `nome_<campo>`), porque apps
+ *       leem esses campos hoje. Eventos e API iguais.
  *   - v6.6.4: [SEGURANCA] busca remota: o token CSRF da sessão (header X-CSRF-TOKEN e _token
  *       no corpo) ia para QUALQUER `zld-url`, inclusive outro domínio ou `//host`. Agora só
  *       para a mesma origem da página (mesmo critério do ozi-loaddata 5.0.2). Busca para a
@@ -953,7 +957,17 @@
     OziSelect.prototype.appendStructuredHiddenInputs = function (item) {
         if (!item || typeof item !== 'object') return;
         var self = this;
+        // v6.6.5: submit-mode="value" envia só o value + os campos do submit-extra (que vêm em
+        // minúsculas do parseSubmitExtraFields: casa sem diferença de maiúscula, `sublabel` →
+        // `subLabel`). Até a 6.6.4 o "value" e o submit-extra eram lidos e ignorados. O padrão
+        // (value-label) segue enviando todo campo escalar, como sempre: apps leem esses campos.
+        var only = null;
+        if (this.submitMode === 'value') {
+            only = { value: true };
+            this.submitExtraFields.forEach(function (f) { only[f] = true; });
+        }
         Object.keys(item).forEach(function (key) {
+            if (only && !only[String(key).toLowerCase()]) return;
             if (self.shouldSkipAutoSubmitKey(key)) return;
             var value = item[key];
             if (value !== null && typeof value === 'object') return;

@@ -6,14 +6,21 @@ listed where they changed.
 
 ## [Unreleased]
 
-## [2.10.2] — 2026-11-22
+## [2.10.2] — 2026-11-23
 
 ### Fixed
 - `ozi-select` 6.6.5: with `data-ozi-select-multiple-group`, the group header now shows the
   `is-group-selected` (all checked) and `is-group-partial` (some checked) states. They were computed
   against a list that had just been cleared, so they never appeared.
 
+- `ozi-select` 6.6.5: `data-ozi-select-submit-mode="value"` now sends only the value, and
+  `data-ozi-select-submit-extra` adds the listed option fields (`subLabel,image` → `name_subLabel`,
+  `name_image`). Both were read and ignored since 1.0.0. The default mode (`value-label`) is unchanged:
+  it still sends every simple field of the option.
+
 ### Changed
+- **Possible impact:** if you already set `submit-mode="value"`, the form now receives only the value
+  (no more `name_label` and the other fields), as the documentation always said.
 - `ozi-select` 6.6.5: screen readers now announce arrow-key navigation (`aria-activedescendant` on the
   combobox and the search field, an `id` on each option). The option list is built in a
   `DocumentFragment` and inserted once. Form submission, events and the JS API are unchanged.
