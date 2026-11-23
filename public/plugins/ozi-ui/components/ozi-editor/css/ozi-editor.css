@@ -1,6 +1,12 @@
 /**
  * components/ozi-editor/css/ozi-editor.css
- * Versão: 2.8.1
+ * Versão: 2.8.2
+ *
+ * [2.8.2] FIX White-label: o fundo do botão ativo segue a --ozi-color-primary do app
+ *         (color-mix, mesmo azul quando o app não define a primária). No escuro era
+ *         rgba(59,130,246,.15) fixo, e no escuro do sistema a cor do botão ativo era
+ *         #60a5fa fixo (o escuro forçado já seguia a primária). Aceite:
+ *         teste-v2/aceite-white-label*.html.
  *
  * [2.8.1] FIX Ícones do alinhamento de imagem (`.ozi-editor-popover-align-icon`)
  *         mediam 0×0: o SVG não tinha tamanho, e os 4 botões apareciam vazios
@@ -122,7 +128,7 @@
     --ozi-editor-btn-hover-bg:    var(--ozi-color-gray-100,     #f3f4f6);
     --ozi-editor-btn-hover-color: var(--ozi-color-gray-900,     #111827);
 
-    --ozi-editor-active-bg:       var(--ozi-color-primary-light, #eff6ff);
+    --ozi-editor-active-bg:       var(--ozi-color-primary-light, color-mix(in srgb, var(--ozi-color-primary, #3b82f6) 8%, #ffffff));
     --ozi-editor-active-color:    var(--ozi-color-primary,       #3b82f6);
     --ozi-editor-uicolor:         var(--ozi-color-primary,       #3b82f6);
 
@@ -152,7 +158,7 @@
     --ozi-editor-btn-border:      var(--ozi-color-gray-300,     #4b5563);
     --ozi-editor-btn-hover-bg:    var(--ozi-color-gray-200,     #374151);
     --ozi-editor-btn-hover-color: var(--ozi-color-gray-900,     #f9fafb);
-    --ozi-editor-active-bg:       rgba(59, 130, 246, 0.15);
+    --ozi-editor-active-bg:       color-mix(in srgb, var(--ozi-color-primary, #3b82f6) 15%, transparent);
     --ozi-editor-active-color:    var(--ozi-color-primary,      #60a5fa);
     --ozi-editor-placeholder:     var(--ozi-color-gray-400,     #6b7280);
 }
@@ -168,8 +174,8 @@
         --ozi-editor-btn-border:      #4b5563;
         --ozi-editor-btn-hover-bg:    #374151;
         --ozi-editor-btn-hover-color: #f9fafb;
-        --ozi-editor-active-bg:       rgba(59, 130, 246, 0.15);
-        --ozi-editor-active-color:    #60a5fa;
+        --ozi-editor-active-bg:       color-mix(in srgb, var(--ozi-color-primary, #3b82f6) 15%, transparent);
+        --ozi-editor-active-color:    var(--ozi-color-primary,      #60a5fa);
         --ozi-editor-placeholder:     #6b7280;
     }
 }

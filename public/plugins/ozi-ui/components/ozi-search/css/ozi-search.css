@@ -1,6 +1,10 @@
 /**
  * components/ozi-search/css/ozi-search.css
- * Versão: 1.0.1
+ * Versão: 1.0.2
+ *
+ * [1.0.2] FIX White-label: a página ativa da paginação segue a --ozi-color-primary do app
+ *         (era #0d6efd fixo; sem primária definida, continua #0d6efd). Aceite:
+ *         teste-v2/aceite-white-label*.html.
  *
  * Classes alinhadas com ozi-search.js v1.0.1:
  *   Paginação: .ozi-search-pagination__list, .ozi-search-pagination__btn (BEM)
@@ -25,9 +29,9 @@
     --ozi-search-pagination-hover-bg:     #f8f9fa;
     --ozi-search-pagination-hover-border: #adb5bd;
 
-    --ozi-search-pagination-active-bg:     #0d6efd;
+    --ozi-search-pagination-active-bg:     var(--ozi-color-primary, #0d6efd);
     --ozi-search-pagination-active-color:  #fff;
-    --ozi-search-pagination-active-border: #0d6efd;
+    --ozi-search-pagination-active-border: var(--ozi-color-primary, #0d6efd);
 
     --ozi-search-pagination-disabled-color:  #adb5bd;
     --ozi-search-pagination-disabled-bg:     #fff;

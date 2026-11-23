@@ -1,6 +1,10 @@
 /**
  * themes/default/tokens.css
- * Versão: 1.0.0
+ * Versão: 1.0.1
+ *
+ * [1.0.1] FIX White-label: --ozi-color-primary-light deriva da --ozi-color-primary
+ *         (color-mix 8% com branco ≈ #eff6ff). Um app que troca só a primária agora troca
+ *         também o fundo de destaque. Aceite: teste-v2/aceite-white-label*.html.
  *
  * Tokens CSS neutros do OZI-UI.
  * Sem dependência de Bootstrap, Tailwind ou qualquer framework UI.
@@ -16,7 +20,7 @@
 
     --ozi-color-primary:        #3b82f6;
     --ozi-color-primary-hover:  #2563eb;
-    --ozi-color-primary-light:  #eff6ff;
+    --ozi-color-primary-light:  color-mix(in srgb, var(--ozi-color-primary) 8%, #ffffff);
 
     --ozi-color-secondary:      #6b7280;
     --ozi-color-secondary-hover:#4b5563;

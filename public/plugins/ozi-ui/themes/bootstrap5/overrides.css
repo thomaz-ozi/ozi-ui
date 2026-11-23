@@ -1,6 +1,6 @@
 /**
  * themes/bootstrap5/overrides.css
- * Versão: 1.0.1
+ * Versão: 1.0.2
  *
  * Ajustes de componentes OZI-UI para integração com Bootstrap 5.
  * Garante que os componentes OZI se comportem visualmente
@@ -9,6 +9,8 @@
  * Carregue APÓS bootstrap.css e default/overrides.css.
  *
  * Changelog:
+ *   - v1.0.2: [FIX] White-label: o anel de foco é um color-mix 25% da --ozi-color-primary (ligada
+ *     ao --bs-primary no tokens.css); antes rgba(13,110,253,.25) fixo, igual com o azul padrão.
  *   - v1.0.1: [FIX-P5] Seletores atualizados para v1.0.0.
  *     'ozi-select-wrap' → 'ozi-select-root' (classe raiz atual do ozi-select.js).
  *     'ozi-editor-wrap' → 'ozi-editor-root' (alinhado com v1.0.0).
@@ -40,7 +42,7 @@
 .ozi-autocomplete-input:focus {
     border-color: var(--ozi-border-color-focus);
     outline:      0;
-    box-shadow:   0 0 0 .25rem rgba(13, 110, 253, .25);
+    box-shadow:   0 0 0 .25rem color-mix(in srgb, var(--ozi-color-primary) 25%, transparent);
 }
 
 /* oziEditor alinhado ao .form-control */
@@ -59,7 +61,7 @@
 .ozi-editor-content:focus {
     border-color: var(--ozi-border-color-focus);
     outline:      0;
-    box-shadow:   0 0 0 .25rem rgba(13, 110, 253, .25);
+    box-shadow:   0 0 0 .25rem color-mix(in srgb, var(--ozi-color-primary) 25%, transparent);
 }
 
 /* ─── TOOLBAR DO EDITOR — alinhado ao BS5 ───────────── */

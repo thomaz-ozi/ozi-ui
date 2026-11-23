@@ -40,6 +40,8 @@ const KNOWN_FAIL = {
 const EMULATE_MEDIA = {
     // [OZI-10] do SNDESK: editor escurecia pelo Windows com o app claro (pacote 2.8.0)
     'aceite-theme-sistema-escuro.html': [{ name: 'prefers-color-scheme', value: 'dark' }],
+    // A17 (white-label): a marca do app chega aos tokens no escuro do sistema (pacote 2.10.3)
+    'aceite-white-label-sistema-escuro.html': [{ name: 'prefers-color-scheme', value: 'dark' }],
 };
 
 // Erro que escape (DevTools caiu, navegador morreu…): sem isto o processo morria com código 1

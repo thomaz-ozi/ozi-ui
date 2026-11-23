@@ -1,6 +1,10 @@
 /**
  * themes/tailwind/tokens.css
- * Versão: 1.0.0
+ * Versão: 1.0.1
+ *
+ * [1.0.1] FIX White-label: tom claro, foco, opção selecionada e barra de progresso derivam da
+ *         --ozi-color-primary (antes #3b82f6/#eff6ff fixos). Mesmo resultado com a primária
+ *         do tema. Aceite: teste-v2/aceite-white-label*.html.
  *
  * Mapeia tokens --ozi-* para valores compatíveis com Tailwind CSS.
  * Usa valores do design system padrão do Tailwind.
@@ -11,7 +15,7 @@
     /* cores mapeadas para paleta Tailwind */
     --ozi-color-primary:        #3b82f6;  /* blue-500 */
     --ozi-color-primary-hover:  #2563eb;  /* blue-600 */
-    --ozi-color-primary-light:  #eff6ff;  /* blue-50  */
+    --ozi-color-primary-light:  color-mix(in srgb, var(--ozi-color-primary) 8%, #ffffff);  /* ~blue-50 */
 
     --ozi-color-secondary:      #6b7280;  /* gray-500 */
     --ozi-color-success:        #22c55e;  /* green-500 */
@@ -43,7 +47,7 @@
 
     --ozi-border-width:         1px;
     --ozi-border-color:         #e5e7eb;   /* gray-200 */
-    --ozi-border-color-focus:   #3b82f6;   /* blue-500 */
+    --ozi-border-color-focus:   var(--ozi-color-primary);   /* blue-500 */
 
     --ozi-radius-sm:            0.125rem;  /* rounded-sm */
     --ozi-radius-md:            0.375rem;  /* rounded    */
@@ -65,10 +69,10 @@
 
     --ozi-select-bg:            #ffffff;
     --ozi-select-border:        #e5e7eb;
-    --ozi-select-border-focus:  #3b82f6;
+    --ozi-select-border-focus:  var(--ozi-color-primary);
     --ozi-select-radius:        0.375rem;
     --ozi-select-option-hover-bg:   #f3f4f6;
-    --ozi-select-option-selected-bg:#eff6ff;
+    --ozi-select-option-selected-bg:var(--ozi-color-primary-light);
 
     --ozi-editor-toolbar-bg:    #f9fafb;
     --ozi-editor-content-bg:    #ffffff;
@@ -77,7 +81,7 @@
     --ozi-auth-dropdown-shadow: var(--ozi-shadow-md);
 
     --ozi-progress-height:      3px;
-    --ozi-progress-color:       #3b82f6;
+    --ozi-progress-color:       var(--ozi-color-primary);
     --ozi-progress-success-color:#22c55e;
     --ozi-progress-error-color: #ef4444;
 

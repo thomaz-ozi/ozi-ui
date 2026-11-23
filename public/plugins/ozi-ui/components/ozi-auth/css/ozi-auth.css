@@ -1,8 +1,12 @@
 /**
  * components/ozi-auth/css/ozi-auth.css
- * Versão: 3.0.1
+ * Versão: 3.0.2
  *
  * Changelog:
+ *   - v3.0.2: [FIX] White-label: o foco segue a --ozi-color-primary do app
+ *     (--ozi-border-color-focus → --ozi-color-primary → #3b82f6), e o anel de foco é um
+ *     color-mix da cor do foco (antes rgba(59,130,246,.15) fixo). Mesmo azul quando o app não
+ *     define a primária. Aceite: teste-v2/aceite-white-label*.html.
  *   - v3.0.1: [FIX-P3] Tokens locais agora consomem --ozi-* globais do tema ativo
  *     em vez de valores hardcoded BS5 (#ced4da, #198754, #dc3545, etc.).
  *   - v3.0.1: [FIX-P4] Dark mode adicionado via [data-ozi-theme="dark"] +
@@ -14,8 +18,8 @@
 :root {
     /* — borda e foco via tokens globais — */
     --ozi-auth-border-color:        var(--ozi-border-color,       #d1d5db);
-    --ozi-auth-focus-color:         var(--ozi-border-color-focus, #3b82f6);
-    --ozi-auth-focus-shadow:        0 0 0 0.2rem rgba(59, 130, 246, 0.15);
+    --ozi-auth-focus-color:         var(--ozi-border-color-focus, var(--ozi-color-primary, #3b82f6));
+    --ozi-auth-focus-shadow:        0 0 0 0.2rem color-mix(in srgb, var(--ozi-auth-focus-color) 15%, transparent);
     --ozi-auth-radius:              var(--ozi-radius-md,          0.375rem);
 
     /* — toggle (show/hide senha) — */

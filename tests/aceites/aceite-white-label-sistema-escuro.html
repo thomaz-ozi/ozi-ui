@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite white-label (escuro do sistema)</title>
+<!-- Mesmo CSS que o @oziStyles carrega (só componentes, SEM arquivos de tema) -->
+<link rel="stylesheet" href="../plugins/ozi-ui/components/ozi-select/css/ozi-select.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/components/ozi-editor/css/ozi-editor.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/components/ozi-autocomplete/css/ozi-autocomplete.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/components/ozi-auth/css/ozi-auth.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/components/ozi-search/css/ozi-search.css">
+<!-- A receita white-label: a marca do cliente DEPOIS do @oziStyles, sem !important -->
+<style id="marca">
+    :root {
+        --ozi-color-primary:       #e11d48;
+        --ozi-color-primary-hover: #be123c;
+    }
+</style>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 980px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .3rem 0; word-break: break-all; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+</style>
+</head>
+<body>
+<h1>Aceite white-label <small>(escuro do sistema, <code>prefers-color-scheme: dark</code>)</small></h1>
+<p>⚠️ Precisa de <code>prefers-color-scheme: dark</code> emulado: o <code>run.mjs</code> faz isso por esta
+página (<code>EMULATE_MEDIA</code>). Aberta à mão num sistema claro, o passo 0 falha de propósito.</p>
+<p>Critério: no escuro do sistema (sem <code>data-ozi-theme</code>), a regra de escuro dos componentes tem
+especificidade (0,3,0), maior que o <code>:root</code> do cliente. Mesmo assim a marca chega a todos os
+tokens de destaque, porque eles derivam da <code>--ozi-color-primary</code> em vez de redeclarar um azul.</p>
+<ul id="resultados"></ul>
+<div id="veredito">rodando…</div>
+<div id="sonda" style="width:10px;height:10px"></div>
+
+<script>
+(function () {
+    var html = document.documentElement, marca = document.getElementById('marca'), sonda = document.getElementById('sonda');
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function rgba(s) {
+        var m = /rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\)/.exec(s);
+        if (m) return [+m[1], +m[2], +m[3], m[4] === undefined ? 1 : +m[4]];
+        m = /color\(srgb\s+([\d.e-]+)\s+([\d.e-]+)\s+([\d.e-]+)(?:\s*\/\s*([\d.]+))?\)/.exec(s);
+        if (m) return [m[1] * 255, m[2] * 255, m[3] * 255, m[4] === undefined ? 1 : +m[4]];
+        return null;
+    }
+    function cor(token, prop) {
+        prop = prop || 'color';
+        sonda.style.color = ''; sonda.style.boxShadow = ''; sonda.style.backgroundColor = '';
+        sonda.style[prop] = 'var(' + token + ')';
+        var v = getComputedStyle(sonda)[prop];
+        if (prop === 'boxShadow') { var m = /(rgba?\([^)]*\)|color\([^)]*\))/.exec(v); v = m ? m[1] : v; }
+        return v;
+    }
+    function ehMarca(c) { var x = rgba(c); return !!x && x[0] > x[2] + 5 && x[0] > x[1] + 5; }
+    function ehAzul(c)  { var x = rgba(c); return !!x && x[2] > x[0] + 5; }
+    function igual(a, b) {
+        var x = rgba(a), y = rgba(b);
+        if (!x || !y) return false;
+        for (var i = 0; i < 3; i++) if (Math.abs(x[i] - y[i]) > 3) return false;
+        return Math.abs(x[3] - y[3]) < 0.02;
+    }
+
+    // token, propriedade, padrão esperado no escuro do sistema SEM marca (o que a 2.10.2 mostra)
+    var TOKENS = [
+        ['--ozi-select-selected-color',            'color',           'rgb(96, 165, 250)'],
+        ['--ozi-select-selected-bg',               'backgroundColor', 'rgba(59, 130, 246, 0.15)'],
+        ['--ozi-select-highlight-bg',              'backgroundColor', 'rgba(59, 130, 246, 0.15)'],
+        ['--ozi-select-focus-shadow',              'boxShadow',       'rgba(59, 130, 246, 0.15)'],
+        ['--ozi-editor-uicolor',                   'color',           'rgb(59, 130, 246)'],
+        ['--ozi-editor-active-color',              'color',           'rgb(96, 165, 250)'],
+        ['--ozi-editor-active-bg',                 'backgroundColor', 'rgba(59, 130, 246, 0.15)'],
+        ['--ozi-autocomplete-option-active-color', 'color',           'rgb(96, 165, 250)'],
+        ['--ozi-autocomplete-option-active-bg',    'backgroundColor', 'rgba(59, 130, 246, 0.15)'],
+        ['--ozi-auth-focus-shadow',                'boxShadow',       'rgba(59, 130, 246, 0.15)'],
+        ['--ozi-search-pagination-active-bg',      'backgroundColor', 'rgb(13, 110, 253)']
+    ];
+
+    var todos = true;
+    try {
+        todos = check('0 premissa: sistema emulado em escuro', window.matchMedia('(prefers-color-scheme: dark)').matches) && todos;
+
+        // ── 1. sem marca: o escuro do sistema não muda ──
+        marca.disabled = true;
+        TOKENS.forEach(function (t) {
+            var v = cor(t[0], t[1]);
+            todos = check('1 sem marca: ' + t[0] + ' igual ao padrão', igual(v, t[2]), v + ' (esperado ' + t[2] + ')') && todos;
+        });
+
+        // ── 2. com a marca: tudo segue a marca, e o fundo de destaque é translúcido ──
+        marca.disabled = false;
+        TOKENS.forEach(function (t) {
+            var v = cor(t[0], t[1]);
+            todos = check('2 marca: ' + t[0] + ' segue a marca', ehMarca(v) && !ehAzul(v), v) && todos;
+        });
+        var bg = rgba(cor('--ozi-select-selected-bg', 'backgroundColor'));
+        todos = check('2 marca: fundo de destaque translúcido no escuro', !!bg && bg[3] < 0.5, JSON.stringify(bg)) && todos;
+
+        // ── 3. app claro (data-ozi-theme="light") no sistema escuro: volta ao claro, com a marca ──
+        html.setAttribute('data-ozi-theme', 'light');
+        var claro = rgba(cor('--ozi-select-selected-bg', 'backgroundColor'));
+        todos = check('3 app claro: fundo de destaque é o tom claro da marca (opaco)',
+            !!claro && claro[3] > 0.9 && ehMarca(cor('--ozi-select-selected-bg', 'backgroundColor')), JSON.stringify(claro)) && todos;
+        html.removeAttribute('data-ozi-theme');
+    } catch (err) {
+        todos = check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : '')) && false;
+    }
+
+    var vered = document.getElementById('veredito');
+    vered.textContent = todos ? '✓ ACEITE white-label (sistema escuro): PASSOU' : '✗ ACEITE white-label (sistema escuro): FALHOU';
+    vered.className = todos ? 'pass' : 'fail';
+    document.title = todos ? 'DONE:PASS' : 'DONE:FAIL';
+})();
+</script>
+</body>
+</html>

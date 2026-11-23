@@ -1,12 +1,14 @@
 /**
  * themes/tailwind/dark.css
- * Versão: 1.0.1
+ * Versão: 1.0.2
  *
  * Dark mode para tema Tailwind CSS.
  * Tailwind usa a classe 'dark' no <html> (darkMode: 'class').
  * Este arquivo ajusta tokens --ozi-* para o contexto dark.
  *
  * Changelog:
+ *   - v1.0.2: [FIX] White-label: --ozi-color-primary-light no escuro deriva da
+ *     --ozi-color-primary (color-mix 15% translúcido = o rgba de antes com a primária padrão).
  *   - v1.0.1: [V2-F3] Bloco @media (prefers-color-scheme) completado para
  *     paridade com o bloco .dark — remapeava só gray-50/100/200/300/900,
  *     agora cobre toda a escala gray-50..900 + success/warning-light. Sem isso,
@@ -30,7 +32,7 @@
 
     --ozi-border-color:         #374151;  /* gray-700 */
 
-    --ozi-color-primary-light:  rgba(59, 130, 246, 0.15);
+    --ozi-color-primary-light:  color-mix(in srgb, var(--ozi-color-primary) 15%, transparent);
     --ozi-color-success-light:  rgba(34, 197, 94, 0.15);
     --ozi-color-danger-light:   rgba(239, 68, 68, 0.15);
     --ozi-color-warning-light:  rgba(245, 158, 11, 0.15);
@@ -59,7 +61,7 @@
 
         --ozi-border-color:         #374151;
 
-        --ozi-color-primary-light:  rgba(59, 130, 246, 0.15);
+        --ozi-color-primary-light:  color-mix(in srgb, var(--ozi-color-primary) 15%, transparent);
         --ozi-color-success-light:  rgba(34, 197, 94, 0.15);
         --ozi-color-danger-light:   rgba(239, 68, 68, 0.15);
         --ozi-color-warning-light:  rgba(245, 158, 11, 0.15);

@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite white-label (com tema linkado)</title>
+<!-- Tema linkado à mão (o @oziStyles não carrega temas), depois os componentes -->
+<link rel="stylesheet" href="../plugins/ozi-ui/themes/default/tokens.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/themes/default/overrides.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/themes/default/dark.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/components/ozi-select/css/ozi-select.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/components/ozi-editor/css/ozi-editor.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/components/ozi-autocomplete/css/ozi-autocomplete.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/components/ozi-auth/css/ozi-auth.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/components/ozi-search/css/ozi-search.css">
+<!-- A marca do cliente DEPOIS do tema: mesmo seletor (:root), vence pela ordem, sem !important -->
+<style id="marca">
+    :root {
+        --ozi-color-primary:       #e11d48;
+        --ozi-color-primary-hover: #be123c;
+    }
+</style>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 980px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .3rem 0; word-break: break-all; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+</style>
+</head>
+<body>
+<h1>Aceite white-label <small>(com <code>themes/default</code> linkado)</small></h1>
+<p>Critério: com o tema <code>default</code> linkado, a marca do cliente declarada depois dele, só com
+<code>--ozi-color-primary</code>, chega ao tom claro (<code>--ozi-color-primary-light</code>, que o tema
+declara) e ao translúcido do escuro, sem <code>!important</code>. Sem a marca, tudo continua azul.</p>
+<ul id="resultados"></ul>
+<div id="veredito">rodando…</div>
+<div id="sonda" style="width:10px;height:10px"></div>
+
+<script>
+(function () {
+    var html = document.documentElement, marca = document.getElementById('marca'), sonda = document.getElementById('sonda');
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function rgba(s) {
+        var m = /rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\)/.exec(s);
+        if (m) return [+m[1], +m[2], +m[3], m[4] === undefined ? 1 : +m[4]];
+        m = /color\(srgb\s+([\d.e-]+)\s+([\d.e-]+)\s+([\d.e-]+)(?:\s*\/\s*([\d.]+))?\)/.exec(s);
+        if (m) return [m[1] * 255, m[2] * 255, m[3] * 255, m[4] === undefined ? 1 : +m[4]];
+        return null;
+    }
+    function cor(token, prop) {
+        prop = prop || 'color';
+        sonda.style.color = ''; sonda.style.boxShadow = ''; sonda.style.backgroundColor = '';
+        sonda.style[prop] = 'var(' + token + ')';
+        var v = getComputedStyle(sonda)[prop];
+        if (prop === 'boxShadow') { var m = /(rgba?\([^)]*\)|color\([^)]*\))/.exec(v); v = m ? m[1] : v; }
+        return v;
+    }
+    function ehMarca(c) { var x = rgba(c); return !!x && x[0] > x[2] + 5 && x[0] > x[1] + 5; }
+    function ehAzul(c)  { var x = rgba(c); return !!x && x[2] > x[0] + 5; }
+
+    var TOKENS = [
+        ['--ozi-color-primary-light',              'backgroundColor'],
+        ['--ozi-select-selected-color',            'color'],
+        ['--ozi-select-selected-bg',               'backgroundColor'],
+        ['--ozi-select-option-selected-bg',        'backgroundColor'],
+        // (--ozi-select-tag-bg fica fora: a etiqueta é cinza por desenho, o ozi-select.css a redefine depois do tema)
+        ['--ozi-select-focus-color',               'color'],
+        ['--ozi-select-focus-shadow',              'boxShadow'],
+        ['--ozi-editor-btn-active-bg',             'backgroundColor'],
+        ['--ozi-editor-active-bg',                 'backgroundColor'],
+        ['--ozi-autocomplete-option-active-bg',    'backgroundColor'],
+        ['--ozi-auth-focus-shadow',                'boxShadow'],
+        ['--ozi-audio-btn-hover-bg',               'backgroundColor'],
+        ['--ozi-progress-color',                   'color'],
+        ['--ozi-search-pagination-active-bg',      'backgroundColor']
+    ];
+
+    var todos = true;
+    try {
+        [['claro', null], ['escuro', 'dark']].forEach(function (modo) {
+            if (modo[1]) html.setAttribute('data-ozi-theme', modo[1]); else html.removeAttribute('data-ozi-theme');
+
+            marca.disabled = true;
+            TOKENS.forEach(function (t) {
+                var v = cor(t[0], t[1]);
+                todos = check('sem marca, ' + modo[0] + ': ' + t[0] + ' continua azul', ehAzul(v), v) && todos;
+            });
+            marca.disabled = false;
+            TOKENS.forEach(function (t) {
+                var v = cor(t[0], t[1]);
+                todos = check('marca, ' + modo[0] + ': ' + t[0] + ' segue a marca', ehMarca(v) && !ehAzul(v), v) && todos;
+            });
+        });
+        var bg = rgba(cor('--ozi-color-primary-light', 'backgroundColor'));
+        todos = check('marca, escuro: o tom de destaque é translúcido', !!bg && bg[3] < 0.5, JSON.stringify(bg)) && todos;
+        html.removeAttribute('data-ozi-theme');
+    } catch (err) {
+        todos = check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : '')) && false;
+    }
+
+    var vered = document.getElementById('veredito');
+    vered.textContent = todos ? '✓ ACEITE white-label (tema): PASSOU' : '✗ ACEITE white-label (tema): FALHOU';
+    vered.className = todos ? 'pass' : 'fail';
+    document.title = todos ? 'DONE:PASS' : 'DONE:FAIL';
+})();
+</script>
+</body>
+</html>

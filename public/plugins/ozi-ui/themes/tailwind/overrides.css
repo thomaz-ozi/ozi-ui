@@ -1,6 +1,6 @@
 /**
  * themes/tailwind/overrides.css
- * Versão: 1.0.1
+ * Versão: 1.0.2
  *
  * Ajustes dos componentes OZI-UI para integração com Tailwind CSS.
  * Faz os componentes OZI se comportarem visualmente como controles de
@@ -17,6 +17,8 @@
  * oziConf({ theme })).
  *
  * Changelog:
+ *   - v1.0.2: [FIX] White-label: o ring de foco é um color-mix 40% da --ozi-color-primary
+ *     (antes rgba(59,130,246,.4) fixo; igual com a primária padrão).
  *   - v1.0.1: [FIX] .ozi-select-control não recebe mais display:block (só o
  *     .ozi-autocomplete-input, que é um <input>). O block sobrescrevia o
  *     display:flex do componente e empilhava ícone/valor/ações na vertical.
@@ -54,7 +56,7 @@
 .ozi-autocomplete-input:focus {
     border-color: var(--ozi-border-color-focus);
     outline:      0;
-    box-shadow:   0 0 0 3px rgba(59, 130, 246, .4);   /* ring-2 ring-blue-500 */
+    box-shadow:   0 0 0 3px color-mix(in srgb, var(--ozi-color-primary) 40%, transparent);   /* ring-2 ring-blue-500 */
 }
 
 /* oziEditor content alinhado ao input Tailwind */
@@ -73,7 +75,7 @@
 .ozi-editor-content:focus {
     border-color: var(--ozi-border-color-focus);
     outline:      0;
-    box-shadow:   0 0 0 3px rgba(59, 130, 246, .4);
+    box-shadow:   0 0 0 3px color-mix(in srgb, var(--ozi-color-primary) 40%, transparent);
 }
 
 /* ─── TOOLBAR DO EDITOR — alinhado ao Tailwind ──────────── */

@@ -1,8 +1,12 @@
 /**
  * components/ozi-autocomplete/css/ozi-autocomplete.css
- * Versão: 3.0.3
+ * Versão: 3.0.4
  *
  * Changelog:
+ *   - v3.0.4: [FIX] White-label: o fundo da opção ativa segue a --ozi-color-primary do app
+ *     (color-mix, mesmo azul quando o app não define a primária). No escuro era
+ *     rgba(59,130,246,.15) fixo, e no escuro do sistema a cor da opção ativa era #60a5fa fixo.
+ *     Aceite: teste-v2/aceite-white-label*.html.
  *   - v3.0.3: [FIX-P1] Tokens locais agora consomem --ozi-* globais do tema ativo
  *     em vez de valores hardcoded BS5 (#dee2e6, #212529, #0d6efd, #dc3545, etc.).
  *   - v3.0.3: [FIX-P2] display:none removido de .ozi-autocomplete-dropdown —
@@ -35,7 +39,7 @@
     --ozi-autocomplete-option-transition:   background-color var(--ozi-transition-fast, 150ms ease),
     color var(--ozi-transition-fast, 150ms ease);
     --ozi-autocomplete-option-hover-bg:     var(--ozi-color-gray-100,   #f3f4f6);
-    --ozi-autocomplete-option-active-bg:    var(--ozi-color-primary-light, #eff6ff);
+    --ozi-autocomplete-option-active-bg:    var(--ozi-color-primary-light, color-mix(in srgb, var(--ozi-color-primary, #3b82f6) 8%, #ffffff));
     --ozi-autocomplete-option-active-color: var(--ozi-color-primary,    #3b82f6);
 
     --ozi-autocomplete-empty-padding:       0.5rem 0.75rem;
@@ -60,7 +64,7 @@
     --ozi-autocomplete-dropdown-border:     1px solid var(--ozi-border-color, #374151);
     --ozi-autocomplete-option-color:        var(--ozi-color-gray-900,   #f9fafb);
     --ozi-autocomplete-option-hover-bg:     var(--ozi-color-gray-200,   #374151);
-    --ozi-autocomplete-option-active-bg:    rgba(59, 130, 246, 0.15);
+    --ozi-autocomplete-option-active-bg:    color-mix(in srgb, var(--ozi-color-primary, #3b82f6) 15%, transparent);
     --ozi-autocomplete-option-active-color: var(--ozi-color-primary,    #60a5fa);
     --ozi-autocomplete-empty-color:         var(--ozi-color-gray-500,   #9ca3af);
 }
@@ -71,8 +75,8 @@
         --ozi-autocomplete-dropdown-border:     1px solid #374151;
         --ozi-autocomplete-option-color:        #f9fafb;
         --ozi-autocomplete-option-hover-bg:     #374151;
-        --ozi-autocomplete-option-active-bg:    rgba(59, 130, 246, 0.15);
-        --ozi-autocomplete-option-active-color: #60a5fa;
+        --ozi-autocomplete-option-active-bg:    color-mix(in srgb, var(--ozi-color-primary, #3b82f6) 15%, transparent);
+        --ozi-autocomplete-option-active-color: var(--ozi-color-primary,    #60a5fa);
         --ozi-autocomplete-empty-color:         #9ca3af;
     }
 }
