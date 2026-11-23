@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite ozi-lang (console limpo em es + rótulo do código-fonte Markdown)</title>
+<link rel="stylesheet" href="../plugins/ozi-ui/components/ozi-editor/css/ozi-editor.css">
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 980px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .3rem 0; word-break: break-all; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+</style>
+<script>
+    /* tudo que o ozi-lang reclamar no console */
+    window.__lang = [];
+    ['warn', 'error'].forEach(function (k) {
+        var orig = console[k];
+        console[k] = function () {
+            var msg = Array.prototype.join.call(arguments, ' ');
+            if (msg.indexOf('[OZI:lang]') > -1) window.__lang.push(msg);
+            return orig.apply(console, arguments);
+        };
+    });
+</script>
+</head>
+<body>
+<h1>Aceite <code>ozi-lang</code> <small>(console limpo em espanhol; rótulo do código-fonte Markdown)</small></h1>
+<p>Critério: uma página em espanhol com editor HTML e Markdown não deixa nenhum aviso
+<code>[OZI:lang]</code> no console (até a 2.10.0: <code>use("es"): dicionario nao registrado</code>, porque
+não havia dicionário base <code>es</code>, e <code>t("editor.source.md"): chave nao encontrada</code>, porque
+<code>editor.source</code> é texto e não pode ter filho <code>.md</code>). O botão de código-fonte do
+editor Markdown diz "Markdown" no idioma da página.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<textarea data-ozi-editor-html="edHtml" data-ozi-editor-tools="bold,source"></textarea>
+<textarea data-ozi-editor-md="edMd" data-ozi-editor-tools="bold,source"></textarea>
+
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['editor', 'editor-md'], lang: 'es' });
+
+    var erros = [];
+    window.addEventListener('error', function (ev) {
+        if (ev.message === 'Script error.' && !ev.filename && !ev.lineno) return;
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    function rotulo(key) {
+        var inst = OZI.components.editor.get(key);
+        var btn  = inst && inst.wrap && inst.wrap.querySelector('[data-ozi-editor-tool="source"]');
+        return btn ? (btn.getAttribute('title') || btn.getAttribute('aria-label') || btn.textContent || '').trim() : null;
+    }
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 12s';
+        vered.className = 'fail';
+    }, 12000);
+
+    OZI.ready(async function () {
+        try {
+            var todos = true;
+            await wait(400);
+
+            todos = check('1 nenhum aviso [OZI:lang] no console (página em es, editor HTML e Markdown)',
+                window.__lang.length === 0, window.__lang.join(' | ')) && todos;
+
+            var md = rotulo('edMd'), html = rotulo('edHtml');
+            todos = check('2a botão de código-fonte do editor Markdown diz "Markdown"', !!md && /markdown/i.test(md), JSON.stringify(md)) && todos;
+            todos = check('2b o do editor HTML segue "HTML"', !!html && /html/i.test(html) && !/markdown/i.test(html), JSON.stringify(html)) && todos;
+
+            // 3. no idioma da página (o standalone só carrega o dicionário do idioma atual)
+            var n = window.__lang.length;
+            var es = { md: OZI.lang.t('editor.sourceMd'), common: OZI.lang.t('common.loading') };
+            todos = check('3a es: editor.sourceMd = "Markdown" e common.loading em espanhol, sem aviso',
+                es.md === 'Markdown' && es.common === 'Cargando...' && window.__lang.length === n, JSON.stringify(es)) && todos;
+            // 3b. a chave existe também nos dicionários pt-BR e en (lidos como arquivo)
+            var faltam = [];
+            for (var l of ['pt-BR', 'en', 'es']) {
+                var txt = await (await fetch('../plugins/ozi-ui/components/ozi-editor/lang/' + l + '.js')).text();
+                if (!/sourceMd:\s*'[^']+'/.test(txt)) faltam.push(l);
+            }
+            todos = check('3b sourceMd nos dicionários pt-BR, en e es do editor', faltam.length === 0, faltam.join(', ') || null) && todos;
+
+            todos = check('zero erros JS', erros.length === 0, erros.join(' | ') || null) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ ACEITE ozi-lang (console): PASSOU' : '✗ ACEITE ozi-lang (console): FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+        } catch (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+            vered.textContent = '✗ ACEITE ozi-lang (console): FALHOU (exceção)';
+            vered.className = 'fail';
+        }
+    });
+</script>
+</body>
+</html>

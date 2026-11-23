@@ -2,7 +2,7 @@
  * ------------------------------------------
  * ozi-editor
  * ------------------------------------------
- * Ver: 4.10.1
+ * Ver: 4.10.2
  * 2026-11-22
  *
  * Editor WYSIWYG (contenteditable) com toolbar declarativa, modos html/md,
@@ -19,6 +19,11 @@
  *   ozi:editor-sanitized (4.10.0)
  *
  * Changelog:
+ *   - v4.10.2: [FIX] chave i18n `editor.source.md` → `editor.sourceMd`. O resolvedor do ozi-lang anda
+ *       por caminho pontilhado, e `editor.source` é texto, então `.md` nunca resolvia: aviso
+ *       `t("editor.source.md"): chave nao encontrada` no console de toda página com editor Markdown
+ *       e o botão de código-fonte em inglês ("Markdown source") em pt-BR/es. Pendência registrada
+ *       na v4.4.x. Chave nova nos dicionários pt-BR/en/es.
  *   - v4.10.1: [SEGURANCA] upload de imagem: o header X-CSRF-TOKEN ia para QUALQUER
  *       `data-ozi-editor-upload-url`, inclusive outro domínio (o arquivo e o token da sessão
  *       juntos). Agora o token só vai para a mesma origem da página (mesmo critério do
@@ -466,7 +471,7 @@
             'editor.outdent':        'Outdent (Shift+Tab)',
             'editor.codeblock':      'Code',
             'editor.source':         'HTML source',
-            'editor.source.md':      'Markdown source',
+            'editor.sourceMd':       'Markdown source',
             'editor.table':          'Table',
             'editor.clear':          'Clear format',
             'editor.alignLeft':      'Align left',
@@ -1164,7 +1169,7 @@
         });
         self.content.style.minHeight = self.height;
 
-        var sourcePlaceholder = self.editorType === 'md' ? _t('editor.source.md') : _t('editor.source');
+        var sourcePlaceholder = self.editorType === 'md' ? _t('editor.sourceMd') : _t('editor.source');
         self.source = _el('textarea', 'ozi-editor-source', { placeholder: sourcePlaceholder });
         self.source.style.minHeight = self.height;
         self.source.style.display = 'none';
@@ -1370,7 +1375,7 @@
 
         var meta  = TOOL_META[tool];
         var label = _t(meta.labelKey);
-        if (tool === 'source' && self.editorType === 'md') label = _t('editor.source.md');
+        if (tool === 'source' && self.editorType === 'md') label = _t('editor.sourceMd');
 
         if (tool === 'heading')   return self._buildHeadingButton(label);
         if (tool === 'classes')   return self._buildClassesButton(label);

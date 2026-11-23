@@ -19,6 +19,7 @@
             outdent:     'Reducir sangría (Shift+Tab)',
             codeblock:   'Bloque de código',
             source:      'HTML',
+            sourceMd:    'Markdown',
             table:       'Tabla',
             heading:     'Título',
             h1:          'Título 1',

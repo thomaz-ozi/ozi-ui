@@ -19,6 +19,7 @@
             outdent:     'Outdent (Shift+Tab)',
             codeblock:   'Code block',
             source:      'HTML',
+            sourceMd:    'Markdown',
             table:       'Table',
             heading:     'Heading',
             h1:          'Heading 1',

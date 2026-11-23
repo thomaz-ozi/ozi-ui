@@ -6,6 +6,15 @@ listed where they changed.
 
 ## [Unreleased]
 
+## [2.10.1] — 2026-11-22
+
+### Fixed
+- Pages in Spanish no longer log `[OZI:lang] use("es"): dicionario nao registrado`: `ozi-lang` 1.0.2
+  ships a base `es` dictionary, like pt-BR and en.
+- `ozi-editor` 4.10.2: the Markdown source button no longer logs `t("editor.source.md"): chave nao
+  encontrada` and is now labelled in the page language (it was always "Markdown source"). The
+  translation key is now `editor.sourceMd`.
+
 ## [2.10.0] — 2026-11-22
 
 ### Added
@@ -363,7 +372,8 @@ Version 2: every plugin rewritten in plain JavaScript, no jQuery, zero runtime d
 A v1 compatibility ramp (jQuery shims, `zld*` aliases) is included and opt-in. `ozi-copy` and
 `ozi-paste` were discontinued. See the [migration guide](https://oziui.com/en/docs/migration).
 
-[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.0...HEAD
+[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.1...HEAD
+[2.10.1]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.0...v2.10.1
 [2.10.0]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.9.6...v2.10.0
 [2.9.6]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.9.5...v2.9.6
 [2.9.5]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.9.4...v2.9.5

@@ -2,8 +2,8 @@
  ------------------------------------------
  ozi-lang
  ------------------------------------------
- Ver: 1.0.1
- 2026-05-27
+ Ver: 1.0.2
+ 2026-11-22
 
  *
  * Responsabilidade:
@@ -21,6 +21,12 @@
  * Dependencias: ozi-conf.js (lang, fallbackLang, log)
  * Consumido por: ozi.js (window.OziLang)
  * Usado por: todos os plugins via OZI.lang.t()
+ *
+ * Changelog v1.0.2:
+ *   - Dicionario base `es` (copy + common), como o pt-BR e o en. Sem ele, o init() de uma pagina
+ *     em espanhol chamava use('es') antes de qualquer dicionario es existir e deixava o aviso
+ *     `use("es"): dicionario nao registrado` no console de toda pagina (e `common.*` caia no
+ *     ingles ate o shared/lang/es.js chegar).
  *
  * Changelog v1.0.1:
  *   - Corrigido: _normalizeLocale movida para antes da API window.OziLang.
@@ -45,7 +51,7 @@
 
 
     // ---------------------------------------------
-    // [2] DICIONARIO BASE — pt-BR e en
+    // [2] DICIONARIO BASE — pt-BR, en e es (es desde a 1.0.2)
     // Strings globais compartilhadas por 3+ plugins.
     // Strings de plugin ficam em plugin/lang/pt-BR.js.
     // ---------------------------------------------
@@ -103,6 +109,33 @@
                 remove:   'Remove',
                 edit:     'Edit',
                 back:     'Back'
+            }
+        },
+
+        'es': {
+            copy: {
+                success: '¡Copiado!',
+                error:   '¡Error al copiar!'
+            },
+            common: {
+                loading:  'Cargando...',
+                saving:   'Guardando...',
+                save:     'Guardar',
+                cancel:   'Cancelar',
+                confirm:  'Confirmar',
+                close:    'Cerrar',
+                clear:    'Limpiar',
+                search:   'Buscar',
+                empty:    'Sin resultados',
+                error:    'Error',
+                success:  'Completado',
+                required: 'Campo obligatorio',
+                yes:      'Sí',
+                no:       'No',
+                add:      'Agregar',
+                remove:   'Eliminar',
+                edit:     'Editar',
+                back:     'Volver'
             }
         }
     };

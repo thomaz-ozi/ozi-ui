@@ -20,6 +20,7 @@
             outdent:     'Diminuir recuo (Shift+Tab)',
             codeblock:   'Bloco de código',
             source:      'HTML',
+            sourceMd:    'Markdown',
             table:       'Tabela',
             heading:     'Título',
             h1:          'Título 1',

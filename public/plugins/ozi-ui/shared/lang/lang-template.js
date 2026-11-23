@@ -99,6 +99,7 @@
             ol:          '',
             codeblock:   '',
             source:      '',
+            sourceMd:    '',
             table:       '',
             alignLeft:   '',
             alignCenter: '',
