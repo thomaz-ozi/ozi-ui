@@ -3,8 +3,8 @@
  * ------------------------------------------
  * ozi-suggest
  * ------------------------------------------
- * Ver: 2.0.0
- * 2026-07-04
+ * Ver: 2.0.1
+ * 2026-11-22
  *
  * * Responsabilidade:
  *   - Prover logica de busca local e remota compartilhada
@@ -24,6 +24,9 @@
  * Expoe: OZI.modules.suggest, window.OziSuggest (compat)
  *
  * Changelog:
+ *   - v2.0.1: [SEGURANCA] RemoteSearcher: o header X-CSRF-TOKEN ia para QUALQUER `url`,
+ *       inclusive outro domínio. Agora só para a mesma origem da página (mesmo critério do
+ *       ozi-select 6.6.4 e do ozi-loaddata 5.0.2).
  *   - v2.0.0: [V2-F2] Zero jQuery. Os 3 usos residuais foram trocados por API
  *       nativa: loadFromScriptTag usa querySelector/textContent; o CSRF token usa
  *       querySelector('meta[...]').getAttribute; o boot $(fn) virou
@@ -35,6 +38,12 @@
 
 (function (window, document) {
     'use strict';
+
+    // [2.0.1, SEGURANCA] mesma origem da pagina? URL invalida = outra origem: sem token.
+    function _sameOrigin(url) {
+        try { return new URL(String(url || ''), window.location.href).origin === window.location.origin; }
+        catch (e) { return false; }
+    }
 
     // ---------------------------------------------
     // [1] GUARD — singleton
@@ -333,7 +342,8 @@
                 ? new AbortController()
                 : null;
 
-            var _meta   = document.querySelector('meta[name="csrf-token"]');
+            // [2.0.1, SEGURANCA] o token CSRF da sessao so vai para a MESMA ORIGEM
+            var _meta   = _sameOrigin(_url) ? document.querySelector('meta[name="csrf-token"]') : null;
             var token   = _meta ? _meta.getAttribute('content') : null;
             var headers = { 'Accept': 'application/json' };
             if (token) headers['X-CSRF-TOKEN'] = token;

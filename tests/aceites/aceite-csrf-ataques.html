@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="csrf-token" content="TOKEN-DA-SESSAO">
+<title>OZI-UI v2 — Auditoria do token CSRF (autocomplete, suggest, editor)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 980px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .3rem 0; word-break: break-all; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+    .fixtures > * { display: block; margin: .5rem 0; max-width: 360px; }
+</style>
+</head>
+<body>
+<h1>Auditoria do token CSRF <small>(autocomplete, suggest, editor)</small></h1>
+<p>Critério: o token CSRF da sessão (<code>&lt;meta name="csrf-token"&gt;</code>), no header
+<code>X-CSRF-TOKEN</code> ou no <code>_token</code> do corpo, só vai para a <b>mesma origem</b> da
+página. Para outro domínio ou <code>//host</code>, o pedido sai sem o token. O <code>ozi-select</code>
+e o <code>ozi-loaddata</code> têm o mesmo caso nas páginas de ataque deles.
+Corrigido no autocomplete 4.1.1, no suggest 2.0.1 e no editor 4.10.1.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<div class="fixtures">
+    <input data-ozi-autocomplete="acRel"    data-ozi-autocomplete-zld-url="/fake/ac"  data-ozi-autocomplete-zld-min="1" data-ozi-autocomplete-zld-delay="0">
+    <input data-ozi-autocomplete="acAbs"    data-ozi-autocomplete-zld-min="1" data-ozi-autocomplete-zld-delay="0">
+    <input data-ozi-autocomplete="acFora"   data-ozi-autocomplete-zld-url="https://outro-dominio.invalid/ac" data-ozi-autocomplete-zld-min="1" data-ozi-autocomplete-zld-delay="0">
+    <input data-ozi-autocomplete="acSemEsq" data-ozi-autocomplete-zld-url="//outro-dominio.invalid/ac" data-ozi-autocomplete-zld-min="1" data-ozi-autocomplete-zld-delay="0">
+    <input data-ozi-autocomplete="acGet"    data-ozi-autocomplete-zld-url="https://outro-dominio.invalid/ac" data-ozi-autocomplete-zld-method="GET" data-ozi-autocomplete-zld-min="1" data-ozi-autocomplete-zld-delay="0">
+
+    <textarea data-ozi-editor-html="edRel"  data-ozi-editor-upload-url="/fake/upload"></textarea>
+    <textarea data-ozi-editor-html="edFora" data-ozi-editor-upload-url="https://outro-dominio.invalid/upload"></textarea>
+</div>
+
+<script>
+    document.querySelector('[data-ozi-autocomplete="acAbs"]').setAttribute('data-ozi-autocomplete-zld-url', location.origin + '/fake/ac-abs');
+    var _origFetch = window.fetch;
+    window.__pedidos = [];
+    window.fetch = function (url, cfg) {
+        var u = String(url);
+        if (u.indexOf('/fake/') === 0 || u.indexOf(location.origin + '/fake/') === 0 || u.indexOf('outro-dominio.invalid') > -1) {
+            var h = (cfg && cfg.headers) || {};
+            var corpo = cfg && cfg.body instanceof FormData ? cfg.body : null;
+            window.__pedidos.push({ url: u, header: h['X-CSRF-TOKEN'] || null, corpo: corpo ? corpo.get('_token') : null });
+            var json = u.indexOf('upload') > -1 ? { status: 'ok', url: '/img/x.png' } : { options: [] };
+            return Promise.resolve({
+                ok: true,
+                headers: { get: function () { return 'application/json'; } },
+                json: function () { return Promise.resolve(json); }
+            });
+        }
+        return _origFetch.apply(window, arguments);
+    };
+</script>
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['autocomplete', 'editor'], lang: 'pt-BR' });
+
+    var erros = [];
+    window.addEventListener('error', function (ev) {
+        var isOpaco = (ev.message === 'Script error.' && !ev.filename && !ev.lineno);
+        if (isOpaco) return;
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    function ultimoNovo(antes) { return window.__pedidos.length > antes ? window.__pedidos[window.__pedidos.length - 1] : null; }
+    function levaToken(p) { return !!p && p.header === 'TOKEN-DA-SESSAO' && (p.corpo === null || p.corpo === 'TOKEN-DA-SESSAO'); }
+    function semToken(p) { return !!p && !p.header && !p.corpo && p.url.indexOf('_token') < 0; }
+    function digita(k, t) {
+        var i = document.querySelector('[data-ozi-autocomplete="' + k + '"]');
+        i.focus(); i.value = t;
+        i.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 12s';
+        vered.className = 'fail';
+    }, 12000);
+
+    OZI.ready(async function () {
+        try {
+            var todos = true, antes, p;
+            await wait(300);
+
+            // ---- 1. ozi-autocomplete (busca remota) ----
+            var mesmas = [['acRel', '1a autocomplete, mesma origem (relativa): leva o token (header e corpo)'],
+                          ['acAbs', '1b autocomplete, mesma origem (absoluta): leva o token']];
+            for (var i = 0; i < mesmas.length; i++) {
+                antes = window.__pedidos.length; digita(mesmas[i][0], 'x'); await wait(250); p = ultimoNovo(antes);
+                todos = check(mesmas[i][1], levaToken(p) && p.corpo === 'TOKEN-DA-SESSAO', JSON.stringify(p)) && todos;
+            }
+            var foras = [['acFora', '1c autocomplete, OUTRA origem (POST)'],
+                         ['acSemEsq', '1d autocomplete, outra origem sem esquema (//host)'],
+                         ['acGet', '1e autocomplete, OUTRA origem (GET)']];
+            for (var f = 0; f < foras.length; f++) {
+                antes = window.__pedidos.length; digita(foras[f][0], 'x'); await wait(250); p = ultimoNovo(antes);
+                todos = check(foras[f][1] + ': não leva o token (nem header, nem corpo)', semToken(p), JSON.stringify(p)) && todos;
+            }
+
+            // ---- 2. ozi-suggest (RemoteSearcher, usado direto) ----
+            var sug = OZI.modules.suggest;
+            var casosSug = [['/fake/sug', true, '2a suggest, mesma origem: leva o token'],
+                            ['https://outro-dominio.invalid/sug', false, '2b suggest, OUTRA origem: não leva o token'],
+                            ['//outro-dominio.invalid/sug', false, '2c suggest, //host: não leva o token']];
+            for (var s = 0; s < casosSug.length; s++) {
+                antes = window.__pedidos.length;
+                await sug.createRemoteSearcher({ url: casosSug[s][0], min: 1, delay: 0 }).fetch('x');
+                p = ultimoNovo(antes);
+                todos = check(casosSug[s][2], casosSug[s][1] ? levaToken(p) : semToken(p), JSON.stringify(p)) && todos;
+            }
+
+            // ---- 3. ozi-editor (upload de imagem) ----
+            var ed = OZI.components.editor;
+            var casosEd = [['edRel', true, '3a editor upload, mesma origem: leva o token'],
+                           ['edFora', false, '3b editor upload, OUTRA origem: não leva o token']];
+            for (var e = 0; e < casosEd.length; e++) {
+                var inst = ed.get(casosEd[e][0]);
+                antes = window.__pedidos.length;
+                inst._uploadImage(new File(['x'], 'x.png', { type: 'image/png' }), document.createElement('div'));
+                await wait(150); p = ultimoNovo(antes);
+                todos = check(casosEd[e][2], casosEd[e][1] ? levaToken(p) : semToken(p), JSON.stringify(p)) && todos;
+            }
+
+            await wait(200);
+            todos = check('zero erros JS', erros.length === 0, erros.join(' | ') || null) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ AUDITORIA csrf: PASSOU' : '✗ AUDITORIA csrf: FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+        } catch (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+            vered.textContent = '✗ AUDITORIA csrf: FALHOU (exceção)';
+            vered.className = 'fail';
+        }
+    });
+</script>
+</body>
+</html>

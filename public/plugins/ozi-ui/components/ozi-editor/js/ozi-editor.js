@@ -2,8 +2,8 @@
  * ------------------------------------------
  * ozi-editor
  * ------------------------------------------
- * Ver: 4.10.0
- * 2026-11-18
+ * Ver: 4.10.1
+ * 2026-11-22
  *
  * Editor WYSIWYG (contenteditable) com toolbar declarativa, modos html/md,
  * dropdowns de heading/classes, source view, sanitizacao e validacao.
@@ -19,6 +19,10 @@
  *   ozi:editor-sanitized (4.10.0)
  *
  * Changelog:
+ *   - v4.10.1: [SEGURANCA] upload de imagem: o header X-CSRF-TOKEN ia para QUALQUER
+ *       `data-ozi-editor-upload-url`, inclusive outro domínio (o arquivo e o token da sessão
+ *       juntos). Agora o token só vai para a mesma origem da página (mesmo critério do
+ *       ozi-select 6.6.4 e do ozi-loaddata 5.0.2). Upload para a própria aplicação não muda.
  *   - v4.10.0: [FEAT] ([OZI-16] do SNDESK) `data-ozi-editor-sanitize="email"`: perfil do
  *       sanitizador (ozi-editor-sanitize 1.2.0) que mantém DIV e o estilo inline de e-mail
  *       (faixa, botão com padding/radius, tabela de layout). Padrão `"default"` sem mudança.
@@ -441,6 +445,12 @@
     function _h() { return (window.OZI && window.OZI.helpers) || {}; }
 
     function _trim(s) { return String(s || '').replace(/^\s+|\s+$/g, ''); }
+
+    // [4.10.1, SEGURANCA] mesma origem da pagina? URL invalida = outra origem: sem token.
+    function _sameOrigin(url) {
+        try { return new URL(String(url || ''), window.location.href).origin === window.location.origin; }
+        catch (e) { return false; }
+    }
 
     function _t(key) {
         var lang = window.OZI && window.OZI.lang;
@@ -2406,7 +2416,8 @@
         formData.append('file', file);
 
         var headers = { 'X-Requested-With': 'XMLHttpRequest' };
-        var csrfMeta = document.querySelector('meta[name="csrf-token"]');
+        // [4.10.1, SEGURANCA] o token CSRF da sessao so vai para a MESMA ORIGEM
+        var csrfMeta = _sameOrigin(self.uploadUrl) ? document.querySelector('meta[name="csrf-token"]') : null;
         if (csrfMeta) headers['X-CSRF-TOKEN'] = csrfMeta.getAttribute('content');
 
         fetch(self.uploadUrl, { method: 'POST', headers: headers, body: formData })

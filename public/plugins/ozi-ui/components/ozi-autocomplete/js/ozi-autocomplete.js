@@ -2,10 +2,13 @@
  * ------------------------------------------
  * ozi-autocomplete
  * ------------------------------------------
- * Ver: 4.1.0
- * 2026-08-20
+ * Ver: 4.1.1
+ * 2026-11-22
  *
  * Changelog:
+ *   - v4.1.1: [SEGURANCA] busca remota: o token CSRF da sessão (header X-CSRF-TOKEN e _token
+ *       no corpo) ia para QUALQUER `zld-url`, inclusive outro domínio ou `//host`. Agora só para
+ *       a mesma origem da página (mesmo critério do ozi-select 6.6.4 e do ozi-loaddata 5.0.2).
  *   - v4.1.0: [DEBUG] Flag local `data-ozi-autocomplete-log` (convenção `data-ozi-{plugin}-log`,
  *       espelha o zldLog do ozi-loaddata): método _dbg loga init()/destroy() deste widget com
  *       prefixo [OZI:autocomplete#<uid>]; destroy() com console.trace p/ apontar quem chamou.
@@ -52,6 +55,12 @@
 
     var _instances       = {};
     var _instanceCounter = 0;
+
+    // [4.1.1, SEGURANCA] mesma origem da pagina? URL invalida = outra origem: sem token.
+    function _sameOrigin(url) {
+        try { return new URL(String(url || ''), window.location.href).origin === window.location.origin; }
+        catch (e) { return false; }
+    }
 
     /* ─── DOM helpers ────────────────────────────── */
 
@@ -420,13 +429,14 @@
         this.remoteAbortController = typeof AbortController !== 'undefined' ? new AbortController() : null;
         this._setLoading(true);
 
-        var csrfMeta = document.querySelector('meta[name="csrf-token"]');
+        var url      = this.zldUrl;
+        // [4.1.1, SEGURANCA] o token CSRF da sessao so vai para a MESMA ORIGEM
+        var csrfMeta = _sameOrigin(url) ? document.querySelector('meta[name="csrf-token"]') : null;
         var csrf     = csrfMeta ? csrfMeta.getAttribute('content') : null;
         var method   = this.zldMethod === 'GET' ? 'GET' : 'POST';
         var headers  = { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' };
         if (csrf) headers['X-CSRF-TOKEN'] = csrf;
 
-        var url = this.zldUrl;
         var cfg = { method: method, headers: headers };
         if (this.remoteAbortController) cfg.signal = this.remoteAbortController.signal;
 

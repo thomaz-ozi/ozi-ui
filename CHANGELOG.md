@@ -6,6 +6,20 @@ listed where they changed.
 
 ## [Unreleased]
 
+## [2.9.6] — 2026-11-22
+
+### Security
+- The same CSRF issue fixed in `ozi-select` 6.6.4 also existed in three more places, which sent the
+  session token to any URL, including another domain or `//host`:
+  - `ozi-autocomplete` 4.1.1: remote search (`X-CSRF-TOKEN` header and `_token` in the body) to
+    any `data-ozi-autocomplete-zld-url`;
+  - `ozi-suggest` 2.0.1: the shared remote searcher (header) to any `url`;
+  - `ozi-editor` 4.10.1: image upload (header, together with the file) to any
+    `data-ozi-editor-upload-url`.
+
+  All five places in the package that read `<meta name="csrf-token">` now send it only to the same
+  origin. Requests to your own application are unchanged.
+
 ## [2.9.5] — 2026-11-22
 
 ### Security
@@ -327,7 +341,8 @@ Version 2: every plugin rewritten in plain JavaScript, no jQuery, zero runtime d
 A v1 compatibility ramp (jQuery shims, `zld*` aliases) is included and opt-in. `ozi-copy` and
 `ozi-paste` were discontinued. See the [migration guide](https://oziui.com/en/docs/migration).
 
-[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.9.5...HEAD
+[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.9.6...HEAD
+[2.9.6]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.9.5...v2.9.6
 [2.9.5]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.9.4...v2.9.5
 [2.9.4]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.9.3...v2.9.4
 [2.9.3]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.9.2...v2.9.3
