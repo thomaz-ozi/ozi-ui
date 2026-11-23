@@ -3,9 +3,12 @@
  *  ------------------------------------------
  *  ozi-conf
  *  ------------------------------------------
- *  Ver: 3.1.0
- *  2026-10-29
+ *  Ver: 3.2.0
+ *  2026-11-22
  *
+ *  v3.2.0 — [FEAT] chave `warnUnknown` (default null = automático): liga/desliga o aviso OZI-W001
+ *    de atributo data-ozi-* desconhecido (core/ozi-attrs.js). null segue o APP_DEBUG no
+ *    @oziScripts e o host (localhost, *.test...) no standalone; true/false vence a detecção.
  *  v3.1.0 — [FEAT] `themeMode` passa a ter efeito: apply() repassa o valor ao
  *    core/ozi-theme.js (se carregado), que escreve `data-ozi-theme` no <html>.
  *    Valor novo 'app' (segue o tema do app). O default continua 'auto' e não é
@@ -45,6 +48,7 @@
         themeMode:   'auto',      // 'auto' (segue o sistema) | 'light' | 'dark' | 'app' (segue o app) — ver core/ozi-theme.js
         lang:        'en',        // 'en' | 'pt-BR' | qualquer locale registrado
         fallbackLang:'en',
+        warnUnknown: null,        // null = só em dev (APP_DEBUG / localhost) | true | false — ver core/ozi-attrs.js
 
         plugins: 'all',           // 'all' | ['loaddata', 'select', ...]
 

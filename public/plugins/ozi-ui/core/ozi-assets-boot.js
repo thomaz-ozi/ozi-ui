@@ -2,8 +2,12 @@
  *  ------------------------------------------
  *  ozi-assets-boot
  *  ------------------------------------------
- *  Ver: 1.0.0
- *  2026-11-16
+ *  Ver: 1.1.0
+ *  2026-11-22
+ *
+ *  v1.1.0 — lê `data-ozi-debug` da própria tag (o OziAssets.php emite "1"/"0" a partir do
+ *    APP_DEBUG) e grava em OZI.appDebug: o aviso OZI-W001 do core/ozi-attrs.js segue o APP_DEBUG
+ *    no caminho Laravel (decisão #25). Sem o atributo (pacote antigo), OZI.appDebug fica indefinido.
  *
  *  v1.0.0 — boot do caminho @oziScripts (Laravel), que até o pacote 2.7.2 era um
  *    <script> INLINE emitido pelo OziAssets.php. Virou arquivo por causa do [OZI-11] do
@@ -29,11 +33,16 @@
     var me     = document.currentScript;
     var base   = (me && me.getAttribute('data-ozi-base')) || '';
     var locale = (me && me.getAttribute('data-ozi-locale')) || 'en';
+    var debug  = me ? me.getAttribute('data-ozi-debug') : null;
 
     var OZI = window.OZI = window.OZI ||
         { components: {}, behaviors: {}, modules: {}, helpers: {}, conf: null, lang: null };
 
     OZI.helpers = window.OziHelpers || OZI.helpers || {};
+
+    // v1.1.0: APP_DEBUG do Laravel → aviso de atributo desconhecido (core/ozi-attrs.js, #25)
+    if (debug === '1' || debug === '0') OZI.appDebug = (debug === '1');
+    if (window.OziAttrs) OZI.attrs = window.OziAttrs;
 
     // OziConf.init() recomeça do zero: numa navegação SPA entre duas telas com ozi-ui, a
     // configuração da tela anterior não vaza para esta (a fila abaixo traz a desta)

@@ -13,7 +13,7 @@
 </head>
 <body>
 <h1>Auditoria <code>ozi-auth</code> <small>(a senha não vaza; o texto digitado não vira HTML)</small></h1>
-<p>Critério: com o debug ligado, uma senha conhecida digitada nos campos <b>não aparece</b> em
+<p>Critério: com o log do core ligado (<code>core.log</code>; o ozi-auth não tem log próprio), uma senha conhecida digitada nos campos <b>não aparece</b> em
 <code>localStorage</code>/<code>sessionStorage</code>/cookie, em nenhum atributo do DOM, em nenhum log do
 console, no <code>detail</code> dos eventos do ozi-auth nem na URL. Um e-mail ou usuário com HTML não
 executa nas listas de regras, no dropdown ou no resumo.</p>
@@ -21,7 +21,7 @@ executa nas listas de regras, no dropdown ou no resumo.</p>
 <div id="veredito">aguardando boot…</div>
 
 <form id="f" action="#" onsubmit="return false">
-    <input id="u" type="text" data-ozi-auth-user data-ozi-auth-user-caracter="3" data-ozi-auth-log="true">
+    <input id="u" type="text" data-ozi-auth-user data-ozi-auth-user-caracter="3">
     <input id="m" type="email" data-ozi-auth-mail>
     <input id="p" type="password" data-ozi-auth-pass="bi bi-eye-slash,bi bi-eye" autocomplete="new-password">
     <input id="c" type="password" data-ozi-auth-confirm="bi bi-eye-slash,bi bi-eye" autocomplete="new-password">

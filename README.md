@@ -212,9 +212,10 @@ For a custom theme, copy `vendor/ozi-ui/core/public/plugins/ozi-ui/themes/_templ
 Every push runs on GitHub Actions:
 
 - **PHPUnit** (via Orchestra Testbench) on PHP 8.2–8.4 × Laravel 10–13: asset resolution, Blade
-  directives, the asset route, and `ozi:check`
-- **54 browser acceptance pages** in headless Chrome, one or more per plugin, including attack pages
-  with real XSS payloads for the editor sanitizer, select, loaddata, actions and auth
+  directives, the asset route, `ozi:check` and the unknown-key warning
+- **55 browser acceptance pages** in headless Chrome, one or more per plugin, including attack pages
+  with real XSS payloads for the editor sanitizer, select, loaddata, actions and auth, and a CSRF page.
+  They run with the unknown-attribute warning on, so an attribute the registry does not know fails the build
 
 See [`tests/aceites/README.md`](tests/aceites/README.md) to run them locally.
 

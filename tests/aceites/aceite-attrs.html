@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite ozi-attrs (OZI-W001, atributo desconhecido)</title>
+<link rel="stylesheet" href="../plugins/ozi-ui/components/ozi-select/css/ozi-select.css">
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 980px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .3rem 0; word-break: break-all; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+    .fixtures > * { display: block; margin: .5rem 0; max-width: 360px; }
+</style>
+<script>
+    /* captura os avisos antes de qualquer coisa do ozi-ui carregar */
+    window.__avisos = [];
+    var _warn = console.warn;
+    console.warn = function (msg, el) {
+        if (String(msg).indexOf('OZI-W001') > -1) window.__avisos.push({ msg: String(msg), el: el });
+        return _warn.apply(console, arguments);
+    };
+</script>
+</head>
+<body>
+<h1>Aceite <code>ozi-attrs</code> <small>(OZI-W001: atributo <code>data-ozi-*</code> desconhecido)</small></h1>
+<p>Critério: atributo errado avisa no console, uma vez, com a sugestão do nome certo; atributo certo,
+compartilhado, de log, do Livewire, de breakpoint do editor e os que os próprios plugins geram não
+avisam. <code>warnUnknown:false</code> silencia, e fora de desenvolvimento (APP_DEBUG desligado) não
+avisa. A página roda com componentes de verdade, então um falso positivo em DOM gerado também cai aqui.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<div class="fixtures">
+    <!-- CERTOS: não podem avisar -->
+    <div data-ozi-select="certo" data-ozi-select-multiple data-ozi-select-check data-ozi-select-log="false"
+         data-ozi-select-value-placeholder="Escolha" data-ozi-required="true" data-ozi-required-message="Obrigatório"
+         data-ozi-livewire-model="x" data-ozi-livewire-defer></div>
+    <script type="application/json" data-ozi-select-options="certo">[{"value":"a","label":"A","group":"G"},{"value":"b","label":"B"}]</script>
+    <input data-ozi-autocomplete="auto" data-ozi-autocomplete-zld-url="/x" data-ozi-autocomplete-zld-min="2">
+    <textarea data-ozi-editor-html="ed" data-ozi-editor-tools="bold italic link image table" data-ozi-editor-tools-md="bold"
+              data-ozi-editor-tools-scroll-lg="bold" data-ozi-editor-height="120"></textarea>
+
+    <!-- ERRADOS: cada um avisa uma vez -->
+    <div id="e-typo"  data-ozi-select="e1" data-ozi-select-requierd="true"></div>
+    <div id="e-ns"    data-ozi-selcet="e2"></div>
+    <textarea id="e-bare" data-ozi-editor="e3"></textarea>
+    <input id="e-zld"  data-ozi-autocomplete="e4" data-ozi-autocomplete-url="/api">
+    <div id="e-end"   data-ozi-select="e5" data-ozi-select-placeholder="..."></div>
+    <button id="e-gone" data-ozi-copy="texto">copiar</button>
+    <div id="e-none"  data-ozi-dropdown="x"></div>
+</div>
+
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['select', 'autocomplete', 'editor'], lang: 'pt-BR' });
+
+    var erros = [];
+    window.addEventListener('error', function (ev) {
+        var isOpaco = (ev.message === 'Script error.' && !ev.filename && !ev.lineno);
+        if (isOpaco) return;
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    function avisosDe(el) { return window.__avisos.filter(function (a) { return a.el === el; }); }
+    function um(id, trecho, nome) {
+        var el = document.getElementById(id), av = avisosDe(el);
+        return check(nome, av.length === 1 && av[0].msg.indexOf(trecho) > -1,
+            av.length + ' aviso(s): ' + av.map(function (a) { return a.msg; }).join(' | '));
+    }
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 12s';
+        vered.className = 'fail';
+    }, 12000);
+
+    OZI.ready(async function () {
+        try {
+            var todos = true;
+            await wait(400);   // plugins iniciados e DOM gerado no lugar
+
+            // ---- 1. cada atributo errado avisa uma vez, com a resposta certa ----
+            todos = um('e-typo', '"data-ozi-select-required"', '1a erro de digitação → sugere data-ozi-select-required') && todos;
+            todos = um('e-ns',   '"data-ozi-select"', '1b erro no nome do plugin (data-ozi-selcet) → sugere data-ozi-select') && todos;
+            todos = um('e-bare', '"data-ozi-editor-html" ou "data-ozi-editor-md"', '1c data-ozi-editor sem sufixo → sugere -html ou -md') && todos;
+            todos = um('e-zld',  '"data-ozi-autocomplete-zld-url"', '1d sem o zld- (data-ozi-autocomplete-url) → sugere -zld-url') && todos;
+            todos = um('e-end',  '"data-ozi-select-value-placeholder"', '1e data-ozi-select-placeholder → sugere -value-placeholder') && todos;
+            todos = um('e-gone', 'saiu na 2.0; use receitas Alpine', '1f data-ozi-copy → avisa que saiu na 2.0') && todos;
+            todos = um('e-none', 'OZI-W001 atributo desconhecido "data-ozi-dropdown". Lista', '1g sem parecido → avisa sem sugestão') && todos;
+            var tag = avisosDe(document.getElementById('e-typo'))[0];
+            todos = check('1h prefixo do plugin e link da doc na mensagem',
+                !!tag && tag.msg.indexOf('[OZI:select] OZI-W001') === 0 && tag.msg.indexOf('https://oziui.com/docs/warnings#ozi-w001') > -1,
+                tag && tag.msg) && todos;
+
+            // ---- 2. nenhum falso positivo (markup certo + DOM que os plugins geraram) ----
+            var esperados = ['e-typo', 'e-ns', 'e-bare', 'e-zld', 'e-end', 'e-gone', 'e-none'].map(function (id) { return document.getElementById(id); });
+            var sobra = window.__avisos.filter(function (a) { return esperados.indexOf(a.el) < 0; });
+            todos = check('2 nenhum aviso em atributo certo, compartilhado, de log, Livewire, breakpoint ou gerado',
+                sobra.length === 0, sobra.map(function (a) { return a.msg; }).join(' | ')) && todos;
+            todos = check('2b os plugins iniciaram de verdade (select e editor com DOM gerado)',
+                !!document.querySelector('[data-ozi-select="certo"] .ozi-select-control') &&
+                !!document.querySelector('.ozi-editor-toolbar, [data-ozi-editor-tool]')) && todos;
+
+            // ---- 3. re-render não repete ----
+            var n = window.__avisos.length;
+            OZI.attrs.scan(document);
+            OZI.hooks.afterRender.run(document, { source: 'teste' });
+            await wait(100);
+            todos = check('3 nova varredura (scan e afterRender) não repete aviso', window.__avisos.length === n,
+                (window.__avisos.length - n) + ' a mais') && todos;
+
+            // ---- 4. elemento novo (render dinâmico) avisa uma vez ----
+            var novo = document.createElement('div');
+            novo.setAttribute('data-ozi-select-mutliple', '');
+            document.querySelector('.fixtures').appendChild(novo);
+            OZI.hooks.afterRender.run(novo, { source: 'teste' });
+            OZI.hooks.afterRender.run(novo, { source: 'teste' });
+            todos = check('4 elemento inserido depois avisa (uma vez) com sugestão',
+                avisosDe(novo).length === 1 && avisosDe(novo)[0].msg.indexOf('"data-ozi-select-multiple"') > -1,
+                avisosDe(novo).map(function (a) { return a.msg; }).join(' | ')) && todos;
+
+            // ---- 5. quando avisar (decisão #25) ----
+            function silencio(nome) {
+                var el = document.createElement('div');
+                el.setAttribute('data-ozi-xyz-' + Math.random().toString(36).slice(2, 6), '');
+                document.body.appendChild(el);
+                return OZI.attrs.scan(el) === 0 && avisosDe(el).length === 0;
+            }
+            function avisa() {
+                var el = document.createElement('div');
+                el.setAttribute('data-ozi-xyz-' + Math.random().toString(36).slice(2, 6), '');
+                document.body.appendChild(el);
+                return OZI.attrs.scan(el) === 1;
+            }
+            todos = check('5a padrão em 127.0.0.1 (sem warnUnknown nem APP_DEBUG): avisa', OZI.attrs.enabled() && avisa()) && todos;
+            oziConf({ warnUnknown: false });
+            todos = check('5b warnUnknown:false silencia', silencio()) && todos;
+            oziConf({ warnUnknown: null });
+            OZI.appDebug = false;
+            todos = check('5c APP_DEBUG desligado (produção no @oziScripts) silencia, mesmo em 127.0.0.1', silencio()) && todos;
+            oziConf({ warnUnknown: true });
+            todos = check('5d warnUnknown:true vence o APP_DEBUG desligado', avisa()) && todos;
+            oziConf({ warnUnknown: null });
+            OZI.appDebug = true;
+            todos = check('5e APP_DEBUG ligado avisa', avisa()) && todos;
+            delete OZI.appDebug;
+
+            // ---- 6. API ----
+            todos = check('6 OZI.attrs.isKnown / suggest',
+                OZI.attrs.isKnown('data-ozi-select-multiple') && !OZI.attrs.isKnown('data-ozi-select-mutliple') &&
+                OZI.attrs.suggest('data-ozi-autocomplete-min')[0] === 'data-ozi-autocomplete-zld-min') && todos;
+
+            todos = check('zero erros JS', erros.length === 0, erros.join(' | ') || null) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ ACEITE ozi-attrs 1.0.0: PASSOU' : '✗ ACEITE ozi-attrs 1.0.0: FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+        } catch (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+            vered.textContent = '✗ ACEITE ozi-attrs 1.0.0: FALHOU (exceção)';
+            vered.className = 'fail';
+        }
+    });
+</script>
+</body>
+</html>

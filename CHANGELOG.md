@@ -6,6 +6,28 @@ listed where they changed.
 
 ## [Unreleased]
 
+## [2.10.0] — 2026-11-22
+
+### Added
+- **Unknown attribute warning (`OZI-W001`).** A `data-ozi-*` attribute that no plugin reads now logs a
+  console warning with the correct name: `data-ozi-select-requierd` → "Did you mean
+  `data-ozi-select-required`?". It also catches a typo in the plugin name (`data-ozi-selcet`),
+  `data-ozi-editor` without `-html`/`-md`, remote-search names without `zld-`
+  (`data-ozi-autocomplete-url`) and attributes removed in 2.0 (`data-ozi-copy`, `data-ozi-paste`).
+  New core file `core/ozi-attrs.js` (`OZI.attrs`: `scan`, `isKnown`, `suggest`, `enabled`, `known`).
+- **Unknown key warning (`OZI-W002`).** An unknown key in `@oziScripts([...])` or `@oziStyles([...])`
+  used to be dropped silently. It now warns, with a suggestion (`'ozi-validate'` → `'validate'`). The
+  page never breaks: the other keys load as before.
+- `php artisan ozi:check` lists unknown `@oziScripts`/`@oziStyles` keys found in your views, with file
+  and line (warning only; the exit code does not change).
+- `oziConf({ warnUnknown: true | false })` forces the warnings on or off.
+
+### Changed
+- Warnings appear **only in development**: with `@oziScripts` they follow `APP_DEBUG` (the boot tag
+  now carries `data-ozi-debug`); standalone (`ozi.js`) they are on for `localhost`, `127.0.0.1`,
+  `*.test`, `*.local` and `file://`. With `APP_DEBUG=false`, `OZI-W002` goes only to the Laravel log.
+- `ozi.js` 2.1.0 (`OZI.version` is now `2.1.0`), `ozi-conf` 3.2.0, `ozi-assets-boot` 1.1.0.
+
 ## [2.9.6] — 2026-11-22
 
 ### Security
@@ -341,7 +363,8 @@ Version 2: every plugin rewritten in plain JavaScript, no jQuery, zero runtime d
 A v1 compatibility ramp (jQuery shims, `zld*` aliases) is included and opt-in. `ozi-copy` and
 `ozi-paste` were discontinued. See the [migration guide](https://oziui.com/en/docs/migration).
 
-[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.9.6...HEAD
+[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.0...HEAD
+[2.10.0]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.9.6...v2.10.0
 [2.9.6]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.9.5...v2.9.6
 [2.9.5]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.9.4...v2.9.5
 [2.9.4]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.9.3...v2.9.4

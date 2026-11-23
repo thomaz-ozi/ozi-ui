@@ -3,8 +3,11 @@
  * ------------------------------------------
  * ozi
  * ------------------------------------------
- * Ver: 2.0.0
- * 2026-08-02
+ * Ver: 2.1.0
+ * 2026-11-22
+ *
+ * v2.1.0 — carrega core/ozi-attrs.js (opcional, logo após o ozi-hooks): aviso OZI-W001 de atributo
+ *   data-ozi-* desconhecido, só em desenvolvimento (decisão #25). OZI.version → 2.1.0.
  *
  * v2.0.0 — índice de versão da geração v2 (JS puro, zero dependência de terceiros).
  *   ozi.js é o marcador de versão da biblioteca. Bump 1.0.7 → 2.0.0 no corte v2.
@@ -26,7 +29,7 @@
  *   1. Cria window.OZI e window.oziConf (imediato)
  *   2. Detecta urlBase pelo próprio src
  *   3. Aguarda DOM pronto
- *   4. Carrega subsistemas do core (ozi-conf, ozi-theme, ozi-hooks, ozi-lang, ozi-helpers, ozi-integrations)
+ *   4. Carrega subsistemas do core (ozi-conf, ozi-theme, ozi-hooks, ozi-attrs, ozi-lang, ozi-helpers, ozi-integrations)
  *   5. Aplica oziConf() pendente se houver
  *   6. Carrega plugins declarados (default: todos)
  *   7. OZI.isReady = true → dispara callbacks OZI.ready()
@@ -90,7 +93,7 @@
      * ───────────────────────────────────────────── */
 
     var OZI = {
-        version: '2.0.0',
+        version: '2.1.0',
 
         conf:         {},
         theme:        {},
@@ -250,6 +253,7 @@
             { url: base + 'core/ozi-conf.js',             optional: false },
             { url: base + 'core/ozi-theme.js',             optional: true  },
             { url: base + 'core/ozi-hooks.js',             optional: true  },
+            { url: base + 'core/ozi-attrs.js',             optional: true  },
             { url: base + 'core/ozi-lang.js',              optional: true  },
             { url: base + 'core/helpers/ozi-helpers.js',   optional: true  },
             { url: base + 'core/ozi-loader.js',            optional: false },

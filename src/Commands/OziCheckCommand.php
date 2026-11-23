@@ -44,6 +44,7 @@ class OziCheckCommand extends Command
         'core/ozi-conf.js',
         'core/ozi-theme.js',
         'core/ozi-hooks.js',
+        'core/ozi-attrs.js',         // aviso OZI-W001 (2.10.0)
         'core/ozi-lang.js',
         'core/helpers/ozi-helpers.js',
         'core/ozi-loader.js',
@@ -183,6 +184,10 @@ class OziCheckCommand extends Command
             $allOk = false;
         }
 
+        // ── 6. Chaves do @oziScripts/@oziStyles nos Blade (OZI-W002, 2.10.0) ──
+        // Só avisa (não muda o código de saída): é a mesma regra do aviso em runtime.
+        $this->checkBladeKeys(app(OziAssets::class));
+
         $this->newLine();
 
         if ($allOk) {
@@ -197,6 +202,52 @@ class OziCheckCommand extends Command
         $this->newLine();
 
         return $allOk ? self::SUCCESS : self::FAILURE;
+    }
+
+    /**
+     * Procura `@oziScripts([...])` e `@oziStyles([...])` nas views e lista as chaves que não
+     * existem, com a sugestão. Devolve quantas achou.
+     */
+    protected function checkBladeKeys(OziAssets $assets): int
+    {
+        $dir = resource_path('views');
+        if (!is_dir($dir)) return 0;
+
+        $known = $assets->knownKeys();
+        $found = 0;
+        $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS));
+
+        foreach ($files as $file) {
+            if (!str_ends_with($file->getFilename(), '.blade.php')) continue;
+
+            $src = (string) file_get_contents($file->getPathname());
+            if (!preg_match_all('/@(oziScripts|oziStyles)\s*\(\s*\[(.*?)\]\s*\)/s', $src, $calls, PREG_SET_ORDER | PREG_OFFSET_CAPTURE)) {
+                continue;
+            }
+
+            foreach ($calls as $call) {
+                preg_match_all('/[\'"]([^\'"]+)[\'"]/', $call[2][0], $keys);
+                foreach ($keys[1] as $key) {
+                    $normalized = strtolower(trim($key));
+                    if (in_array($normalized, $known, true)) continue;
+
+                    $found++;
+                    $line = substr_count(substr($src, 0, $call[0][1]), "\n") + 1;
+                    $rel  = ltrim(str_replace([base_path(), '\\'], ['', '/'], $file->getPathname()), '/');
+                    $hint = $assets->suggestKey($normalized);
+                    $this->line(sprintf(
+                        "  <fg=yellow>⚠</> OZI-W002 <fg=white>%s:%d</> @%s: chave desconhecida <fg=white>'%s'</>%s",
+                        $rel, $line, $call[1][0], $key, $hint !== null ? " — você quis dizer <fg=white>'{$hint}'</>?" : ''
+                    ));
+                }
+            }
+        }
+
+        if ($found === 0) {
+            $this->line('  <fg=green>✔</> <fg=white>chaves do @oziScripts/@oziStyles nas views</> <fg=gray>OK</>');
+        }
+
+        return $found;
     }
 
     /**

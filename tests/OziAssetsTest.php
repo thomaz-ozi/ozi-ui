@@ -207,7 +207,7 @@ class OziAssetsTest extends TestCase
         $html = (new OziAssets())->setBase('/p/')->setVersion('T')->scripts([]);
 
         $this->assertStringContainsString(
-            '<script src="/p/core/ozi-assets-boot.js?v=T" data-ozi-base="/p/" data-ozi-locale="pt-BR"></script>',
+            '<script src="/p/core/ozi-assets-boot.js?v=T" data-ozi-base="/p/" data-ozi-locale="pt-BR" data-ozi-debug="0"></script>',
             $html
         );
     }

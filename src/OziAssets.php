@@ -137,6 +137,39 @@ class OziAssets
         'full'     => [], // array vazio = todos
     ];
 
+    /*
+     | 2.10.0 (N2 do roadmap "pronto para IA"): chave desconhecida no @oziScripts/@oziStyles
+     | era descartada em silêncio (`@oziScripts(['ozi-validate'])` não carregava nada e nada
+     | avisava). Agora vira o aviso OZI-W002: com APP_DEBUG, comentário HTML + console.warn;
+     | em produção, só Log::warning (decisão #25: o visitante nunca vê). Nunca exceção: uma
+     | chave errada não pode derrubar a página de quem atualizar o pacote.
+     */
+
+    /** Chaves desconhecidas da chamada atual (zeradas a cada styles()/scripts()). */
+    protected array $unknownKeys = [];
+
+    /** Nomes que parecem certos e não são, com a chave certa. */
+    protected array $keyAliases = [
+        'password-rules'     => 'password',
+        'ozi-password-rules' => 'password',
+        'sanitize'           => 'editor-sanitize',
+        'markdown'           => 'editor-md',
+        'md'                 => 'editor-md',
+        'all'                => 'full',
+    ];
+
+    /** Plugins que saíram, com a versão. */
+    protected array $removedKeys = ['copy' => '2.0', 'paste' => '2.0'];
+
+    protected const W002_TEXT = [
+        'pt-BR' => ['unknown' => "OZI-W002 chave desconhecida '%s' em %s.", 'suggest' => "Você quis dizer '%s'?",
+                    'removed' => 'Ela saiu na %s.', 'more' => 'Lista de chaves: %s'],
+        'en'    => ['unknown' => "OZI-W002 unknown key '%s' in %s.", 'suggest' => "Did you mean '%s'?",
+                    'removed' => 'It was removed in %s.', 'more' => 'Key list: %s'],
+        'es'    => ['unknown' => "OZI-W002 clave desconocida '%s' en %s.", 'suggest' => "¿Quiso decir '%s'?",
+                    'removed' => 'Se eliminó en la %s.', 'more' => 'Lista de claves: %s'],
+    ];
+
     public function __construct()
     {
         $this->base    = rtrim(asset(config('ozi-ui.base_path', 'plugins/ozi-ui')), '/') . '/';
@@ -178,9 +211,10 @@ class OziAssets
     }
     public function styles(array $only = []): string
     {
+        $this->unknownKeys = [];
         $map = $this->resolveKeys($this->availableStyles, $only);
 
-        return implode("\n", array_map(
+        return $this->unknownKeysWarning('@oziStyles') . implode("\n", array_map(
             fn($file) => '<link rel="stylesheet" href="' . $this->url($file) . '">',
             $map
         ));
@@ -188,6 +222,7 @@ class OziAssets
 
     public function scripts(array $only = []): string
     {
+        $this->unknownKeys = [];
         $map = $this->resolveKeys($this->availableScripts, $only, true);
 
         $helpersUrl      = $this->base . 'core/helpers/ozi-helpers.js?v='  . $this->version;
@@ -196,6 +231,7 @@ class OziAssets
         $langUrl         = $this->base . 'core/ozi-lang.js?v='             . $this->version;
         $integrationsUrl = $this->base . 'core/ozi-integrations.js?v='     . $this->version;
         $hooksUrl        = $this->base . 'core/ozi-hooks.js?v='            . $this->version;
+        $attrsUrl        = $this->base . 'core/ozi-attrs.js?v='            . $this->version;
         $bootUrl         = $this->base . 'core/ozi-assets-boot.js?v='      . $this->version;
         $readyUrl        = $this->base . 'core/ozi-assets-ready.js?v='     . $this->version;
 
@@ -217,7 +253,9 @@ class OziAssets
         // base e locale vão por data-* (o arquivo os lê de document.currentScript)
         $bootTag = '<script src="' . $bootUrl . '"'
                  . ' data-ozi-base="' . htmlspecialchars($this->base, ENT_QUOTES) . '"'
-                 . ' data-ozi-locale="' . htmlspecialchars($this->locale, ENT_QUOTES) . '"></script>';
+                 . ' data-ozi-locale="' . htmlspecialchars($this->locale, ENT_QUOTES) . '"'
+                 // 2.10.0: o aviso OZI-W001 (core/ozi-attrs.js) segue o APP_DEBUG (decisão #25)
+                 . ' data-ozi-debug="' . ($this->isDebug() ? '1' : '0') . '"></script>';
 
         $head = '<script src="' . $helpersUrl . '"></script>' . "\n"
               . '<script>' . $bridge . '</script>' . "\n"
@@ -228,6 +266,8 @@ class OziAssets
               . '<script src="' . $langUrl . '"></script>' . "\n"
               . '<script src="' . $integrationsUrl . '"></script>' . "\n"
               . '<script src="' . $hooksUrl . '"></script>' . "\n"
+              // 2.10.0: logo após o ozi-hooks, para registrar a varredura no afterRender antes dos plugins
+              . '<script src="' . $attrsUrl . '"></script>' . "\n"
               . $bootTag;
 
         // Dicionários logo após o boot: os arquivos de lang chamam
@@ -248,7 +288,9 @@ class OziAssets
         ));
 
         // ready por último: liga os hooks do Livewire e sobe OZI.isReady depois dos plugins
-        return $head . "\n" . $body . "\n" . '<script src="' . $readyUrl . '"></script>';
+        // o aviso vai no TOPO: o fim da saída é sempre o ozi-assets-ready.js
+        return $this->unknownKeysWarning('@oziScripts')
+             . $head . "\n" . $body . "\n" . '<script src="' . $readyUrl . '"></script>';
     }
 
     /**
@@ -327,6 +369,11 @@ class OziAssets
                 continue;
             }
 
+            if (!isset($available[$key]) && !in_array($key, $this->knownKeys(), true)) {
+                $this->unknownKeys[$key] = true;   // OZI-W002 (ver unknownKeysWarning)
+                continue;
+            }
+
             $keys[] = $key;
         }
 
@@ -396,6 +443,111 @@ class OziAssets
         }
 
         return 'dev';
+    }
+
+    /** Toda chave aceita por @oziScripts ou @oziStyles (arquivo ou grupo). */
+    public function knownKeys(): array
+    {
+        return array_values(array_unique(array_merge(
+            array_keys($this->availableScripts),
+            array_keys($this->availableStyles),
+            array_keys($this->groups)
+        )));
+    }
+
+    /**
+     * Para uma chave que não existe: a chave certa, se der para adivinhar. Ordem: nome que
+     * parece certo (alias), prefixo `ozi-` sobrando, plural, distância de edição <= 2.
+     */
+    public function suggestKey(string $key): ?string
+    {
+        $key   = strtolower(trim($key));
+        $known = $this->knownKeys();
+
+        if (isset($this->keyAliases[$key])) {
+            return $this->keyAliases[$key];
+        }
+
+        foreach (['ozi-', 'ozi_'] as $prefix) {
+            if (str_starts_with($key, $prefix)) {
+                $rest = substr($key, strlen($prefix));
+                if (in_array($rest, $known, true)) return $rest;
+                if (isset($this->keyAliases[$rest])) return $this->keyAliases[$rest];
+            }
+        }
+
+        if (str_ends_with($key, 's') && in_array(substr($key, 0, -1), $known, true)) {
+            return substr($key, 0, -1);
+        }
+
+        $best = null;
+        $bestDistance = 3;
+        foreach ($known as $candidate) {
+            $distance = levenshtein($key, $candidate);
+            // chave curta não ganha sugestão aleatória ('x' está a 2 letras de 'md')
+            if ($distance < $bestDistance && $distance < strlen($key)) {
+                $bestDistance = $distance;
+                $best = $candidate;
+            }
+        }
+
+        return $best;
+    }
+
+    /** Uma mensagem por chave desconhecida da última chamada (vazio = nenhuma). */
+    public function unknownKeyMessages(string $directive): array
+    {
+        $t = self::W002_TEXT[$this->locale] ?? self::W002_TEXT['en'];
+        $messages = [];
+
+        foreach (array_keys($this->unknownKeys) as $key) {
+            $message = sprintf($t['unknown'], $key, $directive);
+
+            if (isset($this->removedKeys[$key])) {
+                $message .= ' ' . sprintf($t['removed'], $this->removedKeys[$key]);
+            } elseif (($suggestion = $this->suggestKey((string) $key)) !== null) {
+                $message .= ' ' . sprintf($t['suggest'], $suggestion);
+            }
+
+            $messages[] = '[OZI] ' . $message . ' ' . sprintf($t['more'], 'https://oziui.com/docs/warnings#ozi-w002');
+        }
+
+        return $messages;
+    }
+
+    /**
+     * O aviso OZI-W002 da última chamada. Com APP_DEBUG: comentário HTML + console.warn (o resto
+     * da página não muda). Sem APP_DEBUG: só Log::warning, e nada vai para o HTML.
+     */
+    protected function unknownKeysWarning(string $directive): string
+    {
+        $messages = $this->unknownKeyMessages($directive);
+        if ($messages === []) return '';
+
+        if (!$this->isDebug()) {
+            if (function_exists('logger')) {
+                foreach ($messages as $message) logger()->warning($message);
+            }
+            return '';
+        }
+
+        $html = '';
+        foreach ($messages as $message) {
+            // "--" fecharia o comentário antes da hora
+            $html .= '<!-- ' . str_replace('--', '- -', htmlspecialchars($message, ENT_QUOTES)) . ' -->' . "\n";
+        }
+        $flags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES;
+        $html .= '<script>' . implode('', array_map(
+            fn ($message) => 'console.warn(' . json_encode($message, $flags) . ');',
+            $messages
+        )) . '</script>' . "\n";
+
+        return $html;
+    }
+
+    protected function isDebug(): bool
+    {
+        return function_exists('config') && (bool) config('app.debug');
     }
 
     /** Exposto para verificação cruzada com o _pluginMap (php artisan ozi:check). */
