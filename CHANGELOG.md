@@ -6,6 +6,27 @@ listed where they changed.
 
 ## [Unreleased]
 
+## [2.10.3] — 2026-11-23
+
+### Fixed
+- **White-label: the app's brand color now reaches every component.** Changing only
+  `--ozi-color-primary` used to leave the focus ring, the highlight and selected-option backgrounds,
+  the `ozi-search` active page and most dark-mode highlights blue. They now derive from the primary
+  color with `color-mix()` (8% with white in light mode, 15% translucent in dark mode). One line after
+  `@oziStyles` is enough, with no `!important`:
+  `<style>:root { --ozi-color-primary: #e11d48; }</style>`.
+  CSS only, no JavaScript changed: `ozi-select.css` 1.6.3, `ozi-editor.css` 2.8.2,
+  `ozi-autocomplete.css` 3.0.4, `ozi-auth.css` 3.0.2, `ozi-search.css` 1.0.2, and the `default`,
+  `tailwind` and `bootstrap5` theme files.
+- Without a primary color set, the colors are the same blue as before (the light highlight differs by
+  one level, `#eff6ff` → `#eff5fe`).
+- `ozi-select`: the selected group header stayed light (`#eff6ff`) in dark mode. In system dark mode,
+  `ozi-editor` and `ozi-autocomplete` used a fixed `#60a5fa` for the active color.
+
+### Changed
+- **Visible only with a linked theme file:** the `ozi-search` active page now uses the theme's primary
+  color (`#3b82f6` in `default`; it was a fixed `#0d6efd`). With `@oziStyles` alone, nothing changes.
+
 ## [2.10.2] — 2026-11-23
 
 ### Fixed
@@ -391,7 +412,8 @@ Version 2: every plugin rewritten in plain JavaScript, no jQuery, zero runtime d
 A v1 compatibility ramp (jQuery shims, `zld*` aliases) is included and opt-in. `ozi-copy` and
 `ozi-paste` were discontinued. See the [migration guide](https://oziui.com/en/docs/migration).
 
-[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.2...HEAD
+[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.3...HEAD
+[2.10.3]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.2...v2.10.3
 [2.10.2]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.1...v2.10.2
 [2.10.1]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.0...v2.10.1
 [2.10.0]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.9.6...v2.10.0
