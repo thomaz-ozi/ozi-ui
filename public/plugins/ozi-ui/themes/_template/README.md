@@ -34,6 +34,10 @@ Use `theme: 'default' | 'bootstrap5' | 'tailwind'` para partir de um preset.
 - **Só tokens, nunca hardcode** em `overrides.css` — assim o `dark.css` funciona sozinho.
 - **Herança:** qualquer token que você não declarar herda de `themes/default/tokens.css`.
   Declare só o que diferencia o seu tema (mínimo: `--ozi-color-primary` e `--ozi-color-danger`).
+- **Nunca declare um token vazio.** No `tokens.css` deste template os tokens vêm comentados:
+  descomente só os que o seu tema muda. `--ozi-color-primary: ;` não herda — apaga o fallback e a
+  propriedade cai no valor inicial (cor preta, borda sumida). Até a 2.10.4 o template vinha com os
+  tokens declarados vazios; se você copiou dessa época, apague as linhas sem valor.
 - **classMap:** só é preciso mapear os tokens que os seus componentes usam.
   Referência de tokens e uso por plugin: `ozi-ui-docs/dev/_meta/classMap-tokens.md`.
 - **dark.css:** mantenha os dois blocos (`[data-ozi-theme="dark"]` e

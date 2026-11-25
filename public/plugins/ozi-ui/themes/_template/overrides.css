@@ -26,7 +26,7 @@
 .ozi-select-control:focus,
 .ozi-autocomplete-input:focus {
     /* border-color: var(--ozi-border-color-focus); outline: 0;
-       box-shadow: /* seu anel de foco */; */
+       box-shadow: <seu anel de foco>; */
 }
 
 /* ─── DROPDOWN — ozi-select / ozi-autocomplete ──────────── */

@@ -4,7 +4,8 @@
  *
  * Instruções:
  *   1. Copie esta pasta para themes/meu-tema/
- *   2. Preencha os valores dos tokens abaixo
+ *   2. Descomente só os tokens que o seu tema muda e preencha o valor
+ *      (⚠️ token declarado VAZIO não herda: apaga o fallback e a cor vira preta)
  *   3. Crie overrides.css com estilos dos componentes
  *   4. Crie classmap.js com as classes do seu framework
  *   5. Configure: oziConf({ theme: 'custom', classMap: {...} })
@@ -14,53 +15,53 @@
 
 :root {
     /* ─── CORES PRINCIPAIS ──── substitua pelos valores do seu design ── */
-    --ozi-color-primary:/* ex: #7c3aed */;
-    --ozi-color-primary-hover:  ;
-    --ozi-color-primary-light:  ;
-    --ozi-color-secondary:      ;
-    --ozi-color-success:        ;
-    --ozi-color-success-light:  ;
-    --ozi-color-danger:         ;
-    --ozi-color-danger-light:   ;
-    --ozi-color-warning:        ;
-    --ozi-color-warning-light:  ;
+    /* --ozi-color-primary:ex: #7c3aed ; */
+    /* --ozi-color-primary-hover:  ; */
+    /* --ozi-color-primary-light:  ; */
+    /* --ozi-color-secondary:      ; */
+    /* --ozi-color-success:        ; */
+    /* --ozi-color-success-light:  ; */
+    /* --ozi-color-danger:         ; */
+    /* --ozi-color-danger-light:   ; */
+    /* --ozi-color-warning:        ; */
+    /* --ozi-color-warning-light:  ; */
 
     /* ─── NEUTROS ────────────────────────────────────────────────────── */
-    --ozi-color-white:          ;
-    --ozi-color-gray-50:        ;
-    --ozi-color-gray-100:       ;
-    --ozi-color-gray-200:       ;
-    --ozi-color-gray-300:       ;
-    --ozi-color-gray-400:       ;
-    --ozi-color-gray-500:       ;
-    --ozi-color-gray-600:       ;
-    --ozi-color-gray-700:       ;
-    --ozi-color-gray-800:       ;
-    --ozi-color-gray-900:       ;
+    /* --ozi-color-white:          ; */
+    /* --ozi-color-gray-50:        ; */
+    /* --ozi-color-gray-100:       ; */
+    /* --ozi-color-gray-200:       ; */
+    /* --ozi-color-gray-300:       ; */
+    /* --ozi-color-gray-400:       ; */
+    /* --ozi-color-gray-500:       ; */
+    /* --ozi-color-gray-600:       ; */
+    /* --ozi-color-gray-700:       ; */
+    /* --ozi-color-gray-800:       ; */
+    /* --ozi-color-gray-900:       ; */
 
     /* ─── TIPOGRAFIA ─────────────────────────────────────────────────── */
-    --ozi-font-family:          ;
-    --ozi-font-size-base:       ;
-    --ozi-font-size-sm:         ;
+    /* --ozi-font-family:          ; */
+    /* --ozi-font-size-base:       ; */
+    /* --ozi-font-size-sm:         ; */
 
     /* ─── BORDAS ─────────────────────────────────────────────────────── */
-    --ozi-border-width:         ;
-    --ozi-border-color:         ;
-    --ozi-border-color-focus:   ;
-    --ozi-radius-sm:            ;
-    --ozi-radius-md:            ;
-    --ozi-radius-lg:            ;
+    /* --ozi-border-width:         ; */
+    /* --ozi-border-color:         ; */
+    /* --ozi-border-color-focus:   ; */
+    /* --ozi-radius-sm:            ; */
+    /* --ozi-radius-md:            ; */
+    /* --ozi-radius-lg:            ; */
 
     /* ─── SOMBRAS ────────────────────────────────────────────────────── */
-    --ozi-shadow-sm:            ;
-    --ozi-shadow-md:            ;
-    --ozi-shadow-lg:            ;
+    /* --ozi-shadow-sm:            ; */
+    /* --ozi-shadow-md:            ; */
+    /* --ozi-shadow-lg:            ; */
 
     /* ─── VALIDAÇÃO ──────────────────────────────────────────────────── */
-    --ozi-invalid-color:        ;
-    --ozi-invalid-border:       ;
-    --ozi-valid-color:          ;
-    --ozi-valid-border:         ;
+    /* --ozi-invalid-color:        ; */
+    /* --ozi-invalid-border:       ; */
+    /* --ozi-valid-color:          ; */
+    /* --ozi-valid-border:         ; */
 }
 
 

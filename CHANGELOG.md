@@ -6,6 +6,18 @@ listed where they changed.
 
 ## [Unreleased]
 
+## [2.10.5] — 2026-11-25
+
+### Fixed
+- **Custom theme template: copying it no longer breaks the components.** `themes/_template/tokens.css`
+  and `themes/_template/template-theme.css` declared every token with an empty value
+  (`--ozi-color-primary: ;`), while the README said undeclared tokens fall back to the `default` theme.
+  An empty custom property does not fall back: it wins over the `var()` fallback and the property drops
+  to its initial value (black text, missing borders). Linking the template unedited changed 172 tokens.
+  The 97 declarations now ship commented out: uncomment only what your theme changes.
+- If you copied the template before 2.10.5, delete the token lines you left without a value.
+- Template files only. No JS, component CSS or ready-made theme changed.
+
 ## [2.10.4] — 2026-11-23
 
 ### Fixed
@@ -430,7 +442,8 @@ Version 2: every plugin rewritten in plain JavaScript, no jQuery, zero runtime d
 A v1 compatibility ramp (jQuery shims, `zld*` aliases) is included and opt-in. `ozi-copy` and
 `ozi-paste` were discontinued. See the [migration guide](https://oziui.com/en/docs/migration).
 
-[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.4...HEAD
+[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.5...HEAD
+[2.10.5]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.4...v2.10.5
 [2.10.4]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.3...v2.10.4
 [2.10.3]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.2...v2.10.3
 [2.10.2]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.1...v2.10.2

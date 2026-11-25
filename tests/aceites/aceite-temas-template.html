@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite do themes/_template copiado sem preencher</title>
+<!-- Base: tema default + CSS dos componentes (os :root de cada um derivam dos tokens globais) -->
+<link rel="stylesheet" href="../plugins/ozi-ui/themes/default/tokens.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/themes/default/overrides.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/themes/default/dark.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/modules/ozi-validate/css/ozi-validate.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/components/ozi-select/css/ozi-select.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/components/ozi-autocomplete/css/ozi-autocomplete.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/components/ozi-editor/css/ozi-editor.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/components/ozi-audio/css/ozi-audio.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/components/ozi-auth/css/ozi-auth.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/components/ozi-check/css/ozi-check.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/components/ozi-search/css/ozi-search.css">
+<!-- O _template copiado como o README manda, SEM preencher nada -->
+<link rel="stylesheet" class="tpl" href="../plugins/ozi-ui/themes/_template/tokens.css">
+<link rel="stylesheet" class="tpl" href="../plugins/ozi-ui/themes/_template/overrides.css">
+<link rel="stylesheet" class="tpl" href="../plugins/ozi-ui/themes/_template/dark.css">
+<link rel="stylesheet" class="tpl" href="../plugins/ozi-ui/themes/_template/template-theme.css">
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 980px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .3rem 0; word-break: break-all; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+</style>
+</head>
+<body>
+<h1>Aceite do <code>themes/_template</code> copiado sem preencher</h1>
+<p>Critério: o README manda copiar o <code>_template</code> e diz que "o que você não declarar herda do
+default". Então os 4 arquivos CSS do template, linkados <strong>sem nenhuma edição</strong> por cima do
+<code>default</code>, não podem mudar o valor de nenhum token <code>--ozi-*</code> (globais e de
+componente), no claro nem no escuro. Um token declarado vazio (<code>--x: ;</code>) não herda: ele apaga o
+fallback do <code>var()</code> e a propriedade cai no valor inicial (2.10.4: cor preta).</p>
+<ul id="resultados"></ul>
+<div id="veredito">rodando…</div>
+
+<script>
+(function () {
+    var html = document.documentElement;
+    var tpl = Array.prototype.slice.call(document.querySelectorAll('link.tpl'));
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+
+    // Todos os tokens --ozi-* declarados nas folhas do pacote (exceto o próprio template)
+    function nomes() {
+        var set = {};
+        Array.prototype.forEach.call(document.styleSheets, function (sh) {
+            if (sh.ownerNode && sh.ownerNode.classList.contains('tpl')) return;
+            var rules; try { rules = sh.cssRules; } catch (e) { return; }
+            (function walk(list) {
+                Array.prototype.forEach.call(list, function (r) {
+                    if (r.cssRules) walk(r.cssRules);
+                    if (!r.style) return;
+                    for (var i = 0; i < r.style.length; i++) {
+                        if (r.style[i].indexOf('--ozi-') === 0) set[r.style[i]] = 1;
+                    }
+                });
+            })(rules);
+        });
+        return Object.keys(set).sort();
+    }
+    function snapshot(lista) {
+        var cs = getComputedStyle(html), o = {};
+        lista.forEach(function (n) { o[n] = cs.getPropertyValue(n).trim(); });
+        return o;
+    }
+    function liga(on) { tpl.forEach(function (l) { l.disabled = !on; }); }
+
+    var todos = true;
+    try {
+        liga(false);
+        var lista = nomes();
+        todos = check('tokens --ozi-* encontrados nas folhas do pacote: ' + lista.length, lista.length > 150) && todos;
+
+        [['claro', null], ['escuro', 'dark']].forEach(function (modo) {
+            if (modo[1]) html.setAttribute('data-ozi-theme', modo[1]); else html.removeAttribute('data-ozi-theme');
+            liga(false); var antes = snapshot(lista);
+            liga(true);  var depois = snapshot(lista);
+            var mudou = lista.filter(function (n) { return antes[n] !== depois[n]; });
+            todos = check(modo[0] + ': nenhum token muda com o _template cru', mudou.length === 0,
+                mudou.length ? mudou.length + ' mudaram, ex.: ' + mudou.slice(0, 6).map(function (n) {
+                    return n + ' "' + antes[n] + '" → "' + depois[n] + '"';
+                }).join(' | ') : '') && todos;
+        });
+        html.removeAttribute('data-ozi-theme');
+    } catch (err) {
+        todos = check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : '')) && false;
+    }
+
+    var vered = document.getElementById('veredito');
+    vered.textContent = todos ? '✓ ACEITE _template: PASSOU' : '✗ ACEITE _template: FALHOU';
+    vered.className = todos ? 'pass' : 'fail';
+    document.title = todos ? 'DONE:PASS' : 'DONE:FAIL';
+})();
+</script>
+</body>
+</html>
