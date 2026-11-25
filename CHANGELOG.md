@@ -6,6 +6,16 @@ listed where they changed.
 
 ## [Unreleased]
 
+## [2.10.6] — 2026-11-25
+
+### Fixed
+- **`clarity` skin no longer recolors the whole app.** `themes/clarity/tokens.css` declared
+  `--ozi-color-primary` under `:root[data-ozi-skin~="clarity"]`, a stronger selector than `:root`. With
+  the skin on, 26 tokens outside `ozi-audio` turned blue (select and auth focus, editor highlight…), and
+  the app's brand color (`:root { --ozi-color-primary: … }`, 2.10.3) could not win without `!important`.
+  The skin now sets only `--ozi-audio-*` tokens; the audio player looks exactly the same.
+- `themes/clarity/tokens.css` 1.1.1 only. No JS or component CSS changed.
+
 ## [2.10.5] — 2026-11-25
 
 ### Fixed
@@ -442,7 +452,8 @@ Version 2: every plugin rewritten in plain JavaScript, no jQuery, zero runtime d
 A v1 compatibility ramp (jQuery shims, `zld*` aliases) is included and opt-in. `ozi-copy` and
 `ozi-paste` were discontinued. See the [migration guide](https://oziui.com/en/docs/migration).
 
-[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.5...HEAD
+[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.6...HEAD
+[2.10.6]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.5...v2.10.6
 [2.10.5]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.4...v2.10.5
 [2.10.4]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.3...v2.10.4
 [2.10.3]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.2...v2.10.3

@@ -1,6 +1,6 @@
 /**
  * themes/clarity/tokens.css
- * Versão: 1.0.0
+ * Versão: 1.1.1
  *
  * Skin "clarity" do OZI-UI — geração visual do ozi-audio (Designer).
  * Paleta: PLAY azul · progresso/volume ROXO · gravar VERMELHO · concluir VERDE,
@@ -21,6 +21,11 @@
  * no <html> para evitar flash e para alternar default↔clarity.
  *
  * Changelog:
+ *   - v1.1.1: [FIX vazamento] tirados --ozi-color-primary/-hover do bloco da skin. Eles
+ *     venciam o :root (especificidade 0,2,0) e pintavam o APP inteiro de azul: select,
+ *     editor, foco, e a cor da marca (white-label) declarada depois não vencia. O único
+ *     token do áudio que dependia disso (--ozi-audio-progress-fill) agora é declarado
+ *     direto: o áudio fica idêntico. Aceite: teste-v2/aceite-temas-skin-escopo.html (2.10.6).
  *   - v1.1.0: [FIX cascade] tokens escopados em :root[data-ozi-skin~="clarity"]
  *     p/ vencer a base independente da ordem de carga.
  *   - v1.0.0: [SKIN clarity] tokens. Play azul, progresso/volume roxo, título
@@ -37,9 +42,10 @@
     --ozi-clarity-red:           #e0454f;   /* gravar (recorder/full) */
     --ozi-clarity-green:         #1f9d63;   /* concluir/salvar (recorder/full) */
 
-    /* accent do componente = ROXO (alimenta progress/volume/timeline via var-chain) */
-    --ozi-color-primary:         var(--ozi-clarity-blue);
-    --ozi-color-primary-hover:   var(--ozi-clarity-blue-hover);
+    /* barra de progresso = azul. Até a 1.1.0 isto vinha de --ozi-color-primary declarado
+       aqui, o que vazava: com a skin ligada, select, editor e a cor da marca do app viravam
+       azul (o seletor :root[data-ozi-skin] vence o :root). Skin só mexe em --ozi-audio-*. */
+    --ozi-audio-progress-fill:   var(--ozi-clarity-blue);
 
     /* ─── OZI-AUDIO · skin clarity (modo claro) ─────── */
 

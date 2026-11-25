@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite: a skin clarity só mexe no ozi-audio</title>
+<!-- Ordem documentada: componentes → tema → skin → marca do app -->
+<link rel="stylesheet" href="../plugins/ozi-ui/modules/ozi-validate/css/ozi-validate.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/components/ozi-select/css/ozi-select.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/components/ozi-autocomplete/css/ozi-autocomplete.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/components/ozi-editor/css/ozi-editor.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/components/ozi-audio/css/ozi-audio.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/components/ozi-auth/css/ozi-auth.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/components/ozi-search/css/ozi-search.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/themes/default/tokens.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/themes/default/overrides.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/themes/default/dark.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/themes/clarity/tokens.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/themes/clarity/overrides.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/themes/clarity/dark.css">
+<style id="marca">:root { --ozi-color-primary: #e11d48; }</style>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 980px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .3rem 0; word-break: break-all; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+</style>
+</head>
+<body>
+<h1>Aceite: a skin <code>clarity</code> só mexe no <code>ozi-audio</code></h1>
+<p>Critério: ligar <code>data-ozi-skin="clarity"</code> no <code>&lt;html&gt;</code> não muda nenhum token
+<code>--ozi-*</code> que não seja <code>--ozi-audio-*</code> nem <code>--ozi-clarity-*</code>; a cor da marca
+do app (declarada por último, no <code>:root</code>) vence com a skin ligada; e o áudio mantém a paleta
+da skin (play e progresso azuis, volume roxo). No claro e no escuro. Na clarity 1.1.0 (pacote 2.10.5) a
+skin declarava <code>--ozi-color-primary</code> num seletor mais forte que o <code>:root</code> e pintava o app
+inteiro de azul.</p>
+<ul id="resultados"></ul>
+<div id="veredito">rodando…</div>
+<div id="sonda"></div>
+
+<script>
+(function () {
+    var html = document.documentElement, sonda = document.getElementById('sonda');
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function nomes() {
+        var set = {};
+        Array.prototype.forEach.call(document.styleSheets, function (sh) {
+            var rules; try { rules = sh.cssRules; } catch (e) { return; }
+            (function walk(list) {
+                Array.prototype.forEach.call(list, function (r) {
+                    if (r.cssRules) walk(r.cssRules);
+                    if (!r.style) return;
+                    for (var i = 0; i < r.style.length; i++) {
+                        if (r.style[i].indexOf('--ozi-') === 0) set[r.style[i]] = 1;
+                    }
+                });
+            })(rules);
+        });
+        return Object.keys(set).sort();
+    }
+    function tok(n) { return getComputedStyle(html).getPropertyValue(n).trim(); }
+    function cor(n) { sonda.style.color = ''; sonda.style.color = 'var(' + n + ')'; return getComputedStyle(sonda).color; }
+    function skin(on) { if (on) html.setAttribute('data-ozi-skin', 'clarity'); else html.removeAttribute('data-ozi-skin'); }
+
+    var todos = true;
+    try {
+        var lista = nomes();
+        var fora = lista.filter(function (n) { return n.indexOf('--ozi-audio-') !== 0 && n.indexOf('--ozi-clarity-') !== 0; });
+        todos = check('tokens fora do áudio encontrados: ' + fora.length, fora.length > 100) && todos;
+
+        [['claro', null], ['escuro', 'dark']].forEach(function (modo) {
+            if (modo[1]) html.setAttribute('data-ozi-theme', modo[1]); else html.removeAttribute('data-ozi-theme');
+
+            skin(false);
+            var antes = {}; fora.forEach(function (n) { antes[n] = tok(n); });
+            skin(true);
+            var mudou = fora.filter(function (n) { return tok(n) !== antes[n]; });
+            todos = check(modo[0] + ': ligar a skin não muda nenhum token fora do áudio', mudou.length === 0,
+                mudou.length ? mudou.length + ' mudaram, ex.: ' + mudou.slice(0, 5).map(function (n) {
+                    return n + ' "' + antes[n] + '" → "' + tok(n) + '"';
+                }).join(' | ') : '') && todos;
+
+            todos = check(modo[0] + ': com a skin, a marca do app vence (--ozi-color-primary)', cor('--ozi-color-primary') === 'rgb(225, 29, 72)', cor('--ozi-color-primary')) && todos;
+            todos = check(modo[0] + ': com a skin, o foco do select segue a marca', cor('--ozi-select-focus-color') === 'rgb(225, 29, 72)', cor('--ozi-select-focus-color')) && todos;
+            todos = check(modo[0] + ': play do áudio azul da skin', cor('--ozi-audio-play-bg') === 'rgb(61, 123, 250)', cor('--ozi-audio-play-bg')) && todos;
+            todos = check(modo[0] + ': progresso do áudio azul da skin', cor('--ozi-audio-progress-fill') === 'rgb(61, 123, 250)', cor('--ozi-audio-progress-fill')) && todos;
+            todos = check(modo[0] + ': volume do áudio roxo da skin', cor('--ozi-audio-volume-fill') === 'rgb(124, 92, 255)', cor('--ozi-audio-volume-fill')) && todos;
+        });
+        html.removeAttribute('data-ozi-theme');
+        skin(false);
+    } catch (err) {
+        todos = check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : '')) && false;
+    }
+
+    var vered = document.getElementById('veredito');
+    vered.textContent = todos ? '✓ ACEITE skin (escopo): PASSOU' : '✗ ACEITE skin (escopo): FALHOU';
+    vered.className = todos ? 'pass' : 'fail';
+    document.title = todos ? 'DONE:PASS' : 'DONE:FAIL';
+})();
+</script>
+</body>
+</html>
