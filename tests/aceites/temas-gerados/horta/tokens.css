@@ -1,0 +1,17 @@
+/* tokens.css */
+/* Gerado por IA a partir do prompt oficial (A16) — marca: Horta Viva */
+:root {
+  /* Verde da marca #22c55e escurecido para o texto branco passar 4.5:1 (default #3b82f6) */
+  --ozi-color-primary: #15733a;
+  --ozi-color-primary-hover: #115e2f;
+  /* Placeholder/texto secundário: #6b7280 falhava (4.39:1 sobre gray-100) */
+  --ozi-color-gray-500: #5f6674;
+  /* Erro: #ef4444 tinha 3.76:1 sobre branco (default) */
+  --ozi-color-danger: #c53030;
+  /* Sucesso: só a mensagem de validação; --ozi-color-success (#22c55e) fica como está */
+  --ozi-valid-color: #15803d;
+  /* Forma pill-like pedida pela marca */
+  --ozi-radius-sm: 0.875rem;
+  --ozi-radius-md: 1.25rem;
+  --ozi-radius-lg: 1.75rem;
+}

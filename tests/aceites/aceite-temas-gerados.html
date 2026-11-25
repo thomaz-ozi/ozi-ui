@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite dos temas gerados pelo prompt oficial (A16)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 1100px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } h2 { font-size: 1rem; margin-top: 1.4rem; }
+    .pass { color: #15803d; } .fail { color: #b91c1c; } .info { color: #555; }
+    li { margin: .2rem 0; word-break: break-word; font-size: .9rem; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+    iframe { width: 1px; height: 1px; border: 0; position: absolute; left: -9999px; }
+</style>
+</head>
+<body>
+<h1>Aceite dos temas gerados pelo prompt oficial (A16)</h1>
+<p>Cada tema em <code>temas-gerados/</code> foi gerado por uma IA sem contexto, só com o prompt da página
+"Temas e skins" e um pedido de marca. Todos têm de passar no <code>_verificador-tema.html</code>. O
+<code>_ruim</code> viola de propósito cada regra do prompt e tem de <strong>reprovar</strong> (prova de que o
+verificador pega). O <code>default</code> entra como linha de base (só informativo).</p>
+<div id="relatorio"></div>
+<div id="veredito">rodando…</div>
+
+<script>
+(function () {
+    // nome da pasta → resultado esperado
+    var CASOS = [
+        ['',                            'base'],
+        ['temas-gerados/_ruim',         'reprova'],
+        ['temas-gerados/oceano',        'passa'],
+        ['temas-gerados/terracota',     'passa'],
+        ['temas-gerados/grafite',       'passa'],
+        ['temas-gerados/horta',         'passa']
+    ];
+    var todos = true, rel = document.getElementById('relatorio');
+
+    function roda(caso) {
+        return new Promise(function (ok) {
+            var f = document.createElement('iframe');
+            f.src = '_verificador-tema.html' + (caso[0] ? '?tema=' + encodeURIComponent(caso[0]) : '');
+            var t = setTimeout(function () { ok({ caso: caso, res: { ok: false, falhas: ['tempo esgotado'] }, doc: null }); }, 20000);
+            function msg(e) {
+                if (e.source !== f.contentWindow || !e.data || !e.data.oziVerificador) return;
+                clearTimeout(t); window.removeEventListener('message', msg);
+                ok({ caso: caso, res: e.data.oziVerificador, doc: f.contentDocument });
+            }
+            window.addEventListener('message', msg);
+            document.body.appendChild(f);
+        });
+    }
+
+    (async function () {
+        for (var caso of CASOS) {
+            var r = await roda(caso);
+            var esperado = caso[1], ok;
+            if (esperado === 'base') ok = true;
+            else if (esperado === 'passa') ok = r.res.ok;
+            else ok = !r.res.ok && r.res.falhas.length >= 5;   // o ruim tem de cair em várias regras
+            if (!ok) todos = false;
+
+            var h = document.createElement('h2');
+            h.className = esperado === 'base' ? 'info' : ok ? 'pass' : 'fail';
+            h.textContent = (esperado === 'base' ? '· ' : ok ? '✓ ' : '✗ ') + (caso[0] || 'default (linha de base)') +
+                ' — esperado: ' + esperado + ', obtido: ' + (r.res.ok ? 'passou' : 'reprovou (' + r.res.falhas.length + ' falhas)') +
+                (r.res.avisos && r.res.avisos.length ? ', ' + r.res.avisos.length + ' aviso(s) abaixo de AA' : '');
+            rel.appendChild(h);
+            var ul = document.createElement('ul');
+            if (r.doc) {
+                Array.prototype.forEach.call(r.doc.querySelectorAll('#resultados li'), function (li) {
+                    // linha de base: só os números; tema que passou: só as falhas (não há); demais: tudo que falhou
+                    if (esperado === 'passa' && r.res.ok && !li.classList.contains('info')) return;
+                    if (esperado === 'reprova' && li.classList.contains('pass')) return;
+                    var x = document.createElement('li'); x.className = li.className; x.textContent = li.textContent; ul.appendChild(x);
+                });
+            } else {
+                r.res.falhas.forEach(function (fa) { var x = document.createElement('li'); x.className = 'fail'; x.textContent = fa; ul.appendChild(x); });
+            }
+            rel.appendChild(ul);
+        }
+        var v = document.getElementById('veredito');
+        v.textContent = todos ? '✓ ACEITE temas gerados: PASSOU' : '✗ ACEITE temas gerados: FALHOU';
+        v.className = todos ? 'pass' : 'fail';
+        document.title = todos ? 'DONE:PASS' : 'DONE:FAIL';
+    })();
+})();
+</script>
+</body>
+</html>

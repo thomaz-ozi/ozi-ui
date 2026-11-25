@@ -1,0 +1,21 @@
+/* tokens.css */
+/* Gerado por IA a partir do prompt oficial (A16) — marca: Terracota Arquitetura */
+:root {
+    --ozi-color-primary: #c2410c;
+    --ozi-color-primary-hover: #9a3412;
+    --ozi-color-success: #15803d;
+    --ozi-color-danger: #b91c1c;
+    --ozi-color-white: #fffdf9;
+    --ozi-color-gray-50: #faf6ef;
+    --ozi-color-gray-100: #f3ede3;
+    --ozi-color-gray-200: #ebe3d6;
+    --ozi-color-gray-300: #ddd2c0;
+    --ozi-color-gray-400: #a89a89;
+    --ozi-color-gray-500: #6f6152;
+    --ozi-color-gray-600: #5a4d41;
+    --ozi-color-gray-700: #44392f;
+    --ozi-color-gray-900: #1c1713;
+    --ozi-radius-sm: 0.5rem;
+    --ozi-radius-md: 0.75rem;
+    --ozi-radius-lg: 1rem;
+}

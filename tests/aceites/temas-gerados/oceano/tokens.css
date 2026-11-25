@@ -1,0 +1,14 @@
+/* tokens.css */
+/* Gerado por IA a partir do prompt oficial (A16) — marca: Oceano Seguros */
+:root {
+    /* Primary: sky-700. O #0ea5e9 da marca daria 2.77:1 com texto branco no claro, por isso escurece no claro. */
+    --ozi-color-primary: #0369a1;
+    --ozi-color-primary-hover: #075985;
+
+    /* Success e danger: versões escuras para passar 4.5:1 sobre branco. */
+    --ozi-color-success: #15803d;
+    --ozi-color-danger: #dc2626;
+
+    /* Gray-500 escurecido: #6b7280 dá 4.39:1 sobre gray-100. */
+    --ozi-color-gray-500: #636b78;
+}

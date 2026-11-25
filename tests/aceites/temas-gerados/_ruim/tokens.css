@@ -1,0 +1,10 @@
+/* Tema RUIM de propósito: viola cada regra do prompt oficial (A16).
+   O aceite-temas-gerados.html exige que o verificador o reprove. */
+:root {
+    --ozi-color-primary:       #fde047;   /* amarelo claro: texto branco no botão e foco sem contraste */
+    --ozi-color-gray-700:      #d1d5db;   /* texto do select quase sumindo no branco */
+    --ozi-color-success:       ;          /* vazio: apaga o fallback */
+    --ozi-select-padding:      12px;      /* token morto: nenhum CSS lê */
+    color: red;                           /* propriedade que não é token */
+}
+.ozi-select-control { display: block; }   /* regra estrutural: proibida */

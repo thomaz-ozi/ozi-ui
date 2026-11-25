@@ -1,8 +1,14 @@
 /**
  * components/ozi-audio/css/ozi-audio.css
- * Versão: 1.2.0
+ * Versão: 1.2.1
  *
  * Changelog:
+ *   - v1.2.1: [FIX escuro] os dois blocos de escuro divergiam (armadilha A3): o forçado
+ *     usava --ozi-color-gray-400, que na escala invertida do escuro vira #6b7280 (texto
+ *     3,04:1 no card); o do sistema tinha valores fixos que ignoravam o tema e punham o
+ *     texto secundário cinza-escuro no card escuro. Agora os dois são iguais e usam
+ *     gray-500 (texto, status) e gray-600 (secundário), certos na escala invertida.
+ *     Achado pelo verificador de temas da A16 (aceite-temas-gerados.html).
  *   - v1.2.0: [SKIN 4.2] Recorder com revelação progressiva — a classe `is-empty`
  *     no root esconde play/timeline/volume/speed nas etapas 1-2 (gravar/gravando);
  *     o JS a remove no stop e revela o player (etapa 3). Status do recorder ganhou
@@ -87,9 +93,9 @@
     --ozi-audio-shadow:          rgba(0, 0, 0, 0.35);
     --ozi-audio-border-color:    rgba(255, 255, 255, 0.08);
     --ozi-audio-color:           #4b5563;
-    --ozi-audio-text:            var(--ozi-color-gray-400, #9ca3af);
-    --ozi-audio-text-secondary:  var(--ozi-color-gray-600, #4b5563);
-    --ozi-audio-status:          var(--ozi-color-gray-400, #9ca3af);
+    --ozi-audio-text:            var(--ozi-color-gray-500, #9ca3af);
+    --ozi-audio-text-secondary:  var(--ozi-color-gray-600, #d1d5db);
+    --ozi-audio-status:          var(--ozi-color-gray-500, #9ca3af);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -98,9 +104,9 @@
         --ozi-audio-shadow:         rgba(0, 0, 0, 0.35);
         --ozi-audio-border-color:   rgba(255, 255, 255, 0.08);
         --ozi-audio-color:          #4b5563;
-        --ozi-audio-text:           #9ca3af;
-        --ozi-audio-text-secondary: #4b5563;
-        --ozi-audio-status:         #9ca3af;
+        --ozi-audio-text:           var(--ozi-color-gray-500, #9ca3af);
+        --ozi-audio-text-secondary: var(--ozi-color-gray-600, #d1d5db);
+        --ozi-audio-status:         var(--ozi-color-gray-500, #9ca3af);
     }
 }
 

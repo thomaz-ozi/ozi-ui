@@ -77,7 +77,8 @@ function findBrowser() {
 // ── site temporário + servidor estático ─────────────────────────────────────
 const site = mkdtempSync(join(tmpdir(), 'ozi-aceites-'));
 cpSync(join(ROOT, 'public/plugins/ozi-ui'), join(site, 'plugins/ozi-ui'), { recursive: true });
-cpSync(PAGES_DIR, join(site, 'teste-v2'), { recursive: true, filter: (p) => statSync(p).isDirectory() || p.endsWith('.html') });
+// .css só dos temas gerados pelo prompt oficial (A16), que o aceite-temas-gerados.html carrega
+cpSync(PAGES_DIR, join(site, 'teste-v2'), { recursive: true, filter: (p) => statSync(p).isDirectory() || p.endsWith('.html') || /[\\/]temas-gerados[\\/].*\.css$/.test(p) });
 
 const server = createServer((req, res) => {
     const path = join(site, decodeURIComponent(new URL(req.url, 'http://x').pathname));

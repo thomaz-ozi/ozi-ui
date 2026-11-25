@@ -6,6 +6,18 @@ listed where they changed.
 
 ## [Unreleased]
 
+## [2.10.7] — 2026-11-25
+
+### Fixed
+- **`ozi-audio`: forced dark and system dark now match.** The two dark blocks of `ozi-audio.css`
+  disagreed. Forced dark (`[data-ozi-theme="dark"]`) used `--ozi-color-gray-400`, which the inverted
+  dark scale turns into `#6b7280` (card text at 3.04:1). System dark used fixed colors that ignored the
+  theme, with dark-gray secondary text on the dark card. Both now use `gray-500`/`gray-600`.
+- **`ozi-search`: the current page number follows the theme.** It was fixed `#fff`; it now uses
+  `var(--ozi-color-white, #fff)`, like the primary button. In light mode nothing changes. In dark mode,
+  a theme needs a light primary to contrast with the background, and fixed white text disappeared on it.
+- `ozi-audio.css` 1.2.1 and `ozi-search.css` 1.0.3 only. No JS changed.
+
 ## [2.10.6] — 2026-11-25
 
 ### Fixed
@@ -452,7 +464,8 @@ Version 2: every plugin rewritten in plain JavaScript, no jQuery, zero runtime d
 A v1 compatibility ramp (jQuery shims, `zld*` aliases) is included and opt-in. `ozi-copy` and
 `ozi-paste` were discontinued. See the [migration guide](https://oziui.com/en/docs/migration).
 
-[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.6...HEAD
+[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.7...HEAD
+[2.10.7]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.6...v2.10.7
 [2.10.6]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.5...v2.10.6
 [2.10.5]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.4...v2.10.5
 [2.10.4]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.3...v2.10.4

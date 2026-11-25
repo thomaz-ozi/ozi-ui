@@ -1,0 +1,10 @@
+/* Tema RUIM de propósito: os dois blocos do escuro divergem e o texto some no escuro. */
+[data-ozi-theme="dark"] {
+    --ozi-color-white:     #111827;
+    --ozi-color-gray-900:  #1f2937;   /* texto escuro sobre fundo escuro */
+}
+@media (prefers-color-scheme: dark) {
+    :root:not([data-ozi-theme="light"]) {
+        --ozi-color-white:     #000000;   /* diferente do bloco 1 */
+    }
+}

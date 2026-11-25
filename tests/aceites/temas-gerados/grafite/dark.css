@@ -1,0 +1,35 @@
+/* dark.css */
+/* Gerado por IA a partir do prompt oficial (A16) — marca: Grafite Contabilidade */
+[data-ozi-theme="dark"] {
+    /* Primary must be light: button text is the dark background */
+    --ozi-color-primary: #cbd5e1;
+    --ozi-color-primary-hover: #e2e8f0;
+
+    /* Accent in dark: brand success passes on #1f2937, so the message uses it directly */
+    --ozi-color-success-light: rgba(16, 185, 129, 0.15);
+    --ozi-valid-color: var(--ozi-color-success);
+
+    /* Contrast fix: #dc2626 (light) is too dark on the dark background */
+    --ozi-color-danger: #f87171;
+
+    /* Restore the default dark value so the light override in tokens.css never leaks */
+    --ozi-color-gray-500: #9ca3af;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-ozi-theme="light"]) {
+        /* Primary must be light: button text is the dark background */
+        --ozi-color-primary: #cbd5e1;
+        --ozi-color-primary-hover: #e2e8f0;
+
+        /* Accent in dark: brand success passes on #1f2937, so the message uses it directly */
+        --ozi-color-success-light: rgba(16, 185, 129, 0.15);
+        --ozi-valid-color: var(--ozi-color-success);
+
+        /* Contrast fix: #dc2626 (light) is too dark on the dark background */
+        --ozi-color-danger: #f87171;
+
+        /* Restore the default dark value so the light override in tokens.css never leaks */
+        --ozi-color-gray-500: #9ca3af;
+    }
+}

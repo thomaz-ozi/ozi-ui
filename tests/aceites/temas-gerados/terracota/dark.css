@@ -1,0 +1,36 @@
+/* dark.css */
+/* Gerado por IA a partir do prompt oficial (A16) — marca: Terracota Arquitetura */
+[data-ozi-theme="dark"] {
+    --ozi-color-primary: #fb923c;
+    --ozi-color-primary-hover: #fdba74;
+    --ozi-color-success: #22c55e;
+    --ozi-color-danger: #f87171;
+    --ozi-color-white: #211b16;
+    --ozi-color-gray-50: #14100d;
+    --ozi-color-gray-100: #2b241d;
+    --ozi-color-gray-200: #3a3029;
+    --ozi-color-gray-300: #54483d;
+    --ozi-color-gray-400: #75675a;
+    --ozi-color-gray-500: #b3a392;
+    --ozi-color-gray-600: #d6cabb;
+    --ozi-color-gray-700: #ebe3d8;
+    --ozi-color-gray-900: #faf6f0;
+}
+@media (prefers-color-scheme: dark) {
+    :root:not([data-ozi-theme="light"]) {
+        --ozi-color-primary: #fb923c;
+        --ozi-color-primary-hover: #fdba74;
+        --ozi-color-success: #22c55e;
+        --ozi-color-danger: #f87171;
+        --ozi-color-white: #211b16;
+        --ozi-color-gray-50: #14100d;
+        --ozi-color-gray-100: #2b241d;
+        --ozi-color-gray-200: #3a3029;
+        --ozi-color-gray-300: #54483d;
+        --ozi-color-gray-400: #75675a;
+        --ozi-color-gray-500: #b3a392;
+        --ozi-color-gray-600: #d6cabb;
+        --ozi-color-gray-700: #ebe3d8;
+        --ozi-color-gray-900: #faf6f0;
+    }
+}

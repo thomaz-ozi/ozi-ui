@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI — Verificador de tema de tokens</title>
+<!-- Base: o pacote inteiro como o app real carrega (componentes → tema default → tema testado) -->
+<link rel="stylesheet" href="../plugins/ozi-ui/shared/css/ozi-reset.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/shared/css/ozi-utilities.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/modules/ozi-validate/css/ozi-validate.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/modules/ozi-loaddata/css/ozi-loaddata.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/components/ozi-select/css/ozi-select.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/components/ozi-autocomplete/css/ozi-autocomplete.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/components/ozi-editor/css/ozi-editor.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/components/ozi-audio/css/ozi-audio.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/components/ozi-auth/css/ozi-auth.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/components/ozi-check/css/ozi-check.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/components/ozi-search/css/ozi-search.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/themes/default/tokens.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/themes/default/overrides.css">
+<link rel="stylesheet" href="../plugins/ozi-ui/themes/default/dark.css">
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 1100px; margin: 2rem auto; padding: 0 1rem; background: #fff; color: #111; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; } .info { color: #555; }
+    li { margin: .25rem 0; word-break: break-word; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+</style>
+</head>
+<body>
+<h1>Verificador de tema de tokens <small id="nome"></small></h1>
+<p>Uso: <code>_verificador-tema.html?tema=temas-gerados/oceano</code> (a pasta tem <code>tokens.css</code> e
+<code>dark.css</code>). Sem <code>tema</code>, mede o próprio <code>default</code> (linha de base).
+Critérios, os mesmos do prompt oficial da página "Temas e skins":</p>
+<ol class="info">
+    <li><b>Forma:</b> só os seletores <code>:root</code> (tokens.css) e <code>[data-ozi-theme="dark"]</code> +
+        <code>@media (prefers-color-scheme: dark) { :root:not([data-ozi-theme="light"]) }</code> (dark.css); só
+        propriedades <code>--ozi-*</code>; nenhum valor vazio.</li>
+    <li><b>Só token com efeito:</b> todo token declarado é lido por algum CSS do pacote (direto ou via outro token).</li>
+    <li><b>Escuro coerente:</b> os dois blocos do dark.css declaram os mesmos tokens com os mesmos valores.</li>
+    <li><b>Contraste</b> (WCAG 2.1, claro e escuro): texto ≥ 4,5:1; indicador de foco ≥ 3:1. Os pares em que o
+        próprio <code>default</code> fica abaixo têm a meta do <code>default</code> (não pode piorar).</li>
+</ol>
+<ul id="resultados"></ul>
+<div id="veredito">rodando…</div>
+<div id="sonda"></div>
+
+<script>
+(async function () {
+    var html = document.documentElement, sonda = document.getElementById('sonda');
+    var tema = new URLSearchParams(location.search).get('tema');
+    document.getElementById('nome').textContent = tema ? '— ' + tema : '— default (linha de base)';
+    var todos = true, falhas = [], avisos = [];
+
+    function check(nome, ok, extra, soInfo) {
+        var li = document.createElement('li');
+        li.className = soInfo ? 'info' : (ok ? 'pass' : 'fail');
+        li.textContent = (soInfo ? '· ' : ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        if (!soInfo && !ok) { todos = false; falhas.push(nome + (extra ? ' (' + extra + ')' : '')); }
+        return ok;
+    }
+    function fim() {
+        var v = document.getElementById('veredito');
+        v.textContent = todos ? '✓ VERIFICADOR: PASSOU' : '✗ VERIFICADOR: FALHOU';
+        v.className = todos ? 'pass' : 'fail';
+        window.__resultado = { tema: tema || 'default', ok: todos, falhas: falhas, avisos: avisos };
+        document.title = todos ? 'DONE:PASS' : 'DONE:FAIL';
+        if (window.parent !== window) window.parent.postMessage({ oziVerificador: window.__resultado }, '*');
+    }
+
+    // ── cor: parse, mistura com o fundo e contraste ──────────────────────────
+    function rgba(s) {
+        var m = /rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\)/.exec(s);
+        if (m) return [+m[1], +m[2], +m[3], m[4] === undefined ? 1 : +m[4]];
+        m = /color\(srgb\s+([\d.e-]+)\s+([\d.e-]+)\s+([\d.e-]+)(?:\s*\/\s*([\d.]+))?\)/.exec(s);
+        if (m) return [m[1] * 255, m[2] * 255, m[3] * 255, m[4] === undefined ? 1 : +m[4]];
+        return null;
+    }
+    function cor(token) {
+        sonda.style.color = ''; sonda.style.color = 'var(' + token + ')';
+        return rgba(getComputedStyle(sonda).color);
+    }
+    function sobre(c, base) {          // compõe c (com alfa) sobre base (opaca)
+        var a = c[3];
+        return [c[0] * a + base[0] * (1 - a), c[1] * a + base[1] * (1 - a), c[2] * a + base[2] * (1 - a), 1];
+    }
+    function lum(c) {
+        var v = c.slice(0, 3).map(function (x) { x /= 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); });
+        return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2];
+    }
+    function contraste(a, b) { var l1 = lum(a), l2 = lum(b); return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05); }
+
+    // Pares [frente, fundo, mínimo, descrição]. O fundo translúcido é composto sobre o fundo base
+    // do componente (o primeiro fundo opaco da cadeia), que é composto sobre a página.
+    var PARES = [
+        ['--ozi-select-text-color',              '--ozi-select-bg',                    4.5, 'select: texto'],
+        ['--ozi-select-placeholder-color',       '--ozi-select-bg',                    4.5, 'select: placeholder'],
+        ['--ozi-select-selected-color',          '--ozi-select-selected-bg',           4.5, 'select: opção escolhida', '--ozi-select-bg'],
+        ['--ozi-select-focus-color',             '--ozi-select-bg',                    3.0, 'select: anel de foco'],
+        ['--ozi-autocomplete-option-color',      '--ozi-autocomplete-dropdown-bg',     4.5, 'autocomplete: opção'],
+        ['--ozi-autocomplete-option-active-color','--ozi-autocomplete-option-active-bg',4.5, 'autocomplete: opção ativa', '--ozi-autocomplete-dropdown-bg'],
+        ['--ozi-editor-text',                    '--ozi-editor-bg',                    4.5, 'editor: texto'],
+        ['--ozi-editor-muted',                   '--ozi-editor-bg',                    4.5, 'editor: texto secundário'],
+        ['--ozi-editor-active-color',            '--ozi-editor-active-bg',             4.5, 'editor: botão ativo', '--ozi-editor-toolbar-bg'],
+        ['--ozi-audio-text',                     '--ozi-audio-bg-local',               4.5, 'audio: texto'],
+        ['--ozi-auth-toggle-color',              '--ozi-auth-toggle-bg',               4.5, 'auth: botão mostrar senha'],
+        ['--ozi-search-pagination-color',        '--ozi-search-pagination-bg',         4.5, 'search: paginação'],
+        ['--ozi-search-pagination-active-color', '--ozi-search-pagination-active-bg',  4.5, 'search: página atual'],
+        ['--ozi-search-highlight-color',         '--ozi-search-highlight-bg',          4.5, 'search: trecho destacado'],
+        ['--ozi-invalid-color',                  '--ozi-select-bg',                    4.5, 'validação: mensagem de erro'],
+        ['--ozi-valid-color',                    '--ozi-select-bg',                    4.5, 'validação: mensagem de sucesso'],
+        ['--ozi-color-white',                    '--ozi-color-primary',                4.5, 'botão primário: texto'],
+        ['--ozi-color-primary',                  '--ozi-select-bg',                    3.0, 'cor primária sobre o fundo (links, ícones)']
+    ];
+
+    function medir() {
+        var pagina = cor('--ozi-color-white') || [255, 255, 255, 1];
+        if (pagina[3] < 1) pagina = sobre(pagina, [255, 255, 255, 1]);
+        var out = {};
+        PARES.forEach(function (p) {
+            var base = p[4] ? cor(p[4]) : null;
+            base = base ? sobre(base, pagina) : pagina;
+            var fg = cor(p[0]), bg = cor(p[1]);
+            if (!fg || !bg) { out[p[3]] = null; return; }
+            bg = sobre(bg, base);
+            fg = sobre(fg, bg);
+            out[p[3]] = contraste(fg, bg);
+        });
+        return out;
+    }
+    function modo(m) { if (m) html.setAttribute('data-ozi-theme', m); else html.removeAttribute('data-ozi-theme'); }
+
+    try {
+        // ── linha de base: o default, antes de carregar o tema ──────────────
+        var BASE = {};
+        [['claro', null], ['escuro', 'dark']].forEach(function (m) { modo(m[1]); BASE[m[0]] = medir(); });
+        modo(null);
+
+        // tokens lidos pelo pacote (todo var(--ozi-x) em qualquer folha carregada), com propagação
+        var lidos = {}, valores = {};
+        Array.prototype.forEach.call(document.styleSheets, function (sh) {
+            var rules; try { rules = sh.cssRules; } catch (e) { return; }
+            (function walk(list) {
+                Array.prototype.forEach.call(list, function (r) {
+                    if (r.cssRules) walk(r.cssRules);
+                    if (!r.style) return;
+                    for (var i = 0; i < r.style.length; i++) {
+                        var n = r.style[i];
+                        if (n.indexOf('--ozi-') === 0) valores[n] = (valores[n] || '') + ' ' + r.style.getPropertyValue(n);
+                    }
+                    // pelo cssText, não propriedade a propriedade: num atalho com var()
+                    // (`background: var(--x)`) as derivadas voltam vazias no CSSOM
+                    (r.style.cssText.match(/var\(\s*--ozi-[a-z0-9-]+/g) || []).forEach(function (x) { lidos[x.replace(/var\(\s*/, '')] = 1; });
+                });
+            })(rules);
+        });
+
+        if (!tema) {
+            check('linha de base (default) medida', true);
+        } else {
+            // ── 1. forma ────────────────────────────────────────────────────
+            var txt = {};
+            for (var f of ['tokens.css', 'dark.css']) {
+                var r = await fetch('./' + tema + '/' + f);
+                check(f + ' existe', r.ok, r.ok ? '' : 'HTTP ' + r.status);
+                txt[f] = r.ok ? await r.text() : '';
+            }
+            function regras(css) { var s = new CSSStyleSheet(); s.replaceSync(css); return s.cssRules; }
+            var declarados = {}, problemasForma = [], vazios = [];
+            function lerBloco(rule, onde) {
+                var m = {};
+                for (var i = 0; i < rule.style.length; i++) {
+                    var n = rule.style[i], v = rule.style.getPropertyValue(n);
+                    if (n.indexOf('--ozi-') !== 0) { problemasForma.push(onde + ': propriedade "' + n + '"'); continue; }
+                    if (v.trim() === '') vazios.push(n);
+                    m[n] = v.trim(); declarados[n] = 1;
+                }
+                // o CSSOM descarta declarações inválidas em silêncio: comparar com o texto cru
+                return m;
+            }
+            var tk = regras(txt['tokens.css']);
+            Array.prototype.forEach.call(tk, function (r) {
+                if (r.selectorText === ':root') lerBloco(r, 'tokens.css :root');
+                else problemasForma.push('tokens.css: regra não permitida "' + (r.selectorText || r.cssText.slice(0, 60)) + '"');
+            });
+            var blocoAttr = null, blocoMedia = null;
+            Array.prototype.forEach.call(regras(txt['dark.css']), function (r) {
+                if (r.selectorText === '[data-ozi-theme="dark"]') blocoAttr = lerBloco(r, 'dark.css [data-ozi-theme]');
+                else if (r.media && /prefers-color-scheme:\s*dark/.test(r.media.mediaText) && r.cssRules.length === 1 &&
+                         r.cssRules[0].selectorText === ':root:not([data-ozi-theme="light"])') blocoMedia = lerBloco(r.cssRules[0], 'dark.css @media');
+                else problemasForma.push('dark.css: regra não permitida "' + (r.selectorText || r.cssText.slice(0, 60)) + '"');
+            });
+            // texto cru: declarações que o CSSOM jogou fora (sintaxe quebrada) e propriedades fora do padrão
+            var cru = (txt['tokens.css'] + txt['dark.css']).replace(/\/\*[\s\S]*?\*\//g, '');
+            var nDecl = (cru.match(/--ozi-[a-z0-9-]+\s*:/g) || []).length;
+            var nCssom = Object.keys(declarados).length;
+            check('forma: só seletores permitidos e só propriedades --ozi-*', problemasForma.length === 0, problemasForma.slice(0, 4).join(' | '));
+            check('forma: nenhum token vazio', vazios.length === 0, vazios.join(', '));
+            check('forma: dark.css tem os dois blocos', !!blocoAttr && !!blocoMedia, (blocoAttr ? '' : 'falta [data-ozi-theme="dark"] ') + (blocoMedia ? '' : 'falta @media com :root:not([data-ozi-theme="light"])'));
+            check('forma: tokens declarados', nCssom > 0, nCssom + ' tokens distintos, ' + nDecl + ' declarações no texto', true);
+
+            // ── 2. só token com efeito ───────────────────────────────────────
+            // vivo = lido diretamente, ou citado no valor de um token vivo (fecho transitivo)
+            var vivo = Object.assign({}, lidos), mudou = true;
+            while (mudou) {
+                mudou = false;
+                Object.keys(vivo).forEach(function (t) {
+                    ((valores[t] || '').match(/var\(\s*--ozi-[a-z0-9-]+/g) || []).forEach(function (x) {
+                        x = x.replace(/var\(\s*/, ''); if (!vivo[x]) { vivo[x] = 1; mudou = true; }
+                    });
+                });
+            }
+            var mortos = Object.keys(declarados).filter(function (t) { return !vivo[t]; });
+            check('só token com efeito (lido por algum CSS do pacote)', mortos.length === 0, mortos.join(', '));
+
+            // ── 3. escuro coerente ──────────────────────────────────────────
+            if (blocoAttr && blocoMedia) {
+                var dif = Object.keys(Object.assign({}, blocoAttr, blocoMedia)).filter(function (t) { return blocoAttr[t] !== blocoMedia[t]; });
+                check('escuro: os dois blocos têm os mesmos tokens e valores', dif.length === 0, dif.join(', '));
+            }
+
+            // ── carrega o tema de verdade (depois do default) ────────────────
+            await Promise.all(['tokens.css', 'dark.css'].map(function (f) {
+                return new Promise(function (ok, erro) {
+                    var l = document.createElement('link'); l.rel = 'stylesheet'; l.href = './' + tema + '/' + f;
+                    l.onload = ok; l.onerror = function () { erro(new Error('não carregou ' + f)); };
+                    document.head.appendChild(l);
+                });
+            }));
+        }
+
+        // ── 4. contraste ────────────────────────────────────────────────────
+        [['claro', null], ['escuro', 'dark']].forEach(function (m) {
+            modo(m[1]);
+            var med = medir();
+            PARES.forEach(function (p) {
+                var v = med[p[3]], b = BASE[m[0]][p[3]];
+                var meta = Math.min(p[2], b || p[2]);
+                var nota = (b && b < p[2]) ? ' (meta do default: ' + b.toFixed(2) + ')' : '';
+                if (v === null || v === undefined) { check(m[0] + ': ' + p[3], false, 'cor não resolvida'); return; }
+                if (!tema) { check(m[0] + ': ' + p[3] + ' = ' + v.toFixed(2) + ':1', v >= p[2] - 0.005, v < p[2] ? 'abaixo de ' + p[2] + ' no próprio default' : '', v < p[2]); return; }
+                var passou = check(m[0] + ': ' + p[3] + ' ≥ ' + meta.toFixed(2) + ':1', v >= meta - 0.005, v.toFixed(2) + ':1' + nota);
+                // passou no piso mas não em AA: aviso (o prompt pede AA; o default também não chega lá)
+                if (passou && v < p[2] - 0.005) {
+                    avisos.push(m[0] + ': ' + p[3] + ' ' + v.toFixed(2) + ':1');
+                    check('⚠ ' + m[0] + ': ' + p[3] + ' abaixo de AA (' + p[2] + ':1)', true, v.toFixed(2) + ':1 — aceito porque o default também está abaixo', true);
+                }
+            });
+        });
+        modo(null);
+    } catch (err) {
+        check('exceção não tratada', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+    }
+    fim();
+})();
+</script>
+</body>
+</html>

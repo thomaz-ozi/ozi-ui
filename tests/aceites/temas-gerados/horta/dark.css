@@ -1,0 +1,18 @@
+/* dark.css */
+/* Gerado por IA a partir do prompt oficial (A16) — marca: Horta Viva */
+[data-ozi-theme="dark"] {
+  --ozi-color-primary: #22c55e;
+  --ozi-color-primary-hover: #4ade80;
+  --ozi-color-gray-500: #9ca3af;
+  --ozi-color-danger: #f87171;
+  --ozi-valid-color: var(--ozi-color-success);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-ozi-theme="light"]) {
+    --ozi-color-primary: #22c55e;
+    --ozi-color-primary-hover: #4ade80;
+    --ozi-color-gray-500: #9ca3af;
+    --ozi-color-danger: #f87171;
+    --ozi-valid-color: var(--ozi-color-success);
+  }
+}

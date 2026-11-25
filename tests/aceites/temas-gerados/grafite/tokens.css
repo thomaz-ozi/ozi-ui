@@ -1,0 +1,21 @@
+/* tokens.css */
+/* Gerado por IA a partir do prompt oficial (A16) — marca: Grafite Contabilidade */
+:root {
+    /* Brand: slate, almost monochrome */
+    --ozi-color-primary: #475569;
+    --ozi-color-primary-hover: #334155;
+
+    /* Single accent: success (brand color kept; message text darkened via valid-color) */
+    --ozi-color-success: #10b981;
+    --ozi-color-success-light: #ecfdf5;
+    --ozi-valid-color: #047857;
+
+    /* Contrast fixes */
+    --ozi-color-danger: #dc2626;
+    --ozi-color-gray-500: #5b6472;
+
+    /* Sharp shape: small radii */
+    --ozi-radius-sm: 2px;
+    --ozi-radius-md: 3px;
+    --ozi-radius-lg: 4px;
+}

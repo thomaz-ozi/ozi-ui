@@ -1,0 +1,25 @@
+/* dark.css */
+/* Gerado por IA a partir do prompt oficial (A16) — marca: Oceano Seguros */
+[data-ozi-theme="dark"] {
+    /* Brand #0ea5e9 volta a ser o primary no escuro (5.30:1 sobre o fundo #1f2937). */
+    --ozi-color-primary: #0ea5e9;
+    --ozi-color-primary-hover: #38bdf8;
+    /* 8% em vez de 15%: com 15% o primary sobre a cor clara translúcida cai para 4.17:1. */
+    --ozi-color-primary-light: color-mix(in srgb, var(--ozi-color-primary) 8%, transparent);
+
+    --ozi-color-success: #4ade80;
+    --ozi-color-danger: #f87171;
+    /* Repetido aqui para não herdar o valor do claro. */
+    --ozi-color-gray-500: #9ca3af;
+}
+@media (prefers-color-scheme: dark) {
+    :root:not([data-ozi-theme="light"]) {
+        --ozi-color-primary: #0ea5e9;
+        --ozi-color-primary-hover: #38bdf8;
+        --ozi-color-primary-light: color-mix(in srgb, var(--ozi-color-primary) 8%, transparent);
+
+        --ozi-color-success: #4ade80;
+        --ozi-color-danger: #f87171;
+        --ozi-color-gray-500: #9ca3af;
+    }
+}
