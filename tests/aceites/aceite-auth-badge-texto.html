@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite ozi-auth: contador com o mínimo configurado e textos como texto</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 860px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .3rem 0; word-break: break-word; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+    .fixtures { border-top: 1px dashed #ddd; margin-top: 1rem; padding-top: 1rem; opacity: .4; }
+    .fixtures input { display: block; margin: .25rem 0; }
+</style>
+</head>
+<body>
+<h1>Aceite ozi-auth <small>(contador "faltam" e textos de tradução)</small></h1>
+<p>Critério (pacote 2.10.8, ozi-auth 4.1.1): <b>(1)</b> o contador da regra de tamanho diz quantos
+caracteres faltam para o mínimo <b>configurado</b> (<code>data-ozi-auth-pass-min</code>), não para 8 fixo;
+<b>(2)</b> sem o atributo vale o padrão do <code>pluginConf.auth</code> (12); <b>(3)</b> título, regras e resumo da lista entram como
+<b>texto</b>: uma tradução registrada com tags não vira elemento.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<div class="fixtures">
+    <form id="f12">
+        <input id="p12" type="password" data-ozi-auth-pass data-ozi-auth-pass-min="12" data-ozi-auth-pass-max="64">
+        <input id="c12" type="password" data-ozi-auth-confirm>
+        <div id="regras12"></div>
+        <button type="submit" data-ozi-auth-submit data-ozi-auth-list-id="regras12">Enviar</button>
+    </form>
+    <form id="f8">
+        <input id="p8" type="password" data-ozi-auth-pass>
+        <input id="c8" type="password" data-ozi-auth-confirm>
+        <div id="regras8"></div>
+        <button type="submit" data-ozi-auth-submit data-ozi-auth-list-id="regras8">Enviar</button>
+    </form>
+    <div id="dinamico"></div>
+</div>
+
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['auth'] });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    function setVal(el, v) { el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); }
+    function badge(listId) { var b = document.querySelector('#' + listId + ' [data-rule="passLength"] .ozi-badge-count'); return b ? b.textContent.trim() : '(sem badge)'; }
+    // "9/64 · faltam 3" → 3 ; "9/64" → 0
+    function faltam(txt) { var m = /·\s*\S+\s+(\d+)\s*$/.exec(txt); return m ? Number(m[1]) : 0; }
+
+    (async function () {
+        var todos = true;
+        try {
+            for (var i = 0; i < 100 && !(window.OZI && OZI.isReady && OZI.components && OZI.components.auth); i++) await wait(50);
+            todos = check('ozi-auth carregado', !!(window.OZI && OZI.components && OZI.components.auth)) && todos;
+            await wait(100);
+
+            // (1) mínimo 12: 9 caracteres → faltam 3
+            setVal(document.getElementById('p12'), 'Abcdef12!');
+            await wait(50);
+            var b12 = badge('regras12');
+            todos = check('mínimo 12, 9 caracteres: o contador diz que faltam 3', faltam(b12) === 3, b12) && todos;
+            setVal(document.getElementById('p12'), 'Abcdef12!xyz');
+            await wait(50);
+            var b12b = badge('regras12');
+            todos = check('mínimo 12, 12 caracteres: nada falta', faltam(b12b) === 0, b12b) && todos;
+
+            // (2) sem data-ozi-auth-pass-min vale o padrão do pluginConf.auth (12, o da doc): 5 caracteres →
+            //     faltam 7. Na 4.1.0 dizia "faltam 3" (contava até 8 enquanto a regra exigia 12).
+            setVal(document.getElementById('p8'), 'Ab1!x');
+            await wait(50);
+            var b8 = badge('regras8');
+            todos = check('sem pass-min (padrão 12), 5 caracteres: faltam 7', faltam(b8) === 7, b8) && todos;
+
+            // (3) traduções com tags entram como texto
+            var dict = { auth: {
+                rulesTitle:     '<b id="inj-title">Regras</b>',
+                summaryInvalid: '<i id="inj-sum">Preencha</i>',
+                summaryValid:   '<i id="inj-ok">Pronto</i>',
+                passLength:     '<u id="inj-rule">{min} a {max}</u>'
+            } };
+            ['pt-BR', 'en', 'es'].forEach(function (l) { OZI.lang.register(l, dict); });
+            document.getElementById('dinamico').innerHTML =
+                '<form id="fd"><input id="pd" type="password" data-ozi-auth-pass data-ozi-auth-pass-min="8">' +
+                '<input id="cd" type="password" data-ozi-auth-confirm><div id="regrasd"></div>' +
+                '<button type="submit" data-ozi-auth-submit data-ozi-auth-list-id="regrasd">Enviar</button></form>';
+            OZI.components.auth.init(document.getElementById('dinamico'));
+            await wait(50);
+            setVal(document.getElementById('pd'), 'x');
+            await wait(50);
+            var lista = document.getElementById('regrasd');
+            var injetados = ['inj-title', 'inj-sum', 'inj-ok', 'inj-rule'].filter(function (id) { return document.getElementById(id); });
+            todos = check('lista montada para o form dinâmico', !!lista.querySelector('[data-rule]'), lista.children.length + ' filhos') && todos;
+            todos = check('nenhuma tag das traduções virou elemento', injetados.length === 0, injetados.join(', ')) && todos;
+            todos = check('o texto da tradução aparece como texto (com os sinais < >)', /<b id="inj-title">/.test(lista.textContent) && /<i id="inj-sum">/.test(lista.textContent), lista.textContent.slice(0, 120)) && todos;
+            setVal(document.getElementById('pd'), 'Abcdef12!');
+            setVal(document.getElementById('cd'), 'Abcdef12!');
+            await wait(50);
+            // o resumo é reescrito a cada digitação: continua sem elementos, qualquer que seja o texto
+            var resumo = lista.querySelector('.ozi-auth-summary');
+            todos = check('o resumo, reescrito a cada digitação, continua só texto', !!resumo && resumo.children.length === 0 && !document.getElementById('inj-ok') && !document.getElementById('inj-sum'), resumo && resumo.textContent) && todos;
+        } catch (err) {
+            todos = check('exceção não tratada', false, String(err) + (err && err.stack ? ' | ' + err.stack : '')) && false;
+        }
+        var v = document.getElementById('veredito');
+        v.textContent = todos ? '✓ ACEITE ozi-auth (contador e textos): PASSOU' : '✗ ACEITE ozi-auth (contador e textos): FALHOU';
+        v.className = todos ? 'pass' : 'fail';
+        document.title = todos ? 'DONE:PASS' : 'DONE:FAIL';
+    })();
+</script>
+</body>
+</html>

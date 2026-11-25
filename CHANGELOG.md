@@ -6,6 +6,17 @@ listed where they changed.
 
 ## [Unreleased]
 
+## [2.10.8] — 2026-11-25
+
+### Fixed
+- **`ozi-auth`: the "N left" counter now counts to the configured minimum.** It counted to a fixed 8.
+  The default minimum (`pluginConf.auth.passMin`) is 12, so every form without `data-ozi-auth-pass-min`
+  showed no "left" hint at 9 characters while the length rule was still failing.
+- **`ozi-auth`: the rule list is built with DOM nodes and `textContent`.** The title, rules and summary
+  were HTML strings set with `innerHTML`, using the translated texts; a dictionary registered by the app
+  with tags became elements.
+- `ozi-auth` 4.1.1 only. `result.passMin` is added to the `ozi:auth-change` detail, next to `passLen`.
+
 ## [2.10.7] — 2026-11-25
 
 ### Fixed
@@ -464,7 +475,8 @@ Version 2: every plugin rewritten in plain JavaScript, no jQuery, zero runtime d
 A v1 compatibility ramp (jQuery shims, `zld*` aliases) is included and opt-in. `ozi-copy` and
 `ozi-paste` were discontinued. See the [migration guide](https://oziui.com/en/docs/migration).
 
-[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.7...HEAD
+[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.8...HEAD
+[2.10.8]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.7...v2.10.8
 [2.10.7]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.6...v2.10.7
 [2.10.6]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.5...v2.10.6
 [2.10.5]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.4...v2.10.5

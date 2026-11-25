@@ -2,8 +2,8 @@
  * ------------------------------------------
  * ozi-auth
  * ------------------------------------------
- * Ver: 4.1.0
- * 2026-08-18
+ * Ver: 4.1.1
+ * 2026-11-25
  *
  * Responsabilidade:
  *   - Validacao de senha/confirmacao/email/usuario aplicada a um <form> inteiro
@@ -24,6 +24,11 @@
  * Eventos: ozi:init, ozi:auth-change, ozi:auth-ready, ozi:auth-broken, ozi:destroy
  *
  * Changelog:
+ *   - v4.1.1: [fix] o contador "faltam N" da regra de tamanho conta ate o minimo configurado
+ *       (data-ozi-auth-pass-min / pluginConf.auth.passMin), nao ate 8 fixo. [seguranca] titulo,
+ *       regras e resumo da lista montados com DOM + textContent (eram string HTML em innerHTML):
+ *       uma traducao registrada com tags nao vira elemento. Aceite: aceite-auth-badge-texto.html.
+ *       result.passMin entra no detail de ozi:auth-change (ao lado do passLen, aditivo).
  *   - v4.1.0: [feat] data-ozi-auth-disable no botao submit — desliga regras
  *       individuais (tokens: lowercase, uppercase, number, special, no-space,
  *       no-email-parts, confirm, user, length). Regra desligada some da lista e
@@ -350,14 +355,32 @@
     // [6] HELPERS DE RENDER
     // ─────────────────────────────────────────────
 
-    function _buildRuleItemHtml(rule) {
-        var badgeHtml = rule.badge
-            ? '<span class="ozi-badge-count">0/' + (rule.passMax || 14) + '</span>'
-            : '';
-        return '<div class="ozi-auth-list-item ozi-auth-list-item--invalid" data-rule="' + rule.key + '">' +
-            '<span class="ozi-auth-rule-icon"><i class="ozi-auth-icon-invalid"></i></span>' +
-            '<span class="ozi-auth-rule-text">' + rule.text + ' ' + badgeHtml + '</span>' +
-            '</div>';
+    // 4.1.1: DOM + textContent (era string HTML em innerHTML): o texto vem das traduções, e um
+    // dicionário registrado pelo app com tags não pode virar elemento. Mesmo molde do dropdown.
+    function _buildRuleItemEl(rule) {
+        var item = document.createElement('div');
+        item.className = 'ozi-auth-list-item ozi-auth-list-item--invalid';
+        item.setAttribute('data-rule', rule.key);
+
+        var icon = document.createElement('span');
+        icon.className = 'ozi-auth-rule-icon';
+        var ii = document.createElement('i');
+        ii.className = 'ozi-auth-icon-invalid';
+        icon.appendChild(ii);
+
+        var text = document.createElement('span');
+        text.className = 'ozi-auth-rule-text';
+        text.appendChild(document.createTextNode(rule.text + ' '));
+        if (rule.badge) {
+            var badge = document.createElement('span');
+            badge.className = 'ozi-badge-count';
+            badge.textContent = '0/' + (rule.passMax || 14);
+            text.appendChild(badge);
+        }
+
+        item.appendChild(icon);
+        item.appendChild(text);
+        return item;
     }
 
     function _buildDropdownItemEl(rule) {
@@ -402,19 +425,23 @@
 
         var passRules    = _getPassRules(passMin, passMax, mode.disabled);
         var confirmRules = _getConfirmRules(mode.disabled);
-        var rulesHtml    = '';
-        passRules.forEach(function (r) { rulesHtml += _buildRuleItemHtml(r); });
-        confirmRules.forEach(function (r) { rulesHtml += _buildRuleItemHtml(r); });
 
-        container.innerHTML =
-            '<div class="ozi-auth-alert ozi-auth-alert-box">' +
-            '<div class="ozi-auth-alert-title">' + _t('auth.rulesTitle', 'Regras da senha') + '</div>' +
-            '<div class="ozi-auth-list-rules">' + rulesHtml + '</div>' +
-            '<div class="ozi-auth-summary ozi-auth-summary--invalid">' +
-            _t('auth.summaryInvalid', 'Preencha os critérios acima para continuar.') +
-            '</div>' +
-            '</div>';
+        function el(tag, cls, txt) {
+            var n = document.createElement(tag);
+            n.className = cls;
+            if (txt !== undefined) n.textContent = txt;
+            return n;
+        }
+        var box   = el('div', 'ozi-auth-alert ozi-auth-alert-box');
+        var rules = el('div', 'ozi-auth-list-rules');
+        passRules.concat(confirmRules).forEach(function (r) { rules.appendChild(_buildRuleItemEl(r)); });
+        box.appendChild(el('div', 'ozi-auth-alert-title', _t('auth.rulesTitle', 'Regras da senha')));
+        box.appendChild(rules);
+        box.appendChild(el('div', 'ozi-auth-summary ozi-auth-summary--invalid',
+            _t('auth.summaryInvalid', 'Preencha os critérios acima para continuar.')));
 
+        container.textContent = '';
+        container.appendChild(box);
         return container;
     }
 
@@ -498,11 +525,13 @@
         else            icon.setAttribute('class', ok ? 'ozi-auth-icon-valid' : 'ozi-auth-icon-invalid');
     }
 
-    function _updateBadge(item, passLen, passMax) {
+    // 4.1.1: "faltam N" conta até o mínimo configurado (data-ozi-auth-pass-min / pluginConf.auth.passMin),
+    // não até 8 fixo: com mínimo 12 e 9 caracteres, a regra ficava inválida sem dizer que faltavam 3.
+    function _updateBadge(item, passLen, passMin, passMax) {
         var badge = item.querySelector('.ozi-badge-count');
         if (!badge) return;
         var len  = Math.min(passLen, passMax);
-        var rest = Math.max(0, 8 - passLen);
+        var rest = Math.max(0, (passMin || 8) - passLen);
         if (passLen === 0) {
             badge.textContent = '0/' + passMax;
         } else if (passLen <= passMax) {
@@ -523,14 +552,14 @@
             item.classList.remove('ozi-auth-list-item--valid', 'ozi-auth-list-item--invalid');
             item.classList.add(ok ? 'ozi-auth-list-item--valid' : 'ozi-auth-list-item--invalid');
             _resolveRuleIcon(item, ok, mode.checkIcons);
-            if (key === 'passLength') _updateBadge(item, result.passLen, passMax);
+            if (key === 'passLength') _updateBadge(item, result.passLen, result.passMin, passMax);
         });
 
         var summary = container.querySelector('.ozi-auth-summary');
         if (summary) {
             summary.classList.remove('ozi-auth-summary--valid', 'ozi-auth-summary--invalid');
             summary.classList.add(result.access ? 'ozi-auth-summary--valid' : 'ozi-auth-summary--invalid');
-            summary.innerHTML = result.access
+            summary.textContent = result.access
                 ? _t('auth.summaryValid',   'Senha pronta para salvar.')
                 : _t('auth.summaryInvalid', 'Preencha os critérios acima para continuar.');
         }
@@ -544,7 +573,7 @@
             item.classList.remove('ozi-auth-dropdown-item--valid', 'ozi-auth-dropdown-item--invalid');
             item.classList.add(ok ? 'ozi-auth-dropdown-item--valid' : 'ozi-auth-dropdown-item--invalid');
             _resolveRuleIcon(item, ok, checkIcons);
-            if (key === 'passLength') _updateBadge(item, result.passLen, passMax);
+            if (key === 'passLength') _updateBadge(item, result.passLen, result.passMin, passMax);
         });
     }
 
@@ -655,6 +684,7 @@
         });
 
         result.passLen = _val(pass).length;
+        result.passMin = passMin;
 
         _updateFieldState(mail, result.mailValid, _val(pass) === '');
         _updateFieldState(pass, _PASS_KEYS.every(function (k) {
