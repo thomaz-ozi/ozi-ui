@@ -2,8 +2,8 @@
  * ------------------------------------------
  * ozi-attrs
  * ------------------------------------------
- * Ver: 1.0.0
- * 2026-11-22
+ * Ver: 1.1.0
+ * 2026-11-26
  *
  * Responsabilidade:
  *   - Registro dos atributos `data-ozi-*` que o ozi-ui conhece (todos os plugins, num lugar só).
@@ -26,15 +26,21 @@
  *   - Varre o DOM inteiro do escopo, não só a raiz de cada componente: pega também erro no NOME do
  *     plugin (`data-ozi-selcet`) e atributo de plugin que nem foi carregado.
  *
- * O registro é escrito à mão nesta versão (2.10). Na 2.11 ele passa a ser gerado do manifesto de
- * cada plugin (roadmap ozi-ui-pronto-para-ia.md, N3). Atributo novo num plugin = entrada aqui,
- * senão o aviso acusa o próprio ozi-ui (o aceite `aceite-attrs.html` e a bateria inteira, que roda
- * com o aviso ligado por estar em 127.0.0.1, pegam isso).
+ * O registro de um plugin COM manifesto ({tipo}/ozi-{nome}/ozi-{nome}.manifest.json, roadmap
+ * ozi-ui-pronto-para-ia.md, N3) é gerado por `node tools/build-manifest.mjs` entre os marcadores
+ * `// >>> manifest:{ns}` e `// <<< manifest:{ns}`: não editar à mão, editar o manifesto. O mesmo
+ * script confere a deriva código × manifesto e roda no CI com `--check`. Desde a 2.11: select.
+ * Os demais plugins seguem escritos à mão aqui até ganharem manifesto. Atributo novo num plugin
+ * sem manifesto = entrada aqui, senão o aviso acusa o próprio ozi-ui (o aceite `aceite-attrs.html`
+ * e a bateria inteira, que roda com o aviso ligado por estar em 127.0.0.1, pegam isso).
  *
  * Expõe: window.OziAttrs e OZI.attrs — { scan(root?), isKnown(name), suggest(name), enabled(),
  *        known() }.
  *
  * Changelog:
+ *   - v1.1.0: [FEAT] registro do select gerado do ozi-select.manifest.json (ozi-ui/core 2.11.0,
+ *       N3). Única mudança de comportamento: `data-ozi-select-footer` (o `<template>` do rodapé,
+ *       escrito por quem usa o plugin) passa de interno a atributo de autor e entra nas sugestões.
  *   - v1.0.0: [FEAT] criado (ozi-ui/core 2.10.0, N1 do roadmap "pronto para IA").
  */
 
@@ -55,15 +61,18 @@
     var BREAKPOINTS = ['sm', 'md', 'lg', 'xl', 'xxl'];
 
     var REGISTRY = {
+        // >>> manifest:select — gerado de components/ozi-select/ozi-select.manifest.json por tools/build-manifest.mjs; não editar à mão
         select: {
-            author: ['', 'options', 'as', 'check', 'creatable', 'creatable-label', 'creatable-sublabel',
-                'disabled', 'footer-call', 'footer-icon', 'footer-label', 'image-dimension', 'list', 'log',
-                'multiple', 'multiple-count', 'multiple-group', 'multiple-label', 'required',
-                'required-message', 'search-icon', 'search-placeholder', 'submit-extra', 'submit-fields',
-                'submit-mode', 'submit-name', 'value-icon', 'value-placeholder', 'zld-delay',
-                'zld-item-name', 'zld-log', 'zld-method', 'zld-min', 'zld-param', 'zld-url'],
-            internal: ['action', 'creatable-option', 'footer', 'generated-hidden']
+            author: ['', 'as', 'check', 'creatable', 'creatable-label', 'creatable-sublabel',
+                'disabled', 'footer', 'footer-call', 'footer-icon', 'footer-label',
+                'image-dimension', 'list', 'log', 'multiple', 'multiple-count', 'multiple-group',
+                'multiple-label', 'options', 'required', 'required-message', 'search-icon',
+                'search-placeholder', 'submit-extra', 'submit-fields', 'submit-mode', 'submit-name',
+                'value-icon', 'value-placeholder', 'zld-delay', 'zld-item-name', 'zld-log',
+                'zld-method', 'zld-min', 'zld-param', 'zld-url'],
+            internal: ['action', 'creatable-option', 'generated-hidden']
         },
+        // <<< manifest:select
         autocomplete: {
             author: ['', 'options', 'as', 'hidden-name', 'log', 'msg-empty', 'msg-search', 'required',
                 'required-message', 'unique', 'unique-message', 'zld-delay', 'zld-log', 'zld-method',

@@ -86,6 +86,11 @@ jobs:
       - name: Pacote de ícones em dia
         run: node tools/build-icons.mjs --check
 
+      # Manifesto por plugin (N3): o registro do core/ozi-attrs.js tem de estar gerado e o código
+      # não pode ler atributo, emitir evento ou usar chave i18n fora do manifesto (nem o contrário)
+      - name: Manifestos em dia (sem deriva)
+        run: node tools/build-manifest.mjs --check
+
       # JS puro, sem build: cada página carrega só o ozi.js do pacote e escreve o veredito;
       # o runner lê o #veredito em tempo real via DevTools Protocol
       - name: Rodar aceites

@@ -6,6 +6,18 @@ listed where they changed.
 
 ## [Unreleased]
 
+### Added
+- **Plugin manifest (`ozi-select` first).** `components/ozi-select/ozi-select.manifest.json` lists every
+  `data-ozi-select-*` attribute (type, accepted values, default, description in pt-BR/en/es), the events,
+  the i18n keys and the dependencies. It is the single source for the attribute reference on oziui.com
+  and for the `OZI-W001` registry. `tools/build-manifest.mjs --check` runs in CI and fails if the code
+  reads an attribute, emits an event or uses an i18n key the manifest does not declare, or the reverse.
+  The other plugins get a manifest in later releases.
+
+### Changed
+- `OZI-W001`: `data-ozi-select-footer` (the footer `<template>`) is now treated as an author attribute,
+  so a typo near it gets suggested. `ozi-attrs` 1.1.0; no plugin JS changed.
+
 ## [2.10.8] — 2026-11-25
 
 ### Fixed
