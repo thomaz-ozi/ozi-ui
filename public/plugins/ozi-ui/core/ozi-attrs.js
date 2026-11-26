@@ -128,10 +128,12 @@
             author: ['args', 'call', 'defer', 'model', 'native', 'options-event', 'text-model', 'value'],
             internal: ['bound', 'last-value']
         },
+        // >>> manifest:validate — gerado de modules/ozi-validate/ozi-validate.manifest.json por tools/build-manifest.mjs; não editar à mão
         validate: {
             author: ['', 'group'],
             internal: []
-        }
+        },
+        // <<< manifest:validate
     };
 
     // atributos sem namespace de plugin (lidos por mais de um, ou pelo core)

@@ -1,0 +1,30 @@
+{
+ "_": "Fonte Ãºnica dos atributos do ozi-validate (roadmap pronto-para-ia, N3). Lido por tools/build-manifest.mjs (gera o registro do core/ozi-attrs.js e confere a deriva com o cÃ³digo) e pelo site (tabela de atributos e llms-full.txt). Atributo novo = entrada aqui na mesma mudanÃ§a, senÃ£o o CI reprova.",
+ "manifest": 1,
+ "plugin": "ozi-validate",
+ "namespace": "validate",
+ "type": "module",
+ "deps": [],
+ "groups": [
+  { "id": "gate", "title": { "pt-BR": "Envio do formulÃ¡rio", "en": "Form submission", "es": "EnvÃ­o del formulario" } },
+  { "id": "fields", "title": { "pt-BR": "Campos", "en": "Fields", "es": "Campos" },
+    "note": { "pt-BR": "Componentes tambÃ©m tÃªm atributo prÃ³prio (`data-ozi-select-required`, `data-ozi-autocomplete-required`, `data-ozi-editor-required`), e todos aceitam o genÃ©rico `data-ozi-required=\"true\"`. O `required` nativo do HTML tambÃ©m vale (use `novalidate` no `<form>` para o balÃ£o do navegador nÃ£o passar na frente).", "en": "Components also have their own attribute (`data-ozi-select-required`, `data-ozi-autocomplete-required`, `data-ozi-editor-required`), and all of them accept the generic `data-ozi-required=\"true\"`. The native HTML `required` works too (add `novalidate` to the `<form>` so the browser bubble does not jump ahead).", "es": "Los componentes tambiÃ©n tienen su atributo propio (`data-ozi-select-required`, `data-ozi-autocomplete-required`, `data-ozi-editor-required`), y todos aceptan el genÃ©rico `data-ozi-required=\"true\"`. El `required` nativo del HTML tambiÃ©n vale (use `novalidate` en el `<form>` para que el globo del navegador no se adelante)." } }
+ ],
+ "attributes": [
+  { "name": "data-ozi-validate", "group": "gate", "type": "flag",
+    "desc": { "pt-BR": "No botÃ£o de envio (`<button type=\"submit\">`, 2.3+): barra o envio enquanto houver campo invÃ¡lido, mostra os erros e foca o primeiro. TambÃ©m barra o `wire:submit` do Livewire. Num container (`<div data-ozi-validate>`): valida os campos obrigatÃ³rios enquanto a pessoa digita", "en": "On the submit button (`<button type=\"submit\">`, 2.3+): blocks the submit while any field is invalid, shows the errors and focuses the first one. It also blocks Livewire's `wire:submit`. On a container (`<div data-ozi-validate>`): validates the required fields as the user types", "es": "En el botÃ³n de envÃ­o (`<button type=\"submit\">`): bloquea el envÃ­o mientras haya un campo invÃ¡lido, muestra los errores y enfoca el primero. TambiÃ©n bloquea el `wire:submit` de Livewire. En un contenedor (`<div data-ozi-validate>`): valida los campos obligatorios mientras se escribe" } },
+  { "name": "data-ozi-validate-group", "group": "gate", "type": "list", "example": "dados,endereco", "since": "2.3",
+    "desc": { "pt-BR": "No botÃ£o: ids dos containers a validar, separados por vÃ­rgula (campos fora do `<form>`). Sem ele, vale o `<form>` do botÃ£o. TambÃ©m Ã© o `name` do `detail` dos eventos", "en": "On the button: ids of the containers to validate, comma-separated (fields outside the `<form>`). Without it, the button's `<form>` is used. It is also the `name` in the events' `detail`", "es": "En el botÃ³n: ids de los contenedores a validar, separados por comas (campos fuera del `<form>`). Sin Ã©l, vale el `<form>` del botÃ³n. TambiÃ©n es el `name` del `detail` de los eventos" } },
+  { "name": "data-ozi-required", "shared": true, "group": "fields", "type": "bool",
+    "desc": { "pt-BR": "Torna o campo obrigatÃ³rio: campo nativo (`input`, `select`, `textarea`) ou a raiz de um componente. Precisa de `=\"true\"`", "en": "Makes the field required: a native field (`input`, `select`, `textarea`) or a component root. Needs `=\"true\"`", "es": "Hace el campo obligatorio: un campo nativo (`input`, `select`, `textarea`) o la raÃ­z de un componente. Necesita `=\"true\"`" } },
+  { "name": "data-ozi-required-message", "shared": true, "group": "fields", "type": "string", "default": "lang:common.required",
+    "desc": { "pt-BR": "Mensagem do campo invÃ¡lido. Sem ela, a mensagem segue a causa (2.11.1+): vazio â†’ `common.required`, e-mail mal formado â†’ `common.email`, valor fora da regra â†’ `common.invalid`", "en": "Message for the invalid field. Without it, the message follows the cause (2.11.1+): empty â†’ `common.required`, malformed email â†’ `common.email`, value outside the rule â†’ `common.invalid`", "es": "Mensaje del campo invÃ¡lido. Sin Ã©l, el mensaje sigue la causa (2.11.1+): vacÃ­o â†’ `common.required`, correo mal formado â†’ `common.email`, valor fuera de la regla â†’ `common.invalid`" } }
+ ],
+ "shared": [],
+ "internal": [],
+ "events": [
+  { "name": "ozi:validate-broken", "detail": ["component", "name", "invalidFields", "isValid", "source"] },
+  { "name": "ozi:validate-ready", "detail": ["component", "name", "invalidFields", "isValid", "source"] }
+ ],
+ "lang": []
+}

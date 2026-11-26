@@ -86,7 +86,11 @@ function validate(m) {
     const base = `data-ozi-${ns}`, seen = new Set();
     for (const a of d.attributes || []) {
         const n = a.name || '';
-        if (n !== base && !n.startsWith(base + '-')) fail(`${where}: "${n}" fora do namespace ${base}`);
+        // "shared": true = atributo sem o prefixo do plugin que ele documenta (data-ozi-required no
+        // validate); fica fora do registro por plugin (o ozi-attrs.js o tem em SHARED_*)
+        if (a.shared) {
+            if (!/^data-ozi-[a-z]+(-[a-z0-9]+)*$/.test(n) || n.startsWith(base + '-') || n === base) fail(`${where}: "${n}" marcado shared mas tem o prefixo do plugin (ou nome inválido)`);
+        } else if (n !== base && !n.startsWith(base + '-')) fail(`${where}: "${n}" fora do namespace ${base}`);
         if (seen.has(n)) fail(`${where}: "${n}" repetido`);
         seen.add(n);
         if (n.includes('{') && !(Array.isArray(a.variants) && a.variants.length)) fail(`${where}: "${n}" é família ({x}) sem "variants"`);
@@ -203,7 +207,8 @@ for (const m of manifests) {
     const suffix = (n) => (n === base ? '' : n.slice(base.length + 1));
 
     // registro (W001)
-    const author   = (d.attributes || []).flatMap(expandNames).map(suffix).sort();
+    const own      = (d.attributes || []).filter((a) => !a.shared);
+    const author   = own.flatMap(expandNames).map(suffix).sort();
     const internal = (d.internal || []).map(suffix).sort();
     const ind = '        ';
     const block = [
@@ -219,10 +224,17 @@ for (const m of manifests) {
     else attrsJs = attrsJs.replace(reBlock, block);
 
     // deriva: atributos
-    const families = (d.attributes || []).filter((a) => a.name.includes('{'));
+    const families = own.filter((a) => a.name.includes('{'));
     const prefixes = families.map(familyPrefix);
-    const declared = new Set([...(d.attributes || []).filter((a) => !a.name.includes('{')).map((a) => a.name),
+    const declared = new Set([...own.filter((a) => !a.name.includes('{')).map((a) => a.name),
                               ...(d.internal || [])]);
+    // compartilhados: o JS do próprio plugin tem de lê-los (literal no código, sem comentários)
+    const ownSrcAll = code.filter(({ f }) => f.startsWith(m.dir + sep)).map(({ src }) => src).join('\n');
+    // (entradas `"shared": true` em attributes, documentadas no site, e a lista simples `shared: [...]`)
+    const sharedNames = [...(d.attributes || []).filter((x) => x.shared).map((x) => x.name), ...(d.shared || [])];
+    for (const n of sharedNames) {
+        if (!ownSrcAll.includes(n)) fail(`${where}: compartilhado "${n}" declarado e o JS do plugin não o lê`);
+    }
     const found = attrsInCode(ns, prefixes);
     const variantNames = new Set(families.flatMap(expandNames));
     for (const [name, files] of found) {

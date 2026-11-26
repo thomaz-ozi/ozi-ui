@@ -52,7 +52,7 @@
   { "name": "data-ozi-autocomplete-log", "group": "debug", "type": "flag", "since": "2.3",
     "desc": { "pt-BR": "Registra `init()` e `destroy()` deste campo no console", "en": "Logs this field's `init()` and `destroy()` to the console", "es": "Registra `init()` y `destroy()` de este campo en la consola" } }
  ],
- "shared": [],
+ "shared": ["data-ozi-required"],
  "internal": ["data-ozi-autocomplete-hidden"],
  "events": [
   { "name": "ozi:change", "detail": ["component", "name", "value", "items", "source"] },
