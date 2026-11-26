@@ -2,10 +2,16 @@
  * ------------------------------------------
  * ozi-select
  * ------------------------------------------
- * Ver: 6.6.5
- * 2026-11-22
+ * Ver: 6.6.6
+ * 2026-11-26
  *
  * Changelog:
+ *   - v6.6.6: [I18N/A11Y] Os `aria-label` do botão limpar ("Limpar seleção"), do botão abrir
+ *       ("Abrir opções") e do × de cada etiqueta ("Remover {label}") eram fixos em português: o
+ *       leitor de tela anunciava em português num site em inglês (regra R11). Agora vêm de
+ *       `select.clearSelection`, `select.openOptions` e `select.removeItem` (pt-BR/en/es), com o
+ *       texto antigo como fallback. `{label}` trocado por split/join (lição da 6.6.3). Achado do
+ *       lançamento público, conferido no código em 26/11.
  *   - v6.6.5: [FIX] No `data-ozi-select-multiple-group`, o cabeçalho do grupo nunca ganhava
  *       `is-group-selected`/`is-group-partial` (o CSS existe desde sempre): o estado era calculado
  *       procurando o grupo em this.list, esvaziada pelo renderOptions() e ainda sem ele. Agora vem
@@ -544,9 +550,9 @@
 
         this.valueEl = _make('div', { class: 'ozi-select-value' });
         var actions  = _make('div', { class: 'ozi-select-actions' });
-        this.clearBtn  = _make('button', { type: 'button', class: 'ozi-select-clear',  'aria-label': 'Limpar seleção' });
+        this.clearBtn  = _make('button', { type: 'button', class: 'ozi-select-clear',  'aria-label': _t('select.clearSelection', 'Limpar seleção') });
         this.clearBtn.innerHTML = '&times;';
-        this.toggleBtn = _make('button', { type: 'button', class: 'ozi-select-toggle', 'aria-label': 'Abrir opções' });
+        this.toggleBtn = _make('button', { type: 'button', class: 'ozi-select-toggle', 'aria-label': _t('select.openOptions', 'Abrir opções') });
         this.toggleBtn.innerHTML = '&#9662;';
         actions.appendChild(this.clearBtn);
         actions.appendChild(this.toggleBtn);
@@ -1273,7 +1279,7 @@
                     tagLabel.textContent = String(item.value || '');
                 }
                 tag.appendChild(tagLabel);
-                var removeBtn = _make('button', { type: 'button', class: 'ozi-select-tag-remove', 'data-value': item.value, 'aria-label': 'Remover ' + (item.label || item.value || '') });
+                var removeBtn = _make('button', { type: 'button', class: 'ozi-select-tag-remove', 'data-value': item.value, 'aria-label': _t('select.removeItem', 'Remover {label}').split('{label}').join(String(item.label || item.value || '')) });
                 removeBtn.innerHTML = '&times;';
                 tag.appendChild(removeBtn);
                 tagsWrap.appendChild(tag);

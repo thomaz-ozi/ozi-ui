@@ -6,6 +6,24 @@ listed where they changed.
 
 ## [Unreleased]
 
+## [2.11.1] — 2026-11-26
+
+### Fixed
+- **`ozi-select`: screen-reader labels follow the page language.** The clear button, the open button and
+  the × on each tag had fixed Portuguese `aria-label`s ("Limpar seleção", "Abrir opções", "Remover …").
+  They now use `select.clearSelection`, `select.openOptions` and `select.removeItem` (pt-BR/en/es).
+  `ozi-select` 6.6.6.
+- **`ozi-validate`: the error message matches the cause.** A filled but invalid field used to say
+  "Required field". A malformed email now shows `common.email` ("Enter a valid email address."), and a
+  filled value outside `minlength`/`maxlength`/`min`/`max` shows `common.invalid` ("Invalid value.").
+  Empty fields still show `common.required`, and `data-ozi-required-message` still wins in every case.
+  `ozi-validate` 2.2.3.
+
+### Changed
+- **`@oziStyles([...])` always emits `ozi-reset.css`**, first, also when you pass a list of keys (the
+  plain `ozi.js` setup always did). Without it the same component had a different `box-sizing` in Blade
+  and in plain PHP. The reset only targets elements with an `ozi-*` class.
+
 ## [2.11.0] — 2026-11-26
 
 ### Added
@@ -489,7 +507,8 @@ Version 2: every plugin rewritten in plain JavaScript, no jQuery, zero runtime d
 A v1 compatibility ramp (jQuery shims, `zld*` aliases) is included and opt-in. `ozi-copy` and
 `ozi-paste` were discontinued. See the [migration guide](https://oziui.com/en/docs/migration).
 
-[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.11.0...HEAD
+[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.11.1...HEAD
+[2.11.1]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.11.0...v2.11.1
 [2.11.0]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.8...v2.11.0
 [2.10.8]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.7...v2.10.8
 [2.10.7]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.6...v2.10.7

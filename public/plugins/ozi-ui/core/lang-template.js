@@ -37,6 +37,8 @@ OZI.lang.register('XX', {
         error:    '',
         success:  '',
         required: '',
+        email:    '',
+        invalid:  '',
         yes:      '',
         no:       '',
         add:      '',

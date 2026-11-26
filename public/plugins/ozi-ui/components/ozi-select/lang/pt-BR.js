@@ -15,7 +15,10 @@
             selectedCount:     '{count} selecionado(s)',
             selectAll:         'Marcar todos',
             allCount:          'Todos',
-            allSelected:       'Todos selecionados'
+            allSelected:       'Todos selecionados',
+            clearSelection: 'Limpar seleção',
+            openOptions:    'Abrir opções',
+            removeItem:     'Remover {label}'
         }
     });
 })(window);

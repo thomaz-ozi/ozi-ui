@@ -41,6 +41,8 @@
             error:    '',
             success:  '',
             required: '',
+            email:    '',
+            invalid:  '',
             optional: '',
             yes:      '',
             no:       '',

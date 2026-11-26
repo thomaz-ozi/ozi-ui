@@ -18,7 +18,10 @@
             selectedCount:     '{count} selected',
             selectAll:         'Select all',
             allCount:          'All',
-            allSelected:       'All selected'
+            allSelected:       'All selected',
+            clearSelection: 'Clear selection',
+            openOptions:    'Open options',
+            removeItem:     'Remove {label}'
         }
     });
 })(window);

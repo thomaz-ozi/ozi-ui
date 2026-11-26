@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite 2.11.1 (i18n do select + mensagem por causa no validate)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .35rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite 2.11.1 <small>(ozi-select 6.6.6 + ozi-validate 2.2.3, idioma <code>en</code>)</small></h1>
+<p>Critério: (1) os <code>aria-label</code> do select seguem o idioma (até a 6.6.5 eram fixos em
+português: "Limpar seleção", "Abrir opções", "Remover …"); (2) o validate escolhe a mensagem pela
+causa: vazio → obrigatório, e-mail preenchido e mal formado → e-mail inválido, valor preenchido fora da
+regra → valor inválido (até a 2.2.2 os três diziam "Required field"); (3) a mensagem do app
+(<code>data-ozi-required-message</code>) continua vencendo em todos os casos.
+<strong>Negativo:</strong> com o JS da 2.11.0, as verificações 1a–1c e 2b–2c falham.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<form id="f" novalidate>
+    <div data-ozi-select="team" data-ozi-select-multiple></div>
+    <script type="application/json" data-ozi-select-options="team">
+    [{"value":"core","label":"Core","selected":true},{"value":"docs","label":"Docs"}]
+    </script>
+
+    <div><input id="email-vazio" name="email_vazio" type="email" data-ozi-required="true"><div class="ozi-feedback"></div></div>
+    <div><input id="email-mal" name="email_mal" type="email" value="joao@" data-ozi-required="true"><div class="ozi-feedback"></div></div>
+    <div><input id="curto" name="curto" value="ab" minlength="5" data-ozi-required="true"><div class="ozi-feedback"></div></div>
+    <div><input id="email-custom" name="email_custom" type="email" value="maria@" data-ozi-required="true"
+                data-ozi-required-message="Use your work email"><div class="ozi-feedback"></div></div>
+    <div><input id="email-ok" name="email_ok" type="email" value="ana@example.com" data-ozi-required="true"><div class="ozi-feedback"></div></div>
+</form>
+
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['select', 'validate'], lang: 'en' });
+
+    var erros = [];
+    window.addEventListener('error', function (ev) {
+        if (ev.message === 'Script error.' && !ev.filename && !ev.lineno) return;
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra && !ok ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    function fb(id) {
+        var el = document.getElementById(id).nextElementSibling;
+        return el && el.style.display !== 'none' ? el.textContent : '(oculto)';
+    }
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 9s';
+        vered.className = 'fail';
+    }, 9000);
+
+    OZI.ready(function () {
+        (async function () {
+            var todos = true;
+            await wait(80);
+
+            // ── 1. aria-label do select em inglês ──
+            var root   = document.querySelector('[data-ozi-select="team"]');
+            var clear  = root.querySelector('.ozi-select-clear');
+            var toggle = root.querySelector('.ozi-select-toggle');
+            var rem    = root.querySelector('.ozi-select-tag-remove');
+            todos = check('1a botão limpar: aria-label "Clear selection"', clear && clear.getAttribute('aria-label') === 'Clear selection',
+                clear && clear.getAttribute('aria-label')) && todos;
+            todos = check('1b botão abrir: aria-label "Open options"', toggle && toggle.getAttribute('aria-label') === 'Open options',
+                toggle && toggle.getAttribute('aria-label')) && todos;
+            todos = check('1c × da etiqueta: aria-label "Remove Core"', rem && rem.getAttribute('aria-label') === 'Remove Core',
+                rem && rem.getAttribute('aria-label')) && todos;
+
+            // ── 2. validate: mensagem pela causa ──
+            var r = OZI.modules.validate.container({ container: document.getElementById('f') });
+            todos = check('2a e-mail vazio → "Required field"', fb('email-vazio') === 'Required field', fb('email-vazio')) && todos;
+            todos = check('2b e-mail "joao@" → "Enter a valid email address."', fb('email-mal') === 'Enter a valid email address.', fb('email-mal')) && todos;
+            todos = check('2c "ab" com minlength 5 → "Invalid value."', fb('curto') === 'Invalid value.', fb('curto')) && todos;
+            todos = check('2d mensagem do app vence no e-mail mal formado', fb('email-custom') === 'Use your work email', fb('email-custom')) && todos;
+            todos = check('2e e-mail válido não mostra erro', fb('email-ok') === '(oculto)', fb('email-ok')) && todos;
+            todos = check('2f isValid false com os 4 inválidos', r.isValid === false && r.invalidFields.length === 4,
+                JSON.stringify(r.invalidFields.map(function (f) { return f.name || f; }))) && todos;
+
+            await wait(100);
+            todos = check('zero erros JS', erros.length === 0, erros.join(' | ')) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ ACEITE 2.11.1 (i18n select + mensagens validate): PASSOU' : '✗ ACEITE 2.11.1 (i18n select + mensagens validate): FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+        })().catch(function (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+            vered.textContent = '✗ ACEITE 2.11.1 (i18n select + mensagens validate): FALHOU (exceção)';
+            vered.className = 'fail';
+        });
+    });
+</script>
+</body>
+</html>

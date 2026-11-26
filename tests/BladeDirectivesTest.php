@@ -28,7 +28,9 @@ class BladeDirectivesTest extends TestCase
     {
         $html = Blade::render("@oziStyles(['select'])");
 
-        $this->assertSame(1, substr_count($html, '<link'));
+        // 2.11.1: o reset sai sempre, antes do CSS pedido
+        $this->assertSame(2, substr_count($html, '<link'));
         $this->assertStringContainsString('components/ozi-select/css/ozi-select.css', $html);
+        $this->assertLessThan(strpos($html, 'ozi-select.css'), strpos($html, 'shared/css/ozi-reset.css'));
     }
 }

@@ -2,8 +2,8 @@
  * ------------------------------------------
  * ozi-validate
  * ------------------------------------------
- * Ver: 2.2.2
- * 2026-11-15
+ * Ver: 2.2.3
+ * 2026-11-26
  *
  * Responsabilidade:
  *   - Motor generico de validacao de campos por container
@@ -24,6 +24,11 @@
  * Expoe: OZI.modules.validate, window.oziValidateContainer (compat)
  *
  * Changelog:
+ *   - v2.2.3: [FIX] Mensagem pela causa: campo vazio → `common.required`; e-mail preenchido e mal
+ *       formado → `common.email` ("Informe um e-mail válido."); outro valor preenchido fora da regra
+ *       (`minlength`, `maxlength`, `min`, `max`) → `common.invalid` ("Valor inválido."). Antes, os
+ *       três mostravam "Campo obrigatório". `data-ozi-required-message` do app continua vencendo em
+ *       todos os casos. Achado do lançamento público, conferido no código em 26/11.
  *   - v2.2.2: [FIX] O gate focava a RAIZ do campo inválido, e a raiz de um componente é um
  *       <div> sem tabindex: `focus()` não fazia nada, e o usuário não era levado ao select vazio.
  *       Agora foca o primeiro elemento focável e visível dentro dela (o próprio campo, se ele
@@ -193,6 +198,30 @@
     // Classes via classMap — sem Bootstrap hardcoded.
     // ---------------------------------------------
 
+    // [2.2.3] Mensagem pela CAUSA. Antes, todo campo inválido mostrava `common.required`, inclusive
+    // um e-mail PREENCHIDO e mal formado ("joao@" → "Campo obrigatório"). A mensagem do app
+    // (`data-ozi-required-message`) continua vencendo em qualquer caso, como sempre: só o padrão muda.
+    function _tf(key, fallback) {
+        var v = _t(key);
+        return (v && v !== key) ? v : fallback;
+    }
+
+    function _invalidMessage(el) {
+        var custom = el.getAttribute('data-ozi-required-message')
+            || el.getAttribute('data-zld-required-message');
+        if (custom) return custom;
+
+        var tag  = el.tagName;
+        var type = (el.getAttribute('type') || 'text').toLowerCase();
+        var filled = (tag === 'INPUT' || tag === 'TEXTAREA')
+            && type !== 'checkbox' && type !== 'radio' && type !== 'file'
+            && String(el.value || '').trim() !== '';
+
+        if (!filled)          return _tf('common.required', 'Campo obrigatório');
+        if (type === 'email') return _tf('common.email',    'Informe um e-mail válido.');
+        return _tf('common.invalid', 'Valor inválido.');
+    }
+
     function _applyState(el, state) {
         var clsInvalid  = _classMap('invalid',  'ozi-invalid');
         var clsValid    = _classMap('valid',     'ozi-valid');
@@ -203,9 +232,7 @@
 
         if (state === 'invalid') {
             _classListOp(el, clsInvalid, 'add');
-            var msg = el.getAttribute('data-ozi-required-message')
-                || el.getAttribute('data-zld-required-message')
-                || _t('common.required');
+            var msg = _invalidMessage(el);
             var feedback = _findFeedbackSibling(el, clsFeedback);
             if (feedback) { feedback.textContent = msg; feedback.style.display = ''; }
 

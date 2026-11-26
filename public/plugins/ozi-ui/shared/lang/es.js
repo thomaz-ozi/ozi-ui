@@ -34,6 +34,8 @@
                 error:    'Error',
                 success:  'Completado',
                 required: 'Campo obligatorio',
+                email:    'Introduce un correo electrónico válido.',
+                invalid:  'Valor no válido.',
                 optional: 'Opcional',
                 yes:      'Sí',
                 no:       'No',

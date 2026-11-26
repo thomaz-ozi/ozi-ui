@@ -113,11 +113,27 @@ class OziAssetsTest extends TestCase
         $this->assertStringContainsString('core/ozi-conf.js', $html, 'o boot do core sai sempre');
     }
 
-    public function test_styles_emit_only_what_was_asked(): void
+    public function test_styles_emit_only_what_was_asked_plus_the_reset(): void
+    {
+        // 2.11.1: o reset sai sempre, primeiro (igual ao standalone); o resto, só o pedido
+        $this->assertSame(
+            ['shared/css/ozi-reset.css', 'components/ozi-select/css/ozi-select.css'],
+            $this->pluginPaths($this->assets()->styles(['select']))
+        );
+    }
+
+    public function test_reset_is_not_duplicated_when_asked(): void
+    {
+        $paths = $this->pluginPaths($this->assets()->styles(['reset', 'select']));
+
+        $this->assertSame(['shared/css/ozi-reset.css', 'components/ozi-select/css/ozi-select.css'], $paths);
+    }
+
+    public function test_reset_comes_alone_when_every_key_is_unknown(): void
     {
         $this->assertSame(
-            ['components/ozi-select/css/ozi-select.css'],
-            $this->pluginPaths($this->assets()->styles(['select']))
+            ['shared/css/ozi-reset.css'],
+            $this->pluginPaths($this->assets()->styles(['ozi-nada']))
         );
     }
 

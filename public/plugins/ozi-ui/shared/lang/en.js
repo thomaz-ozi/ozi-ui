@@ -40,6 +40,8 @@
             error:    'Error',
             success:  'Done',
             required: 'Required field',
+            email:    'Enter a valid email address.',
+            invalid:  'Invalid value.',
             optional: 'Optional',
 
             // — confirmations —

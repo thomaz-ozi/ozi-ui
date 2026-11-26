@@ -105,5 +105,5 @@
   { "name": "ozi:select-footer", "detail": ["component", "name", "value", "items", "source"] },
   { "name": "ozi:option-action", "detail": ["component", "name", "value", "items", "source", "action", "item"] }
  ],
- "lang": ["select.searchPlaceholder", "select.valuePlaceholder", "select.empty", "select.requiredMessage", "select.creatableLabel", "select.selectedCount", "select.selectAll", "select.allCount", "select.allSelected"]
+ "lang": ["select.searchPlaceholder", "select.valuePlaceholder", "select.empty", "select.requiredMessage", "select.creatableLabel", "select.selectedCount", "select.selectAll", "select.allCount", "select.allSelected", "select.clearSelection", "select.openOptions", "select.removeItem"]
 }

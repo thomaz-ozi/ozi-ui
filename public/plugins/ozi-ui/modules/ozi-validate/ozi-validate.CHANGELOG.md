@@ -2,6 +2,18 @@
 
 ---
 
+## [2.2.3] — 2026-11-26 (fix — mensagem pela causa)
+
+### Corrigido
+- Campo preenchido e inválido não diz mais "Campo obrigatório". E-mail mal formado (`joao@`) mostra
+  `common.email` ("Informe um e-mail válido."); outro valor fora da regra (`minlength`, `maxlength`,
+  `min`, `max`) mostra `common.invalid` ("Valor inválido."). Vazio segue com `common.required`.
+- `data-ozi-required-message` do app continua vencendo em todos os casos.
+- Chaves novas nas 3 línguas (`shared/lang/*.js` e o dicionário embutido do `ozi-lang.js`).
+  `aceite-i18n-mensagens.html`; na 2.2.2 caem 2.
+
+---
+
 ## [2.2.2] — 2026-11-15 (fix — foco do gate em componente)
 
 ### Corrigido

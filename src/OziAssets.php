@@ -214,6 +214,15 @@ class OziAssets
         $this->unknownKeys = [];
         $map = $this->resolveKeys($this->availableStyles, $only);
 
+        // 2.11.1: o ozi-reset.css sai SEMPRE, também com lista de chaves, como no standalone
+        // (ozi-loader). Sem ele, o mesmo componente tinha `box-sizing` diferente no Blade e no
+        // ozi.js (foi a causa do `max-height` do popover da 2.7.2). Ele é escopado a
+        // `[class*="ozi-"]`, então não toca no CSS do app.
+        $reset = $this->availableStyles['reset'];
+        if (!in_array($reset, $map, true)) {
+            array_unshift($map, $reset);
+        }
+
         return $this->unknownKeysWarning('@oziStyles') . implode("\n", array_map(
             fn($file) => '<link rel="stylesheet" href="' . $this->url($file) . '">',
             $map
