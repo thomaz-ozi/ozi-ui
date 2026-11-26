@@ -9,7 +9,7 @@
     if (!lang || !lang.register) return;
     lang.register('pt-BR', {
         autocomplete: {
-            searchPlaceholder: 'Pesquisar...',
+            searching:         'Pesquisando...',
             empty:             'Nenhum resultado encontrado',
             uniqueMessage:     'Este item já foi selecionado.'
         }

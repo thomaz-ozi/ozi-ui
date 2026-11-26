@@ -12,7 +12,8 @@
 //        de estar no manifesto (attributes ou internal), e todo atributo do manifesto tem de
 //        aparecer em algum JS (senão é atributo morto, ensinado na doc e sem efeito);
 //      - eventos `emit('ozi:...')` do JS do plugin = `events` do manifesto;
-//      - chaves de lang/{pt-BR,en,es}.js do plugin = `lang` do manifesto;
+//      - chaves de lang/{pt-BR,en,es}.js do plugin = `lang` do manifesto, e toda chave é lida
+//        (literal 'ns.chave') pelo JS do plugin;
 //      - `deps` = deps do plugin no _pluginMap do core/ozi-conf.js.
 //
 // Uso:  node tools/build-manifest.mjs [dir plugins/ozi-ui] [--check]   (padrão: public/plugins/ozi-ui)
@@ -230,6 +231,16 @@ for (const m of manifests) {
         if (start > -1) for (const k of src.slice(start).matchAll(/^\s*(\w+)\s*:\s*['"`]/gm)) keys.add(`${ns}.${k[1]}`);
         for (const k of keys) if (!langDecl.has(k)) fail(`${where}: lang/${l}.js tem "${k}" e o manifesto não`);
         for (const k of langDecl) if (!keys.has(k)) fail(`${where}: "${k}" no manifesto e não em lang/${l}.js`);
+    }
+
+    // deriva: chave i18n declarada e nunca lida pelo JS do plugin (chave morta, e o texto da tela
+    // vem de outro lugar). Achado no ozi-autocomplete 4.1.1: lang/*.js tinha `autocomplete.empty`, o
+    // JS mostrava "No results" fixo em inglês. Procura a chave como literal ('ns.chave' ou "ns.chave").
+    const ownSrc = ownJs.map(({ src }) => src).join('\n');
+    for (const k of langDecl) {
+        if (!ownSrc.includes(`'${k}'`) && !ownSrc.includes(`"${k}"`)) {
+            fail(`${where}: chave "${k}" declarada e o JS do plugin nunca a lê (texto fixo no lugar?)`);
+        }
     }
 
     // deriva: deps × _pluginMap

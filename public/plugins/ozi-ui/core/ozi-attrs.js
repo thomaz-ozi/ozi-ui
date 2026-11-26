@@ -73,12 +73,14 @@
             internal: ['action', 'creatable-option', 'generated-hidden']
         },
         // <<< manifest:select
+        // >>> manifest:autocomplete — gerado de components/ozi-autocomplete/ozi-autocomplete.manifest.json por tools/build-manifest.mjs; não editar à mão
         autocomplete: {
-            author: ['', 'options', 'as', 'hidden-name', 'log', 'msg-empty', 'msg-search', 'required',
-                'required-message', 'unique', 'unique-message', 'zld-delay', 'zld-log', 'zld-method',
-                'zld-min', 'zld-param', 'zld-url'],
+            author: ['', 'as', 'hidden-name', 'log', 'msg-empty', 'msg-search', 'options',
+                'required', 'required-message', 'unique', 'unique-message', 'zld-delay', 'zld-log',
+                'zld-method', 'zld-min', 'zld-param', 'zld-url'],
             internal: ['hidden']
         },
+        // <<< manifest:autocomplete
         editor: {
             author: ['html', 'md', 'class', 'disabled', 'height', 'log', 'placeholder', 'required',
                 'required-message', 'sanitize', 'theme', 'tools', 'tools-scroll', 'type', 'uicolor',

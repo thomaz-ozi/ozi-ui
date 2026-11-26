@@ -2,10 +2,24 @@
  * ------------------------------------------
  * ozi-autocomplete
  * ------------------------------------------
- * Ver: 4.1.1
- * 2026-11-22
+ * Ver: 4.1.2
+ * 2026-11-26
  *
  * Changelog:
+ *   - v4.1.2: [I18N] Os textos padrão nunca passavam pelo dicionário: "No results", "Searching...",
+ *       "Required field" e "Value already selected" eram fixos em INGLÊS (regra R11), e as chaves
+ *       `autocomplete.empty`/`uniqueMessage` dos lang/*.js nunca eram lidas. Num site em português o
+ *       usuário via "No results". Agora `autocomplete.empty`, `autocomplete.searching` (nova),
+ *       `common.required` e `autocomplete.uniqueMessage`, com fallback pt-BR. Os atributos
+ *       `-msg-empty`, `-msg-search`, `-required-message` e `-unique-message` continuam vencendo.
+ *       Sai a chave morta `autocomplete.searchPlaceholder` (o autocomplete não tem campo de busca
+ *       próprio). Achado ao montar o manifesto (26/11).
+ *       [FIX] Autocomplete obrigatório não barrava o envio: o adapter só lia
+ *       `data-ozi-autocomplete-required` (o genérico `data-ozi-required="true"`, que a doc do
+ *       validate ensina, era ignorado), e o gate do validate só enxerga campo marcado com
+ *       `data-ozi-required` — então NEM o atributo próprio barrava o submit. Agora os dois valem,
+ *       e o campo obrigatório espelha `data-ozi-required="true"` (mesma correção do select 6.5.1).
+ *       Aceite `aceite-autocomplete-required-i18n.html` (negativo: 4 caem na 4.1.1).
  *   - v4.1.1: [SEGURANCA] busca remota: o token CSRF da sessão (header X-CSRF-TOKEN e _token
  *       no corpo) ia para QUALQUER `zld-url`, inclusive outro domínio ou `//host`. Agora só para
  *       a mesma origem da página (mesmo critério do ozi-select 6.6.4 e do ozi-loaddata 5.0.2).
@@ -62,6 +76,16 @@
         catch (e) { return false; }
     }
 
+    // texto do dicionário (OZI.lang) com fallback pt-BR embutido (regra R11)
+    function _t(key, fallback) {
+        var lang = window.OZI && window.OZI.lang;
+        if (lang && typeof lang.t === 'function') {
+            var v = lang.t(key);
+            if (v && v !== key) return v;
+        }
+        return fallback || key;
+    }
+
     /* ─── DOM helpers ────────────────────────────── */
 
     function _make(tag, attrs) {
@@ -91,10 +115,15 @@
         this.uid = 'ozi-autocomplete-' + (++_instanceCounter);
 
         this.hiddenName  = String(this.input.getAttribute('data-ozi-autocomplete-hidden-name') || this.key).trim();
-        this.msgEmpty    = String(this.input.getAttribute('data-ozi-autocomplete-msg-empty')   || 'No results').trim();
-        this.msgSearch   = String(this.input.getAttribute('data-ozi-autocomplete-msg-search')  || 'Searching...').trim();
-        this.isRequired  = this._parseBoolAttr('data-ozi-autocomplete-required');
-        this.requiredMsg = String(this.input.getAttribute('data-ozi-autocomplete-required-message') || 'Required field').trim();
+        // [4.1.2] textos padrão pelo dicionário (R11); o atributo do app continua vencendo
+        this.msgEmpty    = String(this.input.getAttribute('data-ozi-autocomplete-msg-empty')   || _t('autocomplete.empty', 'Nenhum resultado encontrado')).trim();
+        this.msgSearch   = String(this.input.getAttribute('data-ozi-autocomplete-msg-search')  || _t('autocomplete.searching', 'Pesquisando...')).trim();
+        // [4.1.2] o genérico `data-ozi-required` (o que a doc do validate ensina) também vale, e um
+        // campo obrigatório espelha `data-ozi-required="true"` para o gate do validate enxergá-lo:
+        // sem isso o gate deixava o form ir vazio nos dois jeitos (mesmo caso do select 6.5.1)
+        this.isRequired  = this._parseBoolAttr('data-ozi-autocomplete-required') || this._parseBoolAttr('data-ozi-required');
+        if (this.isRequired) this.input.setAttribute('data-ozi-required', 'true');
+        this.requiredMsg = String(this.input.getAttribute('data-ozi-autocomplete-required-message') || _t('common.required', 'Campo obrigatório')).trim();
 
         this.zldUrl    = String(this.input.getAttribute('data-ozi-autocomplete-zld-url')    || '').trim();
         this.zldMethod = String(this.input.getAttribute('data-ozi-autocomplete-zld-method') || 'POST').trim().toUpperCase();
@@ -107,7 +136,7 @@
         this.debug     = this._parseBoolAttr('data-ozi-autocomplete-log');
 
         this.uniqueGroup   = String(this.input.getAttribute('data-ozi-autocomplete-unique') || '').trim();
-        this.uniqueMessage = String(this.input.getAttribute('data-ozi-autocomplete-unique-message') || 'Value already selected').trim();
+        this.uniqueMessage = String(this.input.getAttribute('data-ozi-autocomplete-unique-message') || _t('autocomplete.uniqueMessage', 'Este item já foi selecionado.')).trim();
         this.uniqueToast   = null;
 
         this.options          = [];

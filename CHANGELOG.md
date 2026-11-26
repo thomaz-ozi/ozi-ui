@@ -6,6 +6,20 @@ listed where they changed.
 
 ## [Unreleased]
 
+### Fixed
+- **`ozi-autocomplete`: a required field now blocks the form.** The submit gate of `ozi-validate` only sees
+  fields marked with `data-ozi-required`, and the autocomplete only read `data-ozi-autocomplete-required`,
+  so neither attribute blocked an empty submit. Both now work (same fix as `ozi-select` 6.5.1).
+- **`ozi-autocomplete`: default texts follow the page language.** "No results", "Searching...",
+  "Required field" and "Value already selected" were fixed English strings. They now come from
+  `autocomplete.empty`, `autocomplete.searching`, `common.required` and `autocomplete.uniqueMessage`.
+  Your `-msg-*` and `-*-message` attributes still win. `ozi-autocomplete` 4.1.2.
+
+### Added
+- `ozi-autocomplete.manifest.json`: the attribute reference for `ozi-autocomplete` on oziui.com is now
+  generated from it, and CI checks it against the code. The check also fails when a plugin declares an
+  i18n key its JavaScript never reads.
+
 ## [2.11.1] — 2026-11-26
 
 ### Fixed

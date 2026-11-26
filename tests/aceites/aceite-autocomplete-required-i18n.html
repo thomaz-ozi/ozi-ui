@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite ozi-autocomplete 4.1.2 (obrigatório + textos no idioma)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .35rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite ozi-autocomplete 4.1.2 <small>(obrigatório e textos no idioma)</small></h1>
+<p>Critério: (1) o genérico <code>data-ozi-required="true"</code> (o que a doc do validate ensina) torna o
+autocomplete obrigatório, como no select desde a 6.5.1; (2) o gate de envio barra o form com o campo
+vazio nos dois jeitos (genérico e <code>data-ozi-autocomplete-required</code>); (3) os textos padrão
+seguem o idioma (<code>pt-BR</code> aqui): até a 4.1.1 eram fixos em inglês ("No results").
+<strong>Negativo:</strong> com o JS da 4.1.1, 1a, 1b e 3a falham.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<form id="fa" novalidate>
+    <input data-ozi-autocomplete="cidade" data-ozi-required="true">
+    <script type="application/json" data-ozi-autocomplete-options="cidade">[{"value":"1","label":"Curitiba"}]</script>
+    <button type="submit" data-ozi-validate id="ba">Enviar</button>
+</form>
+
+<form id="fb" novalidate>
+    <input data-ozi-autocomplete="estado" data-ozi-autocomplete-required>
+    <script type="application/json" data-ozi-autocomplete-options="estado">[{"value":"PR","label":"Paraná"}]</script>
+    <button type="submit" data-ozi-validate id="bb">Enviar</button>
+</form>
+
+<form id="fc" novalidate>
+    <input id="vazio" data-ozi-autocomplete="pais">
+    <script type="application/json" data-ozi-autocomplete-options="pais">[{"value":"BR","label":"Brasil"}]</script>
+</form>
+
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['autocomplete', 'validate'], lang: 'pt-BR' });
+
+    var erros = [];
+    window.addEventListener('error', function (ev) {
+        if (ev.message === 'Script error.' && !ev.filename && !ev.lineno) return;
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra && !ok ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 9s';
+        vered.className = 'fail';
+    }, 9000);
+
+    OZI.ready(function () {
+        (async function () {
+            var todos = true;
+            await wait(80);
+            var subA = 0, subB = 0;
+            document.getElementById('fa').addEventListener('submit', function (e) { subA++; e.preventDefault(); });
+            document.getElementById('fb').addEventListener('submit', function (e) { subB++; e.preventDefault(); });
+
+            // ── 1. obrigatório pelo genérico ──
+            var r = OZI.modules.validate.container({ container: document.getElementById('fa'), silent: true });
+            todos = check('1a data-ozi-required="true": container() dá inválido com o campo vazio', r.isValid === false,
+                JSON.stringify(r.invalidFields)) && todos;
+            document.getElementById('ba').click(); await wait(30);
+            todos = check('1b data-ozi-required="true": o gate barra o envio', subA === 0, 'submits: ' + subA) && todos;
+
+            // ── 2. obrigatório pelo atributo do plugin ──
+            document.getElementById('bb').click(); await wait(30);
+            todos = check('2a data-ozi-autocomplete-required: o gate barra o envio', subB === 0, 'submits: ' + subB) && todos;
+
+            // ── 2b. preenchido passa ──
+            OZI.components.autocomplete.value('cidade', '1'); await wait(30);
+            document.getElementById('ba').click(); await wait(30);
+            todos = check('2b preenchido: o gate deixa enviar', subA === 1, 'submits: ' + subA) && todos;
+
+            // ── 3. textos no idioma ──
+            var inp = document.getElementById('vazio');
+            inp.focus(); inp.value = 'zzz'; inp.dispatchEvent(new Event('input', { bubbles: true }));
+            await wait(400);
+            var dd = inp.parentElement.querySelector('.ozi-autocomplete-dropdown');
+            var txt = dd ? dd.textContent.trim() : '(sem dropdown)';
+            todos = check('3a sem resultado: "Nenhum resultado encontrado" (era "No results")', txt === 'Nenhum resultado encontrado', txt) && todos;
+
+            await wait(100);
+            todos = check('zero erros JS', erros.length === 0, erros.join(' | ')) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ ACEITE ozi-autocomplete 4.1.2 (obrigatório + idioma): PASSOU' : '✗ ACEITE ozi-autocomplete 4.1.2 (obrigatório + idioma): FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+        })().catch(function (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+            vered.textContent = '✗ ACEITE ozi-autocomplete 4.1.2 (obrigatório + idioma): FALHOU (exceção)';
+            vered.className = 'fail';
+        });
+    });
+</script>
+</body>
+</html>

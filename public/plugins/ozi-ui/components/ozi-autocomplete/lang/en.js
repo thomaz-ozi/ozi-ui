@@ -10,7 +10,7 @@
     if (!lang || !lang.register) return;
     lang.register('en', {
         autocomplete: {
-            searchPlaceholder: 'Search...',
+            searching:         'Searching...',
             empty:             'No results found',
             uniqueMessage:     'This item is already selected.'
         }

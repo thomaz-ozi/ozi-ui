@@ -1,0 +1,62 @@
+{
+ "_": "Fonte única dos atributos do ozi-autocomplete (roadmap pronto-para-ia, N3). Lido por tools/build-manifest.mjs (gera o registro do core/ozi-attrs.js e confere a deriva com o código) e pelo site (tabela de atributos e llms-full.txt). Atributo novo = entrada aqui na mesma mudança, senão o CI reprova.",
+ "manifest": 1,
+ "plugin": "ozi-autocomplete",
+ "namespace": "autocomplete",
+ "type": "component",
+ "deps": ["loaddata", "suggest", "validate"],
+ "groups": [
+  { "id": "identity", "title": { "pt-BR": "Campo e dados", "en": "Field and data", "es": "Campo y datos" } },
+  { "id": "messages", "title": { "pt-BR": "Mensagens", "en": "Messages", "es": "Mensajes" } },
+  { "id": "state", "title": { "pt-BR": "Validação e valor único", "en": "Validation and unique value", "es": "Validación y valor único" } },
+  { "id": "remote", "title": { "pt-BR": "Busca remota", "en": "Remote search", "es": "Búsqueda remota" } },
+  { "id": "debug", "title": { "pt-BR": "Debug", "en": "Debug", "es": "Debug" } }
+ ],
+ "attributes": [
+  { "name": "data-ozi-autocomplete", "group": "identity", "type": "string", "required": true,
+    "desc": { "pt-BR": "Vai no próprio `<input>` de texto. Chave do campo: vincula ao JSON de opções e é o `name` padrão do hidden com o valor", "en": "Goes on the text `<input>` itself. Field key: links it to the options JSON and is the default `name` of the hidden input with the value", "es": "Va en el propio `<input>` de texto. Clave del campo: lo vincula al JSON de opciones y es el `name` por defecto del hidden con el valor" } },
+  { "name": "data-ozi-autocomplete-options", "group": "identity", "type": "string", "on": "script",
+    "desc": { "pt-BR": "Vai no `<script type=\"application/json\">` com as opções (`value`, `label`), com a mesma chave do `data-ozi-autocomplete`", "en": "Goes on the `<script type=\"application/json\">` holding the options (`value`, `label`), with the same key as `data-ozi-autocomplete`", "es": "Va en el `<script type=\"application/json\">` con las opciones (`value`, `label`), con la misma clave que `data-ozi-autocomplete`" } },
+  { "name": "data-ozi-autocomplete-hidden-name", "group": "identity", "type": "string", "default": "data-ozi-autocomplete",
+    "desc": { "pt-BR": "`name` do `<input hidden>` gerado, que leva o valor da opção escolhida", "en": "`name` of the generated `<input hidden>` that carries the chosen option's value", "es": "`name` del `<input hidden>` generado, que lleva el valor de la opción elegida" } },
+  { "name": "data-ozi-autocomplete-as", "group": "identity", "type": "map", "example": "value=id, label=nome",
+    "desc": { "pt-BR": "Mapeia campos do JSON externo para `value` e `label`, no formato `canônico=alias, canônico=alias`", "en": "Maps fields of an external JSON to `value` and `label`, as `canonical=alias, canonical=alias`", "es": "Mapea campos del JSON externo a `value` y `label`, en el formato `canónico=alias, canónico=alias`" } },
+
+  { "name": "data-ozi-autocomplete-msg-empty", "group": "messages", "type": "string", "default": "lang:autocomplete.empty",
+    "desc": { "pt-BR": "Texto quando nenhuma opção corresponde ao que foi digitado", "en": "Text shown when no option matches what was typed", "es": "Texto cuando ninguna opción coincide con lo escrito" } },
+  { "name": "data-ozi-autocomplete-msg-search", "group": "messages", "type": "string", "default": "lang:autocomplete.searching",
+    "desc": { "pt-BR": "Texto durante a busca remota", "en": "Text shown during the remote search", "es": "Texto durante la búsqueda remota" } },
+
+  { "name": "data-ozi-autocomplete-required", "group": "state", "type": "flag",
+    "desc": { "pt-BR": "Define o campo como obrigatório (é preciso escolher uma opção da lista)", "en": "Sets the field as required (an option from the list must be chosen)", "es": "Define el campo como obligatorio (hay que elegir una opción de la lista)" } },
+  { "name": "data-ozi-autocomplete-required-message", "group": "state", "type": "string", "default": "lang:common.required",
+    "desc": { "pt-BR": "Mensagem de validação customizada", "en": "Custom validation message", "es": "Mensaje de validación personalizado" } },
+  { "name": "data-ozi-autocomplete-unique", "group": "state", "type": "string", "example": "telefones",
+    "desc": { "pt-BR": "Nome de um grupo: o mesmo valor não pode ser escolhido em dois autocompletes do mesmo grupo. Ao sair do campo com um valor repetido, ele é limpo, fica inválido, mostra um aviso por ~2,5 s e emite `ozi:unique-invalid`", "en": "Name of a group: the same value cannot be chosen in two autocompletes of the same group. Leaving the field with a repeated value clears it, marks it invalid, shows a notice for ~2.5 s and emits `ozi:unique-invalid`", "es": "Nombre de un grupo: el mismo valor no puede elegirse en dos autocompletes del mismo grupo. Al salir del campo con un valor repetido, se limpia, queda inválido, muestra un aviso durante ~2,5 s y emite `ozi:unique-invalid`" } },
+  { "name": "data-ozi-autocomplete-unique-message", "group": "state", "type": "string", "default": "lang:autocomplete.uniqueMessage",
+    "desc": { "pt-BR": "Texto do aviso quando o valor já foi escolhido no grupo", "en": "Text of the notice when the value was already chosen in the group", "es": "Texto del aviso cuando el valor ya fue elegido en el grupo" } },
+
+  { "name": "data-ozi-autocomplete-zld-url", "group": "remote", "type": "url",
+    "desc": { "pt-BR": "URL para busca remota via AJAX; combina com as opções locais. O token CSRF só vai para a mesma origem da página", "en": "URL for remote search via AJAX; combined with the local options. The CSRF token is only sent to the page's own origin", "es": "URL para búsqueda remota vía AJAX; se combina con las opciones locales. El token CSRF solo va al mismo origen de la página" } },
+  { "name": "data-ozi-autocomplete-zld-method", "group": "remote", "type": "enum", "values": ["GET", "POST"], "default": "POST",
+    "desc": { "pt-BR": "Método HTTP da busca", "en": "HTTP method of the search", "es": "Método HTTP de la búsqueda" } },
+  { "name": "data-ozi-autocomplete-zld-param", "group": "remote", "type": "string", "default": "search",
+    "desc": { "pt-BR": "Nome do parâmetro com o texto digitado", "en": "Name of the parameter that carries the typed text", "es": "Nombre del parámetro con el texto escrito" } },
+  { "name": "data-ozi-autocomplete-zld-min", "group": "remote", "type": "int", "default": "1",
+    "desc": { "pt-BR": "Mínimo de caracteres para disparar a busca", "en": "Minimum characters to trigger the search", "es": "Mínimo de caracteres para disparar la búsqueda" } },
+  { "name": "data-ozi-autocomplete-zld-delay", "group": "remote", "type": "int", "default": "300",
+    "desc": { "pt-BR": "Espera em ms antes de executar a busca", "en": "Delay in ms before executing the search", "es": "Retardo en ms antes de ejecutar la búsqueda" } },
+  { "name": "data-ozi-autocomplete-zld-log", "group": "remote", "type": "flag",
+    "desc": { "pt-BR": "Ativa logs de depuração da busca remota no console", "en": "Enables remote search debug logs in the console", "es": "Activa logs de depuración de la búsqueda remota en la consola" } },
+
+  { "name": "data-ozi-autocomplete-log", "group": "debug", "type": "flag", "since": "2.3",
+    "desc": { "pt-BR": "Registra `init()` e `destroy()` deste campo no console", "en": "Logs this field's `init()` and `destroy()` to the console", "es": "Registra `init()` y `destroy()` de este campo en la consola" } }
+ ],
+ "shared": [],
+ "internal": ["data-ozi-autocomplete-hidden"],
+ "events": [
+  { "name": "ozi:change", "detail": ["component", "name", "value", "items", "source"] },
+  { "name": "ozi:unique-invalid", "detail": ["component", "name", "value", "items", "source", "group"] }
+ ],
+ "lang": ["autocomplete.empty", "autocomplete.searching", "autocomplete.uniqueMessage"]
+}
