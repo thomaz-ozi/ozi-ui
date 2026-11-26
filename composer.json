@@ -1,6 +1,6 @@
 {
   "name": "ozi-ui/core",
-  "version": "2.10.8",
+  "version": "2.11.0",
   "description": "UI components for Laravel and Livewire, configured in HTML: select, rich-text editor, form validation, AJAX forms. Plain JavaScript, zero dependencies.",
   "type": "library",
   "license": "MIT",

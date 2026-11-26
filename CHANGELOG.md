@@ -6,6 +6,8 @@ listed where they changed.
 
 ## [Unreleased]
 
+## [2.11.0] — 2026-11-26
+
 ### Added
 - **Plugin manifest (`ozi-select` first).** `components/ozi-select/ozi-select.manifest.json` lists every
   `data-ozi-select-*` attribute (type, accepted values, default, description in pt-BR/en/es), the events,
@@ -487,7 +489,8 @@ Version 2: every plugin rewritten in plain JavaScript, no jQuery, zero runtime d
 A v1 compatibility ramp (jQuery shims, `zld*` aliases) is included and opt-in. `ozi-copy` and
 `ozi-paste` were discontinued. See the [migration guide](https://oziui.com/en/docs/migration).
 
-[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.8...HEAD
+[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.11.0...HEAD
+[2.11.0]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.8...v2.11.0
 [2.10.8]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.7...v2.10.8
 [2.10.7]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.6...v2.10.7
 [2.10.6]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.5...v2.10.6
