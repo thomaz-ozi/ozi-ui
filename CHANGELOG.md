@@ -6,6 +6,8 @@ listed where they changed.
 
 ## [Unreleased]
 
+## [2.11.2] — 2026-11-26
+
 ### Fixed
 - **`ozi-autocomplete`: a required field now blocks the form.** The submit gate of `ozi-validate` only sees
   fields marked with `data-ozi-required`, and the autocomplete only read `data-ozi-autocomplete-required`,
@@ -521,7 +523,8 @@ Version 2: every plugin rewritten in plain JavaScript, no jQuery, zero runtime d
 A v1 compatibility ramp (jQuery shims, `zld*` aliases) is included and opt-in. `ozi-copy` and
 `ozi-paste` were discontinued. See the [migration guide](https://oziui.com/en/docs/migration).
 
-[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.11.1...HEAD
+[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.11.2...HEAD
+[2.11.2]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.11.1...v2.11.2
 [2.11.1]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.11.0...v2.11.1
 [2.11.0]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.8...v2.11.0
 [2.10.8]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.7...v2.10.8
