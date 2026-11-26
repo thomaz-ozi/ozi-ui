@@ -29,7 +29,9 @@ const root  = resolve(args.find((a) => !a.startsWith('--')) || 'public/plugins/o
 const ATTRS_FILE = join(root, 'core', 'ozi-attrs.js');
 
 const LANGS = ['pt-BR', 'en', 'es'];
-const TYPES = ['flag', 'string', 'int', 'enum', 'url', 'list', 'map'];
+// flag = a presença liga (select, autocomplete); bool = exige "true"/"false" (OZI.helpers.parseBool:
+// editor, validate). Os dois convivem na 2.x; na 3.0 tudo vira flag (decisão B25 do desenho da v3).
+const TYPES = ['flag', 'bool', 'string', 'int', 'enum', 'url', 'list', 'map'];
 const KINDS = ['components', 'modules', 'behaviors'];
 
 if (!existsSync(ATTRS_FILE)) {
@@ -87,10 +89,12 @@ function validate(m) {
         if (n !== base && !n.startsWith(base + '-')) fail(`${where}: "${n}" fora do namespace ${base}`);
         if (seen.has(n)) fail(`${where}: "${n}" repetido`);
         seen.add(n);
+        if (n.includes('{') && !(Array.isArray(a.variants) && a.variants.length)) fail(`${where}: "${n}" é família ({x}) sem "variants"`);
+        if (a.variants && !n.includes('{')) fail(`${where}: "${n}": "variants" só em família ({x} no nome)`);
         if (!groups.has(a.group)) fail(`${where}: "${n}" com grupo desconhecido "${a.group}"`);
         if (!TYPES.includes(a.type)) fail(`${where}: "${n}" com tipo "${a.type}" (aceitos: ${TYPES.join(', ')})`);
         if (a.type === 'enum' && !(Array.isArray(a.values) && a.values.length)) fail(`${where}: "${n}" é enum sem "values"`);
-        if (a.values && !['enum', 'flag'].includes(a.type)) fail(`${where}: "${n}": "values" só em enum/flag`);
+        if (a.values && !['enum', 'flag', 'bool'].includes(a.type)) fail(`${where}: "${n}": "values" só em enum/flag`);
         if (a.type === 'enum' && a.default !== undefined && !a.values.includes(a.default)) fail(`${where}: "${n}": default fora de values`);
         if (a.default !== undefined && typeof a.default !== 'string') fail(`${where}: "${n}": default deve ser texto`);
         for (const l of LANGS) if (!a.desc || !String(a.desc[l] || '').trim()) fail(`${where}: "${n}" sem descrição ${l}`);
@@ -140,7 +144,16 @@ const code = codeFiles.map((f) => ({ f, src: stripComments(read(f)) }));
 
 const kebab = (s) => s.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase());
 
-function attrsInCode(ns) {
+// Família de nomes: `"name": "data-ozi-editor-tools-{bp}", "variants": ["sm", "md", ...]`. Vira um nome
+// por variante no registro, e o código pode montá-los por concatenação ('data-ozi-editor-tools-' + bp):
+// a concatenação só é aceita para o prefixo de uma família declarada.
+const familyPrefix = (a) => a.name.slice(0, a.name.indexOf('{'));
+function expandNames(a) {
+    if (!a.name.includes('{')) return [a.name];
+    return (a.variants || []).map((v) => a.name.replace(/\{\w+\}/, v));
+}
+
+function attrsInCode(ns, families = []) {
     const found = new Map();                     // nome -> [arquivos]
     const add = (name, f) => {
         if (!found.has(name)) found.set(name, new Set());
@@ -151,7 +164,12 @@ function attrsInCode(ns) {
     const reSet = new RegExp(`dataset\\.ozi${Ns}([A-Z][A-Za-z0-9]*)?`, 'g');
     for (const { f, src } of code) {
         for (const m of src.matchAll(reAttr)) {
-            if (m[2]) { fail(`${rel(f)}: nome montado por concatenação ("data-ozi-${ns}${m[1]}-" + ...): escreva o nome inteiro, senão a conferência não o vê`); continue; }
+            if (m[2]) {
+                const prefix = `data-ozi-${ns}${m[1]}-`;
+                if (families.includes(prefix)) { add(prefix, f); continue; }
+                fail(`${rel(f)}: nome montado por concatenação ("${prefix}" + ...): escreva o nome inteiro ou declare a família no manifesto ("${prefix}{x}" com "variants")`);
+                continue;
+            }
             add(`data-ozi-${ns}${m[1]}`, f);
         }
         for (const m of src.matchAll(reSet)) add(`data-ozi-${ns}${m[1] ? kebab(m[1]) : ''}`, f);
@@ -185,7 +203,7 @@ for (const m of manifests) {
     const suffix = (n) => (n === base ? '' : n.slice(base.length + 1));
 
     // registro (W001)
-    const author   = (d.attributes || []).map((a) => suffix(a.name)).sort();
+    const author   = (d.attributes || []).flatMap(expandNames).map(suffix).sort();
     const internal = (d.internal || []).map(suffix).sort();
     const ind = '        ';
     const block = [
@@ -201,19 +219,31 @@ for (const m of manifests) {
     else attrsJs = attrsJs.replace(reBlock, block);
 
     // deriva: atributos
-    const declared = new Set([...(d.attributes || []).map((a) => a.name), ...(d.internal || [])]);
-    const found = attrsInCode(ns);
+    const families = (d.attributes || []).filter((a) => a.name.includes('{'));
+    const prefixes = families.map(familyPrefix);
+    const declared = new Set([...(d.attributes || []).filter((a) => !a.name.includes('{')).map((a) => a.name),
+                              ...(d.internal || [])]);
+    const found = attrsInCode(ns, prefixes);
+    const variantNames = new Set(families.flatMap(expandNames));
     for (const [name, files] of found) {
+        if (prefixes.includes(name) || variantNames.has(name)) continue;   // família: conferida abaixo
         if (!declared.has(name)) fail(`${where}: o código usa "${name}" (${[...files].join(', ')}) e o manifesto não o declara`);
     }
     for (const name of declared) {
         if (!found.has(name)) fail(`${where}: "${name}" está no manifesto e nenhum JS do pacote o lê (atributo morto?)`);
     }
+    for (const a of families) {
+        const p = familyPrefix(a);
+        if (!found.has(p) && !expandNames(a).every((n) => found.has(n))) {
+            fail(`${where}: família "${a.name}": o código não monta "${p}" + ... nem lê cada variante`);
+        }
+    }
 
     // deriva: eventos (JS do próprio plugin)
     const ownJs = code.filter(({ f }) => f.startsWith(join(m.dir, 'js') + sep));
     const emitted = new Set();
-    for (const { src } of ownJs) for (const e of src.matchAll(/emit\(\s*'(ozi:[a-z-]+)'/g)) emitted.add(e[1]);
+    // emit('ozi:x'...), _emit('ozi:x'...) e _emitEvent(el, 'ozi:x'...) (editor: o elemento vem antes)
+    for (const { src } of ownJs) for (const e of src.matchAll(/[eE]mit\w*\(\s*(?:[\w.$]+\s*,\s*)?'(ozi:[a-z-]+)'/g)) emitted.add(e[1]);
     const evDecl = new Set((d.events || []).map((e) => e.name));
     for (const e of emitted) if (!evDecl.has(e)) fail(`${where}: o JS emite "${e}" e o manifesto não o declara em events`);
     for (const e of evDecl) if (!emitted.has(e)) fail(`${where}: evento "${e}" no manifesto e o JS não o emite`);

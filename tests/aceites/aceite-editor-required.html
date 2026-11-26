@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite ozi-editor (obrigatório barra o envio)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .35rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite ozi-editor <small>(obrigatório barra o envio)</small></h1>
+<p>Critério: um editor obrigatório vazio barra o envio pelo gate do validate, declarado pelo genérico
+<code>data-ozi-required="true"</code> (o que a doc do validate ensina) ou por
+<code>data-ozi-editor-required</code>; preenchido, o envio passa. Mesmo caso do select 6.5.1 e do
+autocomplete 4.1.2.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<form id="fa" novalidate>
+    <textarea name="corpo_a" data-ozi-editor-html="corpo_a" data-ozi-required="true"></textarea>
+    <button type="submit" data-ozi-validate id="ba">Enviar</button>
+</form>
+
+<form id="fb" novalidate>
+    <textarea name="corpo_b" data-ozi-editor-md="corpo_b" data-ozi-editor-required="true"></textarea>
+    <button type="submit" data-ozi-validate id="bb">Enviar</button>
+</form>
+
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['editor', 'editor-md', 'validate'], lang: 'pt-BR' });
+
+    var erros = [];
+    window.addEventListener('error', function (ev) {
+        if (ev.message === 'Script error.' && !ev.filename && !ev.lineno) return;
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra && !ok ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 9s';
+        vered.className = 'fail';
+    }, 9000);
+
+    OZI.ready(function () {
+        (async function () {
+            var todos = true;
+            await wait(150);
+            var subA = 0, subB = 0;
+            document.getElementById('fa').addEventListener('submit', function (e) { subA++; e.preventDefault(); });
+            document.getElementById('fb').addEventListener('submit', function (e) { subB++; e.preventDefault(); });
+
+            var r = OZI.modules.validate.container({ container: document.getElementById('fa'), silent: true });
+            todos = check('1a data-ozi-required="true": container() dá inválido com o editor vazio', r.isValid === false,
+                JSON.stringify(r.invalidFields)) && todos;
+            document.getElementById('ba').click(); await wait(30);
+            todos = check('1b data-ozi-required="true": o gate barra o envio', subA === 0, 'submits: ' + subA) && todos;
+
+            document.getElementById('bb').click(); await wait(30);
+            todos = check('2a data-ozi-editor-required="true" (md): o gate barra o envio', subB === 0, 'submits: ' + subB) && todos;
+
+            OZI.components.editor.value('corpo_a', '<p>Olá</p>'); await wait(30);
+            var antes = subA;
+            document.getElementById('ba').click(); await wait(30);
+            todos = check('3a preenchido: o gate deixa enviar', subA === antes + 1, 'submits: ' + subA) && todos;
+
+            await wait(100);
+            todos = check('zero erros JS', erros.length === 0, erros.join(' | ')) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ ACEITE ozi-editor (obrigatório): PASSOU' : '✗ ACEITE ozi-editor (obrigatório): FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+        })().catch(function (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+            vered.textContent = '✗ ACEITE ozi-editor (obrigatório): FALHOU (exceção)';
+            vered.className = 'fail';
+        });
+    });
+</script>
+</body>
+</html>

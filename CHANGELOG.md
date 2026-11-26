@@ -6,6 +6,19 @@ listed where they changed.
 
 ## [Unreleased]
 
+### Fixed
+- **`ozi-editor`: a required editor now blocks the form.** Neither `data-ozi-required="true"` nor
+  `data-ozi-editor-required="true"` blocked an empty submit: the adapter ignored the generic attribute and
+  the `ozi-validate` submit gate only sees fields marked with `data-ozi-required`. Both now work.
+  `ozi-editor` 4.10.3. Note: the editor's on/off attributes still need `="true"`; written empty they are
+  ignored (presence alone will turn them on in 3.0).
+
+### Added
+- `ozi-editor.manifest.json`: the `ozi-editor` attribute reference on oziui.com is now generated from it
+  (it was missing 8 attributes, including `counter`, `upload-url` and the per-breakpoint toolbars).
+  `OZI-W001` now suggests `data-ozi-editor-counter` and no longer suggests the internal
+  `data-ozi-editor-type`. `ozi-attrs` 1.1.1.
+
 ## [2.11.2] — 2026-11-26
 
 ### Fixed

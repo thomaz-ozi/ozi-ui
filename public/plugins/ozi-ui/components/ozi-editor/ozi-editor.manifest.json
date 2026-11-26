@@ -1,0 +1,439 @@
+{
+ "_": "Fonte única dos atributos do ozi-editor (HTML e Markdown; roadmap pronto-para-ia, N3). Lido por tools/build-manifest.mjs (gera o registro do core/ozi-attrs.js e confere a deriva com o código) e pelo site (tabela de atributos e llms-full.txt). Atributo novo = entrada aqui na mesma mudança, senão o CI reprova.",
+ "manifest": 1,
+ "plugin": "ozi-editor",
+ "namespace": "editor",
+ "type": "component",
+ "deps": [
+  "validate",
+  "editor-sanitize"
+ ],
+ "groups": [
+  {
+   "id": "identity",
+   "title": {
+    "pt-BR": "Identificação e modo",
+    "en": "Identification and mode",
+    "es": "Identificación y modo"
+   }
+  },
+  {
+   "id": "toolbar",
+   "title": {
+    "pt-BR": "Toolbar",
+    "en": "Toolbar",
+    "es": "Toolbar"
+   },
+   "note": {
+    "pt-BR": "Prioridade da toolbar: `data-ozi-editor-theme` → `data-ozi-editor-tools` → `defaultTheme`/`defaultTools` do `oziConf` → padrão do modo. Os atributos por breakpoint são lidos sempre do elemento.",
+    "en": "Toolbar priority: `data-ozi-editor-theme` → `data-ozi-editor-tools` → `defaultTheme`/`defaultTools` in `oziConf` → the mode default. Breakpoint attributes are always read from the element.",
+    "es": "Prioridad de la toolbar: `data-ozi-editor-theme` → `data-ozi-editor-tools` → `defaultTheme`/`defaultTools` del `oziConf` → el valor por defecto del modo. Los atributos por breakpoint se leen siempre del elemento."
+   }
+  },
+  {
+   "id": "visual",
+   "title": {
+    "pt-BR": "Visual",
+    "en": "Visual",
+    "es": "Visual"
+   }
+  },
+  {
+   "id": "state",
+   "title": {
+    "pt-BR": "Estado, validação e envio",
+    "en": "State, validation and submission",
+    "es": "Estado, validación y envío"
+   },
+   "note": {
+    "pt-BR": "Os atributos de liga/desliga do editor precisam de valor: `=\"true\"`. Escritos vazios, são ignorados (na 3.0 a presença passa a ligar, como no select).",
+    "en": "The editor on/off attributes need a value: `=\"true\"`. Written empty, they are ignored (in 3.0 presence alone will turn them on, as in the select).",
+    "es": "Los atributos de encendido/apagado del editor necesitan valor: `=\"true\"`. Escritos vacíos, se ignoran (en la 3.0 la presencia los activará, como en el select)."
+   }
+  },
+  {
+   "id": "debug",
+   "title": {
+    "pt-BR": "Debug",
+    "en": "Debug",
+    "es": "Debug"
+   }
+  }
+ ],
+ "attributes": [
+  {
+   "name": "data-ozi-editor-html",
+   "group": "identity",
+   "type": "string",
+   "desc": {
+    "pt-BR": "Vai no `<textarea>`: ativa o editor no modo **HTML**. Valor = chave única. Use este **ou** o `-md`",
+    "en": "Goes on the `<textarea>`: turns the editor on in **HTML** mode. Value = unique key. Use this **or** `-md`",
+    "es": "Va en el `<textarea>`: activa el editor en modo **HTML**. Valor = clave única. Use este **o** el `-md`"
+   }
+  },
+  {
+   "name": "data-ozi-editor-md",
+   "group": "identity",
+   "type": "string",
+   "desc": {
+    "pt-BR": "Vai no `<textarea>`: ativa o editor no modo **Markdown** (o campo envia Markdown). Valor = chave única. Precisa do `editor-md` carregado",
+    "en": "Goes on the `<textarea>`: turns the editor on in **Markdown** mode (the field submits Markdown). Value = unique key. Needs `editor-md` loaded",
+    "es": "Va en el `<textarea>`: activa el editor en modo **Markdown** (el campo envía Markdown). Valor = clave única. Necesita `editor-md` cargado"
+   }
+  },
+  {
+   "name": "data-ozi-editor-theme",
+   "group": "toolbar",
+   "type": "string",
+   "example": "full",
+   "desc": {
+    "pt-BR": "Toolbar pronta pelo nome: `minimal`, `standard`, `full`, `blog`, `code` (embutidos) ou um tema seu em `oziConf({ components: { editor: { themes } } })`. Vence o `-tools`",
+    "en": "Ready-made toolbar by name: `minimal`, `standard`, `full`, `blog`, `code` (built in) or your own theme in `oziConf({ components: { editor: { themes } } })`. Wins over `-tools`",
+    "es": "Toolbar lista por nombre: `minimal`, `standard`, `full`, `blog`, `code` (incluidos) o un tema propio en `oziConf({ components: { editor: { themes } } })`. Gana sobre `-tools`"
+   }
+  },
+  {
+   "name": "data-ozi-editor-tools",
+   "group": "toolbar",
+   "type": "string",
+   "example": "[bold,italic]; heading; [ul,ol]; source",
+   "desc": {
+    "pt-BR": "Ferramentas da toolbar: vírgula separa, `[ ]` agrupa, `;` quebra a linha",
+    "en": "Toolbar tools: comma separates, `[ ]` groups, `;` breaks the line",
+    "es": "Herramientas de la toolbar: la coma separa, `[ ]` agrupa, `;` salta de línea"
+   }
+  },
+  {
+   "name": "data-ozi-editor-tools-{bp}",
+   "variants": [
+    "sm",
+    "md",
+    "lg",
+    "xl",
+    "xxl"
+   ],
+   "group": "toolbar",
+   "type": "string",
+   "desc": {
+    "pt-BR": "Toolbar completa a partir daquele breakpoint (largura mínima, como no Bootstrap). Não soma com a base: cada uma é a lista inteira",
+    "en": "Full toolbar from that breakpoint up (minimum width, as in Bootstrap). It does not add to the base: each one is the whole list",
+    "es": "Toolbar completa a partir de ese breakpoint (ancho mínimo, como en Bootstrap). No se suma a la base: cada una es la lista entera"
+   }
+  },
+  {
+   "name": "data-ozi-editor-tools-scroll",
+   "group": "toolbar",
+   "type": "string",
+   "desc": {
+    "pt-BR": "Toolbar numa linha só com rolagem lateral (setas), em vez de quebrar linhas",
+    "en": "Toolbar on a single line with side scrolling (arrows) instead of wrapping",
+    "es": "Toolbar en una sola línea con desplazamiento lateral (flechas) en lugar de saltar de línea"
+   }
+  },
+  {
+   "name": "data-ozi-editor-tools-scroll-{bp}",
+   "variants": [
+    "sm",
+    "md",
+    "lg",
+    "xl",
+    "xxl"
+   ],
+   "group": "toolbar",
+   "type": "string",
+   "desc": {
+    "pt-BR": "Igual ao `-tools-scroll`, a partir daquele breakpoint. No mesmo breakpoint, vence o `-tools-{bp}`",
+    "en": "Same as `-tools-scroll`, from that breakpoint up. On the same breakpoint, it wins over `-tools-{bp}`",
+    "es": "Igual que `-tools-scroll`, a partir de ese breakpoint. En el mismo breakpoint, gana sobre `-tools-{bp}`"
+   }
+  },
+  {
+   "name": "data-ozi-editor-class",
+   "group": "toolbar",
+   "type": "map",
+   "example": "destaque:Destaque, nota:Nota",
+   "desc": {
+    "pt-BR": "Classes CSS do dropdown \"Classes\", no formato `classe:Rótulo, classe:Rótulo`",
+    "en": "CSS classes for the \"Classes\" dropdown, as `class:Label, class:Label`",
+    "es": "Clases CSS del desplegable \"Clases\", en el formato `clase:Etiqueta, clase:Etiqueta`"
+   }
+  },
+  {
+   "name": "data-ozi-editor-upload-url",
+   "group": "toolbar",
+   "type": "url",
+   "desc": {
+    "pt-BR": "Endpoint de upload de imagem. Sem ele, o popover de imagem não mostra a parte de upload (só URL)",
+    "en": "Image upload endpoint. Without it, the image popover has no upload section (URL only)",
+    "es": "Endpoint de subida de imagen. Sin él, el popover de imagen no muestra la parte de subida (solo URL)"
+   }
+  },
+  {
+   "name": "data-ozi-editor-uicolor",
+   "group": "visual",
+   "type": "string",
+   "default": "var(--ozi-color-primary, #3b82f6)",
+   "example": "#9AB8F3",
+   "desc": {
+    "pt-BR": "Cor principal do editor (foco e botões ativos); aceita `var(--minha-cor)`",
+    "en": "Main editor color (focus and active buttons); accepts `var(--my-color)`",
+    "es": "Color principal del editor (foco y botones activos); acepta `var(--mi-color)`"
+   }
+  },
+  {
+   "name": "data-ozi-editor-placeholder",
+   "group": "visual",
+   "type": "string",
+   "default": "lang:editor.placeholder",
+   "desc": {
+    "pt-BR": "Placeholder da área editável",
+    "en": "Editable area placeholder",
+    "es": "Placeholder del área editable"
+   }
+  },
+  {
+   "name": "data-ozi-editor-height",
+   "group": "visual",
+   "type": "string",
+   "default": "200px",
+   "example": "220px",
+   "desc": {
+    "pt-BR": "Altura mínima da área editável",
+    "en": "Minimum height of the editable area",
+    "es": "Altura mínima del área editable"
+   }
+  },
+  {
+   "name": "data-ozi-editor-counter",
+   "group": "visual",
+   "type": "bool",
+   "desc": {
+    "pt-BR": "Mostra o contador de palavras e caracteres",
+    "en": "Shows the word and character counter",
+    "es": "Muestra el contador de palabras y caracteres"
+   }
+  },
+  {
+   "name": "data-ozi-editor-disabled",
+   "group": "state",
+   "type": "bool",
+   "desc": {
+    "pt-BR": "Desabilita o editor e toda a toolbar",
+    "en": "Disables the editor and the whole toolbar",
+    "es": "Deshabilita el editor y toda la toolbar"
+   }
+  },
+  {
+   "name": "data-ozi-editor-required",
+   "group": "state",
+   "type": "bool",
+   "desc": {
+    "pt-BR": "Marca como obrigatório (o genérico `data-ozi-required=\"true\"` também vale, 2.11.3+)",
+    "en": "Marks as required (the generic `data-ozi-required=\"true\"` works too, 2.11.3+)",
+    "es": "Marca como obligatorio (el genérico `data-ozi-required=\"true\"` también vale, 2.11.3+)"
+   }
+  },
+  {
+   "name": "data-ozi-editor-required-message",
+   "group": "state",
+   "type": "string",
+   "default": "lang:common.required",
+   "desc": {
+    "pt-BR": "Mensagem de validação customizada",
+    "en": "Custom validation message",
+    "es": "Mensaje de validación personalizado"
+   }
+  },
+  {
+   "name": "data-ozi-editor-sanitize",
+   "group": "state",
+   "type": "enum",
+   "values": [
+    "default",
+    "email"
+   ],
+   "default": "default",
+   "since": "2.9",
+   "desc": {
+    "pt-BR": "Perfil do sanitizador. `email` mantém os estilos inline de corpo de e-mail. Valor desconhecido avisa no console e usa `default`. Sanitize de novo no servidor antes de exibir",
+    "en": "Sanitizer profile. `email` keeps the inline styles of an email body. An unknown value warns in the console and uses `default`. Sanitize again on the server before rendering",
+    "es": "Perfil del sanitizador. `email` conserva los estilos en línea de un cuerpo de correo. Un valor desconocido avisa en la consola y usa `default`. Vuelva a sanitizar en el servidor antes de mostrar"
+   }
+  },
+  {
+   "name": "data-ozi-editor-log",
+   "group": "debug",
+   "type": "bool",
+   "since": "2.3",
+   "desc": {
+    "pt-BR": "Registra `init()`, `destroy()` e o relatório do sanitizador no console",
+    "en": "Logs `init()`, `destroy()` and the sanitizer report to the console",
+    "es": "Registra `init()`, `destroy()` y el informe del sanitizador en la consola"
+   }
+  }
+ ],
+ "shared": [
+  "data-ozi-required"
+ ],
+ "internal": [
+  "data-ozi-editor-collapse-id",
+  "data-ozi-editor-collapse-panel",
+  "data-ozi-editor-image-align",
+  "data-ozi-editor-image-align-icon",
+  "data-ozi-editor-image-align-pending",
+  "data-ozi-editor-image-alt-input",
+  "data-ozi-editor-image-apply",
+  "data-ozi-editor-image-file-input",
+  "data-ozi-editor-image-filename",
+  "data-ozi-editor-image-height-input",
+  "data-ozi-editor-image-remove",
+  "data-ozi-editor-image-url-input",
+  "data-ozi-editor-image-width-input",
+  "data-ozi-editor-link-apply",
+  "data-ozi-editor-link-input",
+  "data-ozi-editor-link-remove",
+  "data-ozi-editor-popover-id",
+  "data-ozi-editor-popover-wrap",
+  "data-ozi-editor-scroll-dir",
+  "data-ozi-editor-swatch",
+  "data-ozi-editor-swatch-custom",
+  "data-ozi-editor-swatch-none",
+  "data-ozi-editor-table-action",
+  "data-ozi-editor-table-apply",
+  "data-ozi-editor-table-col",
+  "data-ozi-editor-table-cols",
+  "data-ozi-editor-table-grid",
+  "data-ozi-editor-table-header",
+  "data-ozi-editor-table-panel",
+  "data-ozi-editor-table-row",
+  "data-ozi-editor-table-rows",
+  "data-ozi-editor-table-size-label",
+  "data-ozi-editor-tool",
+  "data-ozi-editor-tool-blocked",
+  "data-ozi-editor-toolbar-bp",
+  "data-ozi-editor-toolbar-bp-until",
+  "data-ozi-editor-type"
+ ],
+ "events": [
+  {
+   "name": "ozi:init",
+   "detail": [
+    "component",
+    "name",
+    "value",
+    "type",
+    "source"
+   ]
+  },
+  {
+   "name": "ozi:change",
+   "detail": [
+    "component",
+    "name",
+    "value",
+    "type",
+    "source"
+   ]
+  },
+  {
+   "name": "ozi:destroy",
+   "detail": [
+    "component",
+    "name",
+    "value",
+    "type",
+    "source"
+   ]
+  },
+  {
+   "name": "ozi:editor-sanitized",
+   "detail": [
+    "component",
+    "name",
+    "value",
+    "sanitized",
+    "removed"
+   ]
+  }
+ ],
+ "lang": [
+  "editor.bold",
+  "editor.italic",
+  "editor.underline",
+  "editor.strike",
+  "editor.ul",
+  "editor.ol",
+  "editor.indent",
+  "editor.outdent",
+  "editor.codeblock",
+  "editor.source",
+  "editor.sourceMd",
+  "editor.table",
+  "editor.heading",
+  "editor.h1",
+  "editor.h2",
+  "editor.h3",
+  "editor.h4",
+  "editor.h5",
+  "editor.h6",
+  "editor.classes",
+  "editor.alignLeft",
+  "editor.alignCenter",
+  "editor.alignRight",
+  "editor.justify",
+  "editor.quote",
+  "editor.hr",
+  "editor.undo",
+  "editor.redo",
+  "editor.link",
+  "editor.unlink",
+  "editor.linkUrl",
+  "editor.color",
+  "editor.highlight",
+  "editor.image",
+  "editor.imageUrl",
+  "editor.imageAlt",
+  "editor.imageWidth",
+  "editor.imageHeight",
+  "editor.imageUpload",
+  "editor.imageUploading",
+  "editor.imageUploadFailed",
+  "editor.imageInvalidUrl",
+  "editor.imageAlign",
+  "editor.imageAlignLeft",
+  "editor.imageAlignRight",
+  "editor.imageAlignCenter",
+  "editor.imageAlignFree",
+  "editor.tableCols",
+  "editor.tableRows",
+  "editor.tableHeader",
+  "editor.tableInsert",
+  "editor.tableSize",
+  "editor.tableGrid",
+  "editor.tableEdit",
+  "editor.tableRowAbove",
+  "editor.tableRowBelow",
+  "editor.tableColBefore",
+  "editor.tableColAfter",
+  "editor.tableRowRemove",
+  "editor.tableColRemove",
+  "editor.tableRemove",
+  "editor.paste",
+  "editor.pasteFmt",
+  "editor.apply",
+  "editor.remove",
+  "editor.none",
+  "editor.customize",
+  "editor.clipboardBlocked",
+  "editor.words",
+  "editor.chars",
+  "editor.clear",
+  "editor.moreTools",
+  "editor.fewerTools",
+  "editor.scrollPrev",
+  "editor.scrollNext",
+  "editor.unknown",
+  "editor.incompatible",
+  "editor.placeholder"
+ ]
+}

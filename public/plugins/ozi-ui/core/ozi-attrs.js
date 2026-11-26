@@ -2,7 +2,7 @@
  * ------------------------------------------
  * ozi-attrs
  * ------------------------------------------
- * Ver: 1.1.0
+ * Ver: 1.1.1
  * 2026-11-26
  *
  * Responsabilidade:
@@ -38,6 +38,11 @@
  *        known() }.
  *
  * Changelog:
+ *   - v1.1.1: registros do autocomplete (2.11.2) e do editor (2.11.3) gerados dos manifestos. No
+ *       editor, duas correções de classificação: `data-ozi-editor-counter` (escrito por quem usa,
+ *       liga o contador) passa de interno a autor e entra nas sugestões; `data-ozi-editor-type` (o
+ *       plugin grava no wrapper) passa de autor a interno e deixa de ser sugerido. Sai a constante
+ *       BREAKPOINTS (o manifesto declara a família `tools-{bp}`).
  *   - v1.1.0: [FEAT] registro do select gerado do ozi-select.manifest.json (ozi-ui/core 2.11.0,
  *       N3). Única mudança de comportamento: `data-ozi-select-footer` (o `<template>` do rodapé,
  *       escrito por quem usa o plugin) passa de interno a atributo de autor e entra nas sugestões.
@@ -57,8 +62,6 @@
     // internal: o que os plugins escrevem no DOM que eles mesmos geram (conhecido, nunca sugerido)
     // Sufixo '' = a chave do próprio plugin (`data-ozi-select="key"`).
     // ─────────────────────────────────────────────
-
-    var BREAKPOINTS = ['sm', 'md', 'lg', 'xl', 'xxl'];
 
     var REGISTRY = {
         // >>> manifest:select — gerado de components/ozi-select/ozi-select.manifest.json por tools/build-manifest.mjs; não editar à mão
@@ -81,21 +84,23 @@
             internal: ['hidden']
         },
         // <<< manifest:autocomplete
+        // >>> manifest:editor — gerado de components/ozi-editor/ozi-editor.manifest.json por tools/build-manifest.mjs; não editar à mão
         editor: {
-            author: ['html', 'md', 'class', 'disabled', 'height', 'log', 'placeholder', 'required',
-                'required-message', 'sanitize', 'theme', 'tools', 'tools-scroll', 'type', 'uicolor',
-                'upload-url']
-                .concat(BREAKPOINTS.map(function (b) { return 'tools-' + b; }))
-                .concat(BREAKPOINTS.map(function (b) { return 'tools-scroll-' + b; })),
-            internal: ['collapse-id', 'collapse-panel', 'counter', 'image-align', 'image-align-icon',
+            author: ['class', 'counter', 'disabled', 'height', 'html', 'log', 'md', 'placeholder',
+                'required', 'required-message', 'sanitize', 'theme', 'tools', 'tools-lg',
+                'tools-md', 'tools-scroll', 'tools-scroll-lg', 'tools-scroll-md', 'tools-scroll-sm',
+                'tools-scroll-xl', 'tools-scroll-xxl', 'tools-sm', 'tools-xl', 'tools-xxl',
+                'uicolor', 'upload-url'],
+            internal: ['collapse-id', 'collapse-panel', 'image-align', 'image-align-icon',
                 'image-align-pending', 'image-alt-input', 'image-apply', 'image-file-input',
                 'image-filename', 'image-height-input', 'image-remove', 'image-url-input',
                 'image-width-input', 'link-apply', 'link-input', 'link-remove', 'popover-id',
-                'popover-wrap', 'scroll-dir', 'swatch', 'swatch-custom', 'swatch-none', 'table-action',
-                'table-apply', 'table-col', 'table-cols', 'table-grid', 'table-header', 'table-panel',
-                'table-row', 'table-rows', 'table-size-label', 'tool', 'tool-blocked', 'toolbar-bp',
-                'toolbar-bp-until']
+                'popover-wrap', 'scroll-dir', 'swatch', 'swatch-custom', 'swatch-none',
+                'table-action', 'table-apply', 'table-col', 'table-cols', 'table-grid',
+                'table-header', 'table-panel', 'table-row', 'table-rows', 'table-size-label',
+                'tool', 'tool-blocked', 'toolbar-bp', 'toolbar-bp-until', 'type']
         },
+        // <<< manifest:editor
         audio: {
             author: ['', 'bg', 'log', 'preview', 'save-field', 'save-url', 'saved', 'speed', 'title', 'url',
                 'volume'],

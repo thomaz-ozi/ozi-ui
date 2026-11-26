@@ -2,8 +2,8 @@
  * ------------------------------------------
  * ozi-editor
  * ------------------------------------------
- * Ver: 4.10.2
- * 2026-11-22
+ * Ver: 4.10.3
+ * 2026-11-26
  *
  * Editor WYSIWYG (contenteditable) com toolbar declarativa, modos html/md,
  * dropdowns de heading/classes, source view, sanitizacao e validacao.
@@ -19,6 +19,13 @@
  *   ozi:editor-sanitized (4.10.0)
  *
  * Changelog:
+ *   - v4.10.3: [FIX] Editor obrigatório não barrava o envio: o adapter só lia
+ *       `data-ozi-editor-required` (o genérico `data-ozi-required="true"`, que a doc do validate
+ *       ensina, era ignorado), e o gate do validate só enxerga campo marcado com
+ *       `data-ozi-required` — nem o atributo próprio barrava o submit. Agora os dois valem e o
+ *       textarea obrigatório espelha `data-ozi-required="true"` (select 6.5.1, autocomplete 4.1.2).
+ *       Aceite `aceite-editor-required.html` (negativo: 3 caem na 4.10.2). Achado ao montar o
+ *       manifesto (26/11).
  *   - v4.10.2: [FIX] chave i18n `editor.source.md` → `editor.sourceMd`. O resolvedor do ozi-lang anda
  *       por caminho pontilhado, e `editor.source` é texto, então `.md` nunca resolvia: aviso
  *       `t("editor.source.md"): chave nao encontrada` no console de toda página com editor Markdown
@@ -1006,7 +1013,12 @@
             || 'var(--ozi-color-primary, #3b82f6)';
 
         this.isDisabled      = _parseBool(this.textarea, 'data-ozi-editor-disabled', false);
-        this.isRequired      = _parseBool(this.textarea, 'data-ozi-editor-required', false);
+        /* [4.10.3] o genérico `data-ozi-required` (o da doc do validate) também vale, e o editor
+           obrigatório espelha `data-ozi-required="true"` no textarea: o gate do validate só enxerga
+           campo com essa marca, e nem o atributo próprio barrava o envio (select 6.5.1, autocomplete 4.1.2) */
+        this.isRequired      = _parseBool(this.textarea, 'data-ozi-editor-required', false)
+            || _parseBool(this.textarea, 'data-ozi-required', false);
+        if (this.isRequired) this.textarea.setAttribute('data-ozi-required', 'true');
         // debug local por instância (convenção `data-ozi-{plugin}-log`, espelha o zldLog do ozi-loaddata)
         this.debug           = _parseBool(this.textarea, 'data-ozi-editor-log', false);
         /* [v4.10.0, OZI-16] perfil do sanitizador. Valor desconhecido avisa
