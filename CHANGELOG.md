@@ -6,6 +6,8 @@ listed where they changed.
 
 ## [Unreleased]
 
+## [2.11.3] — 2026-11-27
+
 ### Fixed
 - **`ozi-editor`: a required editor now blocks the form.** Neither `data-ozi-required="true"` nor
   `data-ozi-editor-required="true"` blocked an empty submit: the adapter ignored the generic attribute and
@@ -18,6 +20,8 @@ listed where they changed.
   (it was missing 8 attributes, including `counter`, `upload-url` and the per-breakpoint toolbars).
   `OZI-W001` now suggests `data-ozi-editor-counter` and no longer suggests the internal
   `data-ozi-editor-type`. `ozi-attrs` 1.1.1.
+- `ozi-validate.manifest.json`: the `ozi-validate` page now documents `data-ozi-required` and
+  `data-ozi-required-message` (read by the validate) next to its own attributes.
 
 ## [2.11.2] — 2026-11-26
 
@@ -536,7 +540,8 @@ Version 2: every plugin rewritten in plain JavaScript, no jQuery, zero runtime d
 A v1 compatibility ramp (jQuery shims, `zld*` aliases) is included and opt-in. `ozi-copy` and
 `ozi-paste` were discontinued. See the [migration guide](https://oziui.com/en/docs/migration).
 
-[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.11.2...HEAD
+[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.11.3...HEAD
+[2.11.3]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.11.2...v2.11.3
 [2.11.2]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.11.1...v2.11.2
 [2.11.1]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.11.0...v2.11.1
 [2.11.0]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.10.8...v2.11.0
