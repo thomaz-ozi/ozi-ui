@@ -6,6 +6,44 @@ listed where they changed.
 
 ## [Unreleased]
 
+## [2.11.4] — 2026-11-27
+
+### Fixed
+- **`ozi-loaddata`: `data-zld-destiny-append` and `data-zld-destiny-before` now work in HTML.** Both were
+  documented but only read from the JavaScript call (`oziLoadData({...})`): in markup the response always
+  replaced the target, and a second send to the same target cancelled the first ("load more" lost data).
+- **`ozi-loaddata`: `data-zld-log="yes"` (or `on`) no longer breaks the click.** The value went through
+  `JSON.parse`, threw a `SyntaxError` and nothing was sent. It now accepts `true`, `1`, `on` and `yes`
+  like the other on/off attributes.
+- **`ozi-loaddata`: error alerts follow the page language.** "Erro ao carregar.", "Não foi possível
+  carregar." and the other alerts were fixed Portuguese strings. They now come from `loadData.*`
+  (pt-BR, en, es). The unused keys `loadData.sending` and `loadData.success` were removed (no screen ever
+  showed them). `ozi-loaddata` 5.0.3.
+- **`ozi-check`: a group name with quotes no longer breaks the page.** The name went into a CSS selector
+  unescaped; `querySelectorAll` threw and, since `refresh()` walks every group, no group synced.
+- **`ozi-check`: `refresh()` with the switch off keeps the group checkbox.** The tristate only counted
+  enabled items, and with the switch off none is, so the group was cleared.
+- **`ozi-check`: `source` in `ozi:check-change` is `'api'` for API calls** (`setAllItems`,
+  `setGroupEnabledState`), as the event contract says; it was always `'user'`. Clicks stay `'user'`.
+- **`ozi-check`: `detail.group` is back** in `ozi:check-change` (the docs list it). `ozi-check` 3.0.1.
+- **`OZI-W001`: `data-ozi-check-enabled` and `data-ozi-check-all` warn again**, with the new name
+  (`-switch`, `-group`). Both were removed in 2.x but the registry still accepted them. `ozi-attrs` 1.1.2.
+
+### Added
+- `ozi-check.manifest.json`; the `OZI-W001` registry for ozi-check is generated from it.
+- `ozi-loaddata.manifest.json`, the first manifest with its own prefix (`data-zld-*`). It stays out of the
+  `OZI-W001` registry, which only scans `data-ozi-*`. The manifest leaves out `data-zld-file`, which is in
+  the docs but no code reads it.
+
+### Changed (tooling)
+- `tools/build-manifest.mjs`: accepts `"prefix"` and `"langNamespace"` in a manifest. Its comment
+  stripper now recognises regex literals: before, the quotes in `/[&<>"']/g` hid the rest of
+  `ozi-loaddata.js` from the drift check. The four existing manifests were not affected.
+
+### Known issue
+- The Livewire integration file for `ozi-check` (`data-ozi-livewire-model` on the items) does not sync
+  the value. Use `wire:model` on the checkboxes instead; a working integration is planned for 3.0.
+
 ## [2.11.3] — 2026-11-27
 
 ### Fixed
@@ -540,7 +578,8 @@ Version 2: every plugin rewritten in plain JavaScript, no jQuery, zero runtime d
 A v1 compatibility ramp (jQuery shims, `zld*` aliases) is included and opt-in. `ozi-copy` and
 `ozi-paste` were discontinued. See the [migration guide](https://oziui.com/en/docs/migration).
 
-[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.11.3...HEAD
+[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.11.4...HEAD
+[2.11.4]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.11.3...v2.11.4
 [2.11.3]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.11.2...v2.11.3
 [2.11.2]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.11.1...v2.11.2
 [2.11.1]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.11.0...v2.11.1
