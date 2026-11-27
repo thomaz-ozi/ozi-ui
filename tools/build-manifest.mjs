@@ -16,6 +16,11 @@
 //        (literal 'ns.chave') pelo JS do plugin;
 //      - `deps` = deps do plugin no _pluginMap do core/ozi-conf.js.
 //
+// Prefixo próprio (2.11.4, ozi-loaddata): `"prefix": "data-zld"` troca o `data-ozi-{ns}` dos nomes
+// (e o `dataset.zld*`); `"langNamespace": "loadData"` troca o bloco de lang/*.js. Plugin com prefixo
+// fora de `data-ozi-` não entra no registro do W001 (o aviso só varre `data-ozi-*`): a deriva é
+// conferida igual, o registro não é gerado.
+//
 // Uso:  node tools/build-manifest.mjs [dir plugins/ozi-ui] [--check]   (padrão: public/plugins/ozi-ui)
 //   --check  não grava; sai com 1 se o registro gerado estiver desatualizado ou houver deriva (CI).
 // Sem dependência npm. Saída determinística.
@@ -68,6 +73,11 @@ if (!manifests.length) {
 
 // ─── 1. formato ──────────────────────────────────────────────────────────────────────────────
 
+// prefixo dos nomes: `data-ozi-{ns}` por padrão; `"prefix"` no manifesto troca (ozi-loaddata: data-zld)
+const prefixOf = (d) => d.prefix || `data-ozi-${d.namespace}`;
+// no W001 só entra quem usa o prefixo padrão (o ozi-attrs.js varre `data-ozi-*`)
+const inW001 = (d) => prefixOf(d) === `data-ozi-${d.namespace}`;
+
 function validate(m) {
     const d = m.data, where = rel(m.file);
     const ns = d.namespace;
@@ -83,7 +93,9 @@ function validate(m) {
         for (const l of LANGS) if (!g.title || !g.title[l]) fail(`${where}: grupo "${g.id}" sem título ${l}`);
     }
 
-    const base = `data-ozi-${ns}`, seen = new Set();
+    if (d.prefix !== undefined && !/^data-[a-z]+(-[a-z]+)*$/.test(d.prefix)) fail(`${where}: "prefix" inválido (${d.prefix})`);
+    if (d.langNamespace !== undefined && !/^[a-zA-Z]+$/.test(d.langNamespace)) fail(`${where}: "langNamespace" inválido`);
+    const base = prefixOf(d), seen = new Set();
     for (const a of d.attributes || []) {
         const n = a.name || '';
         // "shared": true = atributo sem o prefixo do plugin que ele documenta (data-ozi-required no
@@ -113,22 +125,55 @@ function validate(m) {
 
 // ─── leitura do código (sem comentários) ─────────────────────────────────────────────────────
 
-// Tira comentários /* */ e // respeitando strings ('', "", ``). Os cabeçalhos e changelogs dos
-// plugins citam atributos antigos e novos, e não podem contar como "lido pelo código".
+// Tira comentários /* */ e // respeitando strings ('', "", ``) e regex literal (/[&<>"']/g). Os
+// cabeçalhos e changelogs dos plugins citam atributos antigos e novos, e não podem contar como "lido
+// pelo código". [2.11.4] Antes a regex literal não era reconhecida: as aspas de `/[&<>"']/g` (ozi-
+// loaddata) abriam uma string falsa e o resto do arquivo sumia da conferência.
+// `/` abre regex quando o último token significativo não termina uma expressão (identificador,
+// número, `)`, `]`, `}`), ou quando é uma palavra como `return`/`typeof`.
+const REGEX_AFTER_WORD = new Set(['return', 'typeof', 'instanceof', 'in', 'of', 'new', 'delete', 'void',
+    'throw', 'case', 'do', 'else', 'yield', 'await']);
 function stripComments(src) {
-    let out = '', i = 0, q = null;
+    let out = '', i = 0, q = null, last = '', word = '';
+    const regexAllowed = () => {
+        if (!last) return true;
+        if (/[\w$]/.test(last)) return REGEX_AFTER_WORD.has(word);
+        return !/[)\]}]/.test(last);
+    };
     while (i < src.length) {
         const c = src[i], n = src[i + 1];
         if (q) {
             out += c;
             if (c === '\\') { out += n || ''; i += 2; continue; }
-            if (c === q) q = null;
+            if (c === q) { q = null; last = c; word = ''; }
             i++; continue;
         }
         if (c === '"' || c === "'" || c === '`') { q = c; out += c; i++; continue; }
         if (c === '/' && n === '*') { const e = src.indexOf('*/', i + 2); i = e < 0 ? src.length : e + 2; out += ' '; continue; }
         if (c === '/' && n === '/') { const e = src.indexOf('\n', i); i = e < 0 ? src.length : e; continue; }
+        if (c === '/' && regexAllowed()) {
+            // regex literal até a `/` de fechamento (fora de [...]), copiada como está
+            let j = i + 1, cls = false;
+            while (j < src.length && src[j] !== '\n') {
+                const r = src[j];
+                if (r === '\\') { j += 2; continue; }
+                if (r === '[') cls = true;
+                else if (r === ']') cls = false;
+                else if (r === '/' && !cls) break;
+                j++;
+            }
+            if (src[j] === '/') {
+                j++;
+                while (/[a-z]/i.test(src[j] || '')) j++;
+                out += src.slice(i, j); i = j; last = ')'; word = '';
+                continue;
+            }
+        }
         out += c; i++;
+        if (/\s/.test(c)) continue;
+        if (/[\w$]/.test(c)) word = /[\w$]/.test(last) ? word + c : c;
+        else word = '';
+        last = c;
     }
     return out;
 }
@@ -157,26 +202,27 @@ function expandNames(a) {
     return (a.variants || []).map((v) => a.name.replace(/\{\w+\}/, v));
 }
 
-function attrsInCode(ns, families = []) {
+function attrsInCode(base, families = []) {
     const found = new Map();                     // nome -> [arquivos]
     const add = (name, f) => {
         if (!found.has(name)) found.set(name, new Set());
         found.get(name).add(rel(f));
     };
-    const reAttr = new RegExp(`data-ozi-${ns}((?:-[a-z0-9]+)*)(?![a-z0-9])(-)?`, 'g');
-    const Ns = ns[0].toUpperCase() + ns.slice(1);
-    const reSet = new RegExp(`dataset\\.ozi${Ns}([A-Z][A-Za-z0-9]*)?`, 'g');
+    const reAttr = new RegExp(`${base}((?:-[a-z0-9]+)*)(?![a-z0-9])(-)?`, 'g');
+    // data-ozi-select -> dataset.oziSelect; data-zld -> dataset.zld
+    const camel = base.slice(5).replace(/-([a-z])/g, (x, c) => c.toUpperCase());
+    const reSet = new RegExp(`dataset\\.${camel}([A-Z][A-Za-z0-9]*)?`, 'g');
     for (const { f, src } of code) {
         for (const m of src.matchAll(reAttr)) {
             if (m[2]) {
-                const prefix = `data-ozi-${ns}${m[1]}-`;
+                const prefix = `${base}${m[1]}-`;
                 if (families.includes(prefix)) { add(prefix, f); continue; }
                 fail(`${rel(f)}: nome montado por concatenação ("${prefix}" + ...): escreva o nome inteiro ou declare a família no manifesto ("${prefix}{x}" com "variants")`);
                 continue;
             }
-            add(`data-ozi-${ns}${m[1]}`, f);
+            add(`${base}${m[1]}`, f);
         }
-        for (const m of src.matchAll(reSet)) add(`data-ozi-${ns}${m[1] ? kebab(m[1]) : ''}`, f);
+        for (const m of src.matchAll(reSet)) add(`${base}${m[1] ? kebab(m[1]) : ''}`, f);
     }
     return found;
 }
@@ -203,7 +249,8 @@ function wrapList(prefix, items, indent) {
 
 for (const m of manifests) {
     if (!validate(m)) continue;
-    const d = m.data, ns = d.namespace, base = `data-ozi-${ns}`, where = rel(m.file);
+    const d = m.data, ns = d.namespace, base = prefixOf(d), where = rel(m.file);
+    const lns = d.langNamespace || ns;
     const suffix = (n) => (n === base ? '' : n.slice(base.length + 1));
 
     // registro (W001)
@@ -220,7 +267,9 @@ for (const m of manifests) {
         `${ind}// <<< manifest:${ns}`,
     ].join('\n');
     const reBlock = new RegExp(`^[ \\t]*// >>> manifest:${ns}\\b[^\\n]*\\n[\\s\\S]*?^[ \\t]*// <<< manifest:${ns}[^\\n]*$`, 'm');
-    if (!reBlock.test(attrsJs)) fail(`core/ozi-attrs.js sem os marcadores // >>> manifest:${ns} ... // <<< manifest:${ns}`);
+    if (!inW001(d)) {
+        if (reBlock.test(attrsJs)) fail(`core/ozi-attrs.js tem marcadores de ${ns}, mas o prefixo ${base} fica fora do W001`);
+    } else if (!reBlock.test(attrsJs)) fail(`core/ozi-attrs.js sem os marcadores // >>> manifest:${ns} ... // <<< manifest:${ns}`);
     else attrsJs = attrsJs.replace(reBlock, block);
 
     // deriva: atributos
@@ -235,7 +284,7 @@ for (const m of manifests) {
     for (const n of sharedNames) {
         if (!ownSrcAll.includes(n)) fail(`${where}: compartilhado "${n}" declarado e o JS do plugin não o lê`);
     }
-    const found = attrsInCode(ns, prefixes);
+    const found = attrsInCode(base, prefixes);
     const variantNames = new Set(families.flatMap(expandNames));
     for (const [name, files] of found) {
         if (prefixes.includes(name) || variantNames.has(name)) continue;   // família: conferida abaixo
@@ -269,8 +318,8 @@ for (const m of manifests) {
         // cada lang/{l}.js registra um bloco só (`{ns}: { chave: 'texto', ... }`); o texto pode ter
         // `{query}`, então nada de casar até o primeiro `}`: cada linha `chave: '...'` é uma chave
         const keys = new Set();
-        const start = src.search(new RegExp(`\\b${ns}\\s*:\\s*\\{`));
-        if (start > -1) for (const k of src.slice(start).matchAll(/^\s*(\w+)\s*:\s*['"`]/gm)) keys.add(`${ns}.${k[1]}`);
+        const start = src.search(new RegExp(`\\b${lns}\\s*:\\s*\\{`));
+        if (start > -1) for (const k of src.slice(start).matchAll(/^\s*(\w+)\s*:\s*['"`]/gm)) keys.add(`${lns}.${k[1]}`);
         for (const k of keys) if (!langDecl.has(k)) fail(`${where}: lang/${l}.js tem "${k}" e o manifesto não`);
         for (const k of langDecl) if (!keys.has(k)) fail(`${where}: "${k}" no manifesto e não em lang/${l}.js`);
     }
@@ -294,7 +343,8 @@ for (const m of manifests) {
         if (deps !== mine) fail(`${where}: deps [${mine}] ≠ _pluginMap [${deps}]`);
     }
 
-    console.log(`ok       ${d.plugin}: ${author.length} atributos, ${internal.length} internos, ${evDecl.size} eventos, ${langDecl.size} chaves`);
+    console.log(`ok       ${d.plugin}: ${author.length} atributos, ${internal.length} internos, ${evDecl.size} eventos, ${langDecl.size} chaves` +
+        (inW001(d) ? '' : ` (prefixo ${base}: fora do registro do W001)`));
 }
 
 // ─── gravação ────────────────────────────────────────────────────────────────────────────────

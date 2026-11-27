@@ -10,9 +10,13 @@
 
     lang.register('en', {
         loadData: {
-            sending: 'Sending...',
-            error:   'Error loading',
-            success: 'Done'
+            error:           'Error loading.',
+            processError:    'Error processing the request.',
+            invalidJson:     'Invalid JSON response.',
+            invalidJsonHint: 'Check what the route returns.',
+            network:         'Could not load.',
+            networkHint:     'Check your connection.',
+            status:          'Status {status}'
         }
     });
 })(window);

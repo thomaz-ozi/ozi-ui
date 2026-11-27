@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite ozi-loaddata 5.0.3 (HTML append/before, log, i18n)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .35rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite <small>(ozi-loaddata 5.0.3, pacote 2.11.4: achados do manifesto)</small></h1>
+<p>As 3 correções achadas ao escrever o <code>ozi-loaddata.manifest.json</code>. Cada bloco tem o
+teste negativo: a asserção falha no 5.0.2. <code>fetch</code> é simulado (o runner bloqueia rede
+externa): <code>/ok?d=ms&amp;b=texto</code> responde 200, <code>/erro</code> 500,
+<code>/caiu</code> rejeita (rede).</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<!-- 1. append pelo HTML: "carregar mais" -->
+<button id="ap1" type="button" data-zld-url="/ok?d=300&b=P1" data-zld-destiny-id="dest-ap" data-zld-destiny-append="true">mais 1</button>
+<button id="ap2" type="button" data-zld-url="/ok?d=50&b=P2"  data-zld-destiny-id="dest-ap" data-zld-destiny-append="true">mais 2</button>
+<div id="dest-ap"><p class="r">P0</p></div>
+
+<!-- 2. before pelo HTML (a doc escreve data-zld-destiny-Before; o HTML não diferencia caixa) -->
+<button id="bf" type="button" data-zld-url="/ok?b=ANTES" data-zld-destiny-id="dest-bf" data-zld-destiny-Before="true">antes</button>
+<div id="wrap-bf"><div id="dest-bf">FIXO</div></div>
+
+<!-- 3. data-zld-log com valor que não é JSON -->
+<button id="lg" type="button" data-zld-url="/ok?b=LOG" data-zld-destiny-id="dest-lg" data-zld-log="yes">log</button>
+<div id="dest-lg"></div>
+
+<!-- 4. alertas no idioma da página (en) -->
+<div id="dest-net"></div>
+<div id="dest-500"></div>
+<div id="dest-json"></div>
+
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['loaddata', 'validate'], lang: 'en' });
+
+    var erros = [], errosOpacos = 0, _step = 'boot';
+    window.addEventListener('error', function (ev) {
+        if (ev.message === 'Script error.' && !ev.filename && !ev.lineno) { errosOpacos++; return; }
+        erros.push('[' + _step + '] ' + (ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+        return false;
+    });
+    var _origErr = console.error;
+    console.error = function () {
+        var msg = Array.prototype.slice.call(arguments).join(' ');
+        // o fetch rejeitado de propósito (/caiu) só loga com data-zld-log; nada aqui é esperado
+        erros.push('[' + _step + '] console.error: ' + msg);
+        _origErr.apply(console, arguments);
+    };
+
+    // ── fetch simulado ─────────────────────────────────────────────────
+    var pedidos = [];
+    window.fetch = function (url, opts) {
+        opts = opts || {};
+        pedidos.push({ url: url, opts: opts });
+        var u = new URL(url, location.href);
+        if (u.pathname.indexOf('/caiu') !== -1) return Promise.reject(new TypeError('Failed to fetch'));
+        var atraso = Number(u.searchParams.get('d') || 0);
+        var corpo  = u.searchParams.get('b') || 'ok';
+        var json   = u.pathname.indexOf('/json') !== -1;
+        var status = u.pathname.indexOf('/erro') !== -1 ? 500 : 200;
+        return new Promise(function (resolve, reject) {
+            var t = setTimeout(function () {
+                resolve(json
+                    ? new Response('{isto nao e json', { status: 200, headers: { 'content-type': 'application/json' } })
+                    : new Response('<p class="r">' + corpo + '</p>', { status: status, headers: { 'content-type': 'text/html' } }));
+            }, atraso);
+            if (opts.signal) opts.signal.addEventListener('abort', function () {
+                clearTimeout(t); reject(new DOMException('Abortado', 'AbortError'));
+            });
+        });
+    };
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    function waitFor(fn, ms) {
+        var t0 = Date.now();
+        return new Promise(function (res, rej) {
+            (function poll() {
+                if (fn()) return res();
+                if (Date.now() - t0 > ms) return rej(new Error('waitFor timeout'));
+                setTimeout(poll, 20);
+            })();
+        });
+    }
+    function textos(sel) {
+        return Array.prototype.map.call(document.querySelectorAll(sel), function (p) { return p.textContent.trim(); });
+    }
+
+    var vered = document.getElementById('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 15s';
+        vered.className = 'fail';
+    }, 15000);
+
+    OZI.ready(function () {
+        (async function () {
+            var todos = true;
+            await waitFor(function () { return !!window.OziCollector; }, 3000);
+            await wait(50);
+
+            // ── 1. data-zld-destiny-append lido do HTML ─────────────────────
+            _step = 'append';
+            document.getElementById('ap1').click();
+            document.getElementById('ap2').click();
+            await wait(500);
+            var partes = textos('#dest-ap .r');
+            // 5.0.2: o HTML não lia o append → substituía o destino e o 2º envio abortava o 1º → ["P2"]
+            todos = check('[append] HTML: as duas respostas chegam e o conteúdo anterior fica',
+                partes.join(',') === 'P0,P1,P2' || partes.join(',') === 'P0,P2,P1', JSON.stringify(partes)) && todos;
+
+            // ── 2. data-zld-destiny-before lido do HTML ─────────────────────
+            _step = 'before';
+            document.getElementById('bf').click();
+            await wait(100);
+            var wrap = document.getElementById('wrap-bf');
+            var primeiro = wrap.firstElementChild;
+            // 5.0.2: substituía o conteúdo do destino ("FIXO" sumia)
+            todos = check('[before] HTML: a resposta entra ANTES do destino, como irmã',
+                primeiro && primeiro.classList.contains('r') && primeiro.textContent === 'ANTES',
+                wrap.innerHTML.replace(/\s+/g, ' ')) && todos;
+            todos = check('[before] HTML: o conteúdo do destino fica intacto',
+                document.getElementById('dest-bf').textContent === 'FIXO') && todos;
+
+            // ── 3. data-zld-log="yes" não quebra o clique ───────────────────
+            _step = 'log';
+            var errosAntes = erros.length;
+            document.getElementById('lg').click();
+            await wait(100);
+            // 5.0.2: JSON.parse("yes") → SyntaxError no listener de clique, nada era enviado
+            todos = check('[log] data-zld-log="yes": o clique envia e renderiza',
+                document.getElementById('dest-lg').textContent.trim() === 'LOG',
+                'destino="' + document.getElementById('dest-lg').textContent.trim() + '"') && todos;
+            todos = check('[log] sem SyntaxError no clique', erros.slice(errosAntes).every(function (e) {
+                return e.indexOf('JSON') === -1 && e.indexOf('SyntaxError') === -1;
+            }), erros.slice(errosAntes).join(' | ') || null) && todos;
+
+            // ── 4. alertas pelo dicionário (página em en) ───────────────────
+            _step = 'i18n';
+            await oziLoadData({ zldUrl: '/caiu', zldDestinyId: 'dest-net' });
+            var net = document.getElementById('dest-net').textContent;
+            // 5.0.2: "Nao foi possivel carregar." fixo em português
+            todos = check('[i18n] rede caiu: alerta em inglês', net.indexOf('Could not load.') !== -1 &&
+                net.indexOf('Check your connection.') !== -1, net) && todos;
+
+            await oziLoadData({ zldUrl: '/erro', zldDestinyId: 'dest-500' });
+            var e500 = document.getElementById('dest-500').textContent;
+            todos = check('[i18n] HTTP 500 (HTML): título e status pelo dicionário', e500.indexOf('Error loading.') !== -1 &&
+                e500.indexOf('Status 500') !== -1, e500) && todos;
+
+            await oziLoadData({ zldUrl: '/json', zldDestinyId: 'dest-json' });
+            var ej = document.getElementById('dest-json').textContent;
+            todos = check('[i18n] JSON inválido: alerta em inglês', ej.indexOf('Invalid JSON response.') !== -1, ej) && todos;
+
+            todos = check('[i18n] nenhum alerta ficou em português',
+                !/carregar|Verifique|inválid/i.test(net + e500 + ej)) && todos;
+
+            todos = check('[i18n] chaves antigas sem tela (sending/success) saíram do dicionário',
+                OZI.lang.t('loadData.sending') === 'loadData.sending' && OZI.lang.t('loadData.success') === 'loadData.success') && todos;
+
+            // a interpolação {status} vem do OZI.lang (e do fallback interno sem ele)
+            todos = check('[i18n] loadData.status interpola {status}', OZI.lang.t('loadData.status', { status: 404 }) === 'Status 404',
+                OZI.lang.t('loadData.status', { status: 404 })) && todos;
+
+            _step = 'fim';
+            await wait(1200); // finishUi (400 ms) e progress bar (600 ms)
+            todos = check('zero erros JS reais (opacos filtrados: ' + errosOpacos + ')', erros.length === 0, erros.join(' | ') || null) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ ACEITE ozi-loaddata 5.0.3: PASSOU' : '✗ ACEITE ozi-loaddata 5.0.3: FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+        })().catch(function (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err && err.stack || err));
+            vered.textContent = '✗ ACEITE ozi-loaddata 5.0.3: FALHOU (exceção)';
+            vered.className = 'fail';
+        });
+    });
+</script>
+</body>
+</html>

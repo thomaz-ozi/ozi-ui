@@ -2,8 +2,8 @@
  * ------------------------------------------
  * ozi-check
  * ------------------------------------------
- * Ver: 3.0.0
- * 2026-07-04
+ * Ver: 3.0.1
+ * 2026-11-27
  *
  * Responsabilidade:
  *   - Gerenciar checkboxes hierárquicos em 3 níveis por grupo
@@ -22,6 +22,18 @@
  * Eventos: ozi:check-change
  *
  * Changelog:
+ *   - v3.0.1: 4 correcoes achadas pelo manifesto (ozi-check.manifest.json, pacote 2.11.4), sem
+ *       mudar a API:
+ *       - [FIX] Nome de grupo com aspas (ou `\`) quebrava o seletor: o querySelectorAll lancava
+ *         SyntaxError e, como o refresh() passa por todos os grupos, derrubava a pagina inteira
+ *         (inclusive o boot). Agora o nome vai escapado (CSS.escape).
+ *       - [FIX] refresh()/syncAllGroups() com o switch desligado zerava o `group`: o tristate
+ *         contava so itens habilitados, e desligado nenhum esta. Com o grupo desligado, conta
+ *         todos (a marcacao real), como a doc promete.
+ *       - [FIX] source do evento: chamada pela API (setAllItems, setGroupEnabledState) emitia
+ *         'user'. Agora 'api' (contrato de eventos v2); clique continua 'user'.
+ *       - [FIX] detail.group volta ao evento (a doc o promete; o v3.0.0 o tirava por ja estar
+ *         em `name`). `name` continua.
  *   - v3.0.0: [V2-F2] Migracao para JS puro (docs/ozi-ui-v2-contratos.md, dev-hard):
  *       - Coleta/estado via querySelectorAll/classList/propriedades nativas
  *         (checked/indeterminate/disabled) — zero jQuery.
@@ -87,6 +99,13 @@
     var SEL_ITEM     = '[data-ozi-check-item]';
     var CSS_DISABLED = 'ozi-check-disabled';
 
+    // [3.0.1] escape de valor de atributo no seletor (CSS.escape; fallback para aspas e barra)
+    function _cssEscape(value) {
+        value = String(value);
+        if (window.CSS && typeof window.CSS.escape === 'function') return window.CSS.escape(value);
+        return value.replace(/["\\]/g, '\\$&');
+    }
+
     /**
      * _parseGroupList(attrValue)
      * "nordeste,norte" → ['nordeste', 'norte']
@@ -112,7 +131,8 @@
         var root = scope || document;
 
         function find(attr) {
-            var sel = '[' + attr + '="' + group + '"]';
+            // [3.0.1] escapado: aspas no nome do grupo lancavam SyntaxError
+            var sel = '[' + attr + '="' + _cssEscape(group) + '"]';
             return Array.prototype.slice.call(root.querySelectorAll(sel));
         }
 
@@ -193,17 +213,22 @@
      * NÃO altera o estado de marcação — preserva checked/indeterminate.
      */
     function setGroupEnabledState(group, enabled, scope) {
+        _setGroupEnabledState(group, enabled, scope, 'api');
+    }
+
+    // [3.0.1] `origin` = 'user' (clique) ou 'api' (chamada pela API publica)
+    function _setGroupEnabledState(group, enabled, scope, origin) {
         var els = getGroupElements(group, scope);
 
         if (!enabled) {
             _applyDisabledVisual(els.groupEls, true);
             _applyDisabledVisual(els.itemEls, true);
-            _emit(group, { group: group, enabled: false, source: 'switch' }, scope);
+            _emit(group, { group: group, enabled: false, source: 'switch' }, scope, origin);
         } else {
             _applyDisabledVisual(els.groupEls, false);
             _applyDisabledVisual(els.itemEls, false);
             syncGroup(group, scope);
-            _emit(group, { group: group, enabled: true, source: 'switch' }, scope);
+            _emit(group, { group: group, enabled: true, source: 'switch' }, scope, origin);
         }
     }
 
@@ -212,10 +237,14 @@
      * Marca ou desmarca todos os items não-disabled do grupo.
      */
     function setAllItems(group, checked, scope) {
+        _setAllItems(group, checked, scope, 'api');
+    }
+
+    function _setAllItems(group, checked, scope, origin) {
         var els = getGroupElements(group, scope);
         els.itemEls.forEach(function (el) { if (!el.disabled) el.checked = !!checked; });
         syncGroup(group, scope);
-        _emit(group, { group: group, checked: checked, source: 'group' }, scope);
+        _emit(group, { group: group, checked: checked, source: 'group' }, scope, origin);
     }
 
     /**
@@ -228,7 +257,11 @@
 
         if (!els.groupEls.length) return;
 
-        var activeItems  = els.itemEls.filter(function (el) { return !el.disabled; });
+        // [3.0.1] grupo desligado pelo switch: todos os itens estao disabled, entao conta todos
+        // (a marcacao real); ligado, ignora so os itens desabilitados individualmente
+        var activeItems  = isGroupEnabled(group, scope)
+            ? els.itemEls.filter(function (el) { return !el.disabled; })
+            : els.itemEls;
         var total        = activeItems.length;
         var checkedCount = activeItems.filter(function (el) { return el.checked; }).length;
 
@@ -280,7 +313,7 @@
 
             // itera cada grupo do CSV
             _parseGroupList(raw).forEach(function (group) {
-                setGroupEnabledState(group, enabled);
+                _setGroupEnabledState(group, enabled, undefined, 'user');
             });
         });
     }
@@ -295,7 +328,7 @@
 
             if (!isGroupEnabled(group)) return;
 
-            setAllItems(group, el.checked === true);
+            _setAllItems(group, el.checked === true, undefined, 'user');
         });
     }
 
@@ -315,7 +348,7 @@
                 source:  'item',
                 checked: el.checked,
                 value:   el.value
-            });
+            }, undefined, 'user');
         });
     }
 
@@ -327,28 +360,27 @@
     // o `source` do contrato ('user'|'api').
     // ─────────────────────────────────────────────
 
-    function _emit(group, payload, scope) {
+    function _emit(group, payload, scope, origin) {
         payload = payload || {};
         var els    = getGroupElements(group, scope);
-        var origin = els.switchEls[0] || els.groupEls[0] || els.itemEls[0] || document;
+        var target = els.switchEls[0] || els.groupEls[0] || els.itemEls[0] || document;
 
         var detail = {
             component: 'ozi-check',
             name:      group,
             value:     (payload.checked !== undefined) ? payload.checked : (payload.enabled !== undefined ? payload.enabled : null),
-            source:    'user'
+            source:    origin === 'api' ? 'api' : 'user'
         };
         Object.keys(payload).forEach(function (k) {
             if (k === 'source') { detail.level = payload.source; return; }
-            if (k === 'group')  return; // ja e o "name"
-            detail[k] = payload[k];
+            detail[k] = payload[k]; // [3.0.1] `group` fica (a doc o promete), alem do `name`
         });
 
         var helpers = window.OZI && window.OZI.helpers;
         if (helpers && typeof helpers.emit === 'function') {
-            helpers.emit(origin, 'ozi:check-change', detail);
+            helpers.emit(target, 'ozi:check-change', detail);
         } else if (typeof CustomEvent === 'function') {
-            origin.dispatchEvent(new CustomEvent('ozi:check-change', { bubbles: true, detail: detail }));
+            target.dispatchEvent(new CustomEvent('ozi:check-change', { bubbles: true, detail: detail }));
         }
     }
 

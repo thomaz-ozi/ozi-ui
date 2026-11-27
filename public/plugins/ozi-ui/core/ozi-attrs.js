@@ -2,8 +2,8 @@
  * ------------------------------------------
  * ozi-attrs
  * ------------------------------------------
- * Ver: 1.1.1
- * 2026-11-26
+ * Ver: 1.1.2
+ * 2026-11-27
  *
  * Responsabilidade:
  *   - Registro dos atributos `data-ozi-*` que o ozi-ui conhece (todos os plugins, num lugar só).
@@ -29,7 +29,8 @@
  * O registro de um plugin COM manifesto ({tipo}/ozi-{nome}/ozi-{nome}.manifest.json, roadmap
  * ozi-ui-pronto-para-ia.md, N3) é gerado por `node tools/build-manifest.mjs` entre os marcadores
  * `// >>> manifest:{ns}` e `// <<< manifest:{ns}`: não editar à mão, editar o manifesto. O mesmo
- * script confere a deriva código × manifesto e roda no CI com `--check`. Desde a 2.11: select.
+ * script confere a deriva código × manifesto e roda no CI com `--check`. Desde a 2.11: select;
+ * depois autocomplete, editor, validate e check (o loaddata tem manifesto, mas `data-zld-*` fica fora).
  * Os demais plugins seguem escritos à mão aqui até ganharem manifesto. Atributo novo num plugin
  * sem manifesto = entrada aqui, senão o aviso acusa o próprio ozi-ui (o aceite `aceite-attrs.html`
  * e a bateria inteira, que roda com o aviso ligado por estar em 127.0.0.1, pegam isso).
@@ -38,6 +39,9 @@
  *        known() }.
  *
  * Changelog:
+ *   - v1.1.2: registro do check gerado do manifesto (2.11.4). Saem `all` e `enabled`, que o
+ *       ozi-check não lê desde a 2.2.0 e o aviso aceitava calado; agora avisam com a resposta pronta
+ *       (`data-ozi-check-enabled` → `-switch`, `data-ozi-check-all` → `-group`, no SPECIAL).
  *   - v1.1.1: registros do autocomplete (2.11.2) e do editor (2.11.3) gerados dos manifestos. No
  *       editor, duas correções de classificação: `data-ozi-editor-counter` (escrito por quem usa,
  *       liga o contador) passa de interno a autor e entra nas sugestões; `data-ozi-editor-type` (o
@@ -111,10 +115,12 @@
                 'pass-max', 'pass-min', 'submit', 'user', 'user-caracter'],
             internal: []
         },
+        // >>> manifest:check — gerado de components/ozi-check/ozi-check.manifest.json por tools/build-manifest.mjs; não editar à mão
         check: {
-            author: ['all', 'enabled', 'group', 'item', 'switch'],
+            author: ['group', 'item', 'switch'],
             internal: []
         },
+        // <<< manifest:check
         search: {
             author: ['', 'group', 'highlight', 'min', 'multi', 'no-filter', 'pagination', 'pagination-id',
                 'words'],
@@ -145,6 +151,9 @@
     // nomes que existiram ou que parecem certos, com a resposta pronta
     var SPECIAL = {
         'data-ozi-editor': { suggest: ['data-ozi-editor-html', 'data-ozi-editor-md'] },
+        // [1.1.2] renomeados no ozi-check 2.2.0
+        'data-ozi-check-enabled': { suggest: ['data-ozi-check-switch'] },
+        'data-ozi-check-all': { suggest: ['data-ozi-check-group'] },
         'data-ozi-search-menu': { gone: '2.0' }
     };
     var GONE_PREFIXES = [

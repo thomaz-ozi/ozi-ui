@@ -2,8 +2,8 @@
  * ------------------------------------------
  * ozi-loaddata
  * ------------------------------------------
- * Ver: 5.0.2
- * 2026-11-19
+ * Ver: 5.0.3
+ * 2026-11-27
  *
  * Responsabilidade:
  *   - Orquestra fetch, UI, progress bar, busy state, actions
@@ -24,6 +24,16 @@
  * Expoe: window.oziLoadData, window.__zldConf
  *
  * Changelog:
+ *   - v5.0.3: 3 correcoes achadas pelo manifesto (ozi-loaddata.manifest.json, pacote 2.11.4):
+ *       - [I18N] os alertas de erro eram fixos em portugues ("Erro ao carregar.", "Nao foi
+ *         possivel carregar."...) e as chaves de lang/ (loadData.sending/error/success) nunca
+ *         eram lidas. Agora saem do dicionario (OZI.lang) com fallback pt-BR (regra R11).
+ *         Saem `loadData.sending` e `loadData.success`: nenhuma tela as mostrava.
+ *       - [FIX] data-zld-destiny-append e data-zld-destiny-before (na doc desde a v0) nao eram
+ *         lidos do HTML, so da chamada por JS: no HTML a resposta sempre substituia o destino e
+ *         um envio novo cancelava o anterior ("carregar mais" perdia dados).
+ *       - [FIX] data-zld-log com valor fora de JSON (`yes`, `on`) lancava SyntaxError no
+ *         JSON.parse e o clique nao enviava nada. Agora usa zldParseBool, como o resto.
  *   - v5.0.2: [SEGURANCA] auditoria de 2026-11-19 (aceite-loaddata-ataques.html):
  *       - token CSRF (header X-CSRF-TOKEN e _token no corpo) so para a MESMA ORIGEM;
  *         antes ia para qualquer zldUrl, inclusive de outro dominio ou `//host`.
@@ -228,6 +238,22 @@
         if (val === undefined || val === null) return false;
         var s = String(val).trim().toLowerCase();
         return s === 'true' || s === '1' || s === 'on' || s === 'yes';
+    }
+
+    // [5.0.3] texto do dicionario (OZI.lang) com fallback pt-BR embutido (regra R11)
+    function _t(key, fallback, params) {
+        var lang = window.OZI && window.OZI.lang;
+        var v = (lang && typeof lang.t === 'function') ? lang.t(key, params) : '';
+        if (!v || v === key) {
+            v = String(fallback || key).replace(/\{(\w+)\}/g, function (m, k) {
+                return params && params[k] !== undefined ? params[k] : m;
+            });
+        }
+        return v;
+    }
+
+    function _tStatus(status) {
+        return _t('loadData.status', 'Status {status}', { status: status });
     }
 
     function zldGenerateId() {
@@ -479,9 +505,8 @@
             zldCatchItemName: zldParseList(
                 el.dataset.zldCatchItemName || el.dataset.ldCatchItemName
             ),
-            log: el.dataset.zldLog
-                ? Boolean(JSON.parse(String(el.dataset.zldLog).toLowerCase()))
-                : false
+            // [5.0.3] zldParseBool: JSON.parse quebrava com `yes`/`on`
+            log: zldParseBool(el.dataset.zldLog)
         };
     }
 
@@ -803,7 +828,7 @@
 
         var handleHttpErrorHtml = function (status, html) {
             if (isAborted()) return;
-            renderToDestiny(zldBuildAlertHtml('warning', 'Erro ao carregar.', 'Status ' + status));
+            renderToDestiny(zldBuildAlertHtml('warning', _t('loadData.error', 'Erro ao carregar.'), _tStatus(status)));
 
             var titleEl = document.getElementById('logErrorLaravelOziTitle');
             if (titleEl) titleEl.textContent = String(status);
@@ -868,8 +893,8 @@
                             if (!response.ok && !(json && json.actions && json.actions.length)) {
                                 renderToDestiny(zldBuildAlertHtml(
                                     'warning',
-                                    (json && json.message) || 'Erro ao processar.',
-                                    'Status ' + response.status
+                                    (json && json.message) || _t('loadData.processError', 'Erro ao processar.'),
+                                    _tStatus(response.status)
                                 ));
                             }
 
@@ -877,7 +902,8 @@
                         }).catch(function (err) {
                             dataResponse.error = err;
                             if (isAborted()) { dataResponse.aborted = true; return dataResponse; }
-                            renderToDestiny(zldBuildAlertHtml('danger', 'Resposta JSON invalida.', 'Verifique o retorno da rota.'));
+                            renderToDestiny(zldBuildAlertHtml('danger', _t('loadData.invalidJson', 'Resposta JSON inválida.'),
+                                _t('loadData.invalidJsonHint', 'Verifique o retorno da rota.')));
                             return dataResponse;
                         });
                     }
@@ -894,7 +920,8 @@
                     dataResponse.error = err;
                     if (isAborted()) { dataResponse.aborted = true; return dataResponse; }
                     if (loadData.zldLog) console.error('[oziLoadData] fetch falhou:', err);
-                    renderToDestiny(zldBuildAlertHtml('danger', 'Nao foi possivel carregar.', 'Verifique sua conexao.'));
+                    renderToDestiny(zldBuildAlertHtml('danger', _t('loadData.network', 'Não foi possível carregar.'),
+                        _t('loadData.networkHint', 'Verifique sua conexão.')));
                     return dataResponse;
                 })
                 .finally(function () {
@@ -985,13 +1012,15 @@
     // ---------------------------------------------
 
     function _handleDispatch(el, e) {
-        var zldLog = el.dataset.zldLog
-            ? Boolean(JSON.parse(String(el.dataset.zldLog).toLowerCase()))
-            : false;
+        // [5.0.3] zldParseBool: JSON.parse lancava SyntaxError com `yes`/`on` e o clique morria
+        var zldLog = zldParseBool(el.dataset.zldLog);
 
         var attributes = {
             zldUrl:            el.dataset.zldUrl,
             zldDestinyId:      el.dataset.zldDestinyId,
+            // [5.0.3] lidos do HTML (antes so pela chamada por JS)
+            zldDestinyAppend:  el.dataset.zldDestinyAppend,
+            zldDestinyBefore:  el.dataset.zldDestinyBefore,
             zldCatchGroupId:   el.dataset.zldCatchGroupId || el.getAttribute('data-zld-catch-group-id'),
             zldCatchItemName:  el.dataset.zldCatchItemName || el.dataset.ldCatchItemName,
             zldMode:           el.dataset.zldMode   || el.dataset.ldWay  || 'fetch',

@@ -1,0 +1,26 @@
+{
+ "_": "Fonte única dos atributos do ozi-check (roadmap pronto-para-ia, N3). Lido por tools/build-manifest.mjs (confere a deriva com o código e gera o registro do OZI-W001 em core/ozi-attrs.js) e pelo site (tabela de atributos e llms-full.txt). Atributo novo = entrada aqui na mesma mudança, senão o CI reprova.",
+ "manifest": 1,
+ "plugin": "ozi-check",
+ "namespace": "check",
+ "type": "component",
+ "deps": [],
+ "groups": [
+  { "id": "levels", "title": { "pt-BR": "Níveis", "en": "Levels", "es": "Niveles" },
+    "note": { "pt-BR": "Os três atributos vão em `<input type=\"checkbox\">` e recebem o **nome do grupo**: é ele que liga switch, group e itens. Grupos com nomes diferentes são independentes na mesma página. Os nomes antigos `data-ozi-check-enabled` e `data-ozi-check-all` saíram na 2.x (o aviso OZI-W001 sugere os novos).", "en": "The three attributes go on `<input type=\"checkbox\">` and take the **group name**: it is what ties switch, group and items together. Groups with different names are independent on the same page. The old names `data-ozi-check-enabled` and `data-ozi-check-all` were removed in 2.x (the OZI-W001 warning suggests the new ones).", "es": "Los tres atributos van en `<input type=\"checkbox\">` y reciben el **nombre del grupo**: es lo que une switch, group e ítems. Los grupos con nombres distintos son independientes en la misma página. Los nombres antiguos `data-ozi-check-enabled` y `data-ozi-check-all` se quitaron en la 2.x (el aviso OZI-W001 sugiere los nuevos)." } }
+ ],
+ "attributes": [
+  { "name": "data-ozi-check-switch", "group": "levels", "type": "list", "example": "nordeste,norte",
+    "desc": { "pt-BR": "Liga e desliga o grupo (ou vários, separados por vírgula). Desligado, o `group` e os itens ficam desabilitados e com a classe `ozi-check-disabled`; a marcação não muda. Sem switch, o grupo está sempre ligado", "en": "Turns the group (or several, comma-separated) on and off. When off, the `group` and the items are disabled and get the `ozi-check-disabled` class; what is checked does not change. Without a switch, the group is always on", "es": "Activa y desactiva el grupo (o varios, separados por comas). Desactivado, el `group` y los ítems quedan deshabilitados y con la clase `ozi-check-disabled`; lo marcado no cambia. Sin switch, el grupo está siempre activo" } },
+  { "name": "data-ozi-check-group", "group": "levels", "type": "string", "example": "modulos",
+    "desc": { "pt-BR": "Marca ou desmarca todos os itens do grupo. Mostra o estado deles: marcado (todos), desmarcado (nenhum) ou `indeterminate` (parte). Um grupo só, sem vírgula", "en": "Checks or unchecks every item of the group. It shows their state: checked (all), unchecked (none) or `indeterminate` (some). One group only, no comma", "es": "Marca o desmarca todos los ítems del grupo. Muestra su estado: marcado (todos), desmarcado (ninguno) o `indeterminate` (parte). Un solo grupo, sin coma" } },
+  { "name": "data-ozi-check-item", "group": "levels", "type": "string", "example": "modulos",
+    "desc": { "pt-BR": "Checkbox individual do grupo. O `value` e o `name` do input são os de sempre. Com o grupo desligado pelo switch, o item fica `disabled` e o navegador não o envia no formulário. Um grupo só, sem vírgula", "en": "Individual checkbox of the group. The input's `value` and `name` work as usual. When the switch turns the group off, the item is `disabled` and the browser does not send it with the form. One group only, no comma", "es": "Checkbox individual del grupo. El `value` y el `name` del input son los de siempre. Con el grupo desactivado por el switch, el ítem queda `disabled` y el navegador no lo envía en el formulario. Un solo grupo, sin coma" } }
+ ],
+ "shared": [],
+ "internal": [],
+ "events": [
+  { "name": "ozi:check-change", "detail": ["component", "name", "value", "source", "level", "enabled", "checked"] }
+ ],
+ "lang": []
+}

@@ -1,0 +1,67 @@
+{
+ "_": "Fonte única dos atributos do ozi-loaddata (roadmap pronto-para-ia, N3). Lido por tools/build-manifest.mjs (confere a deriva com o código) e pelo site (tabela de atributos e llms-full.txt). Prefixo próprio data-zld-* (o mais antigo do pacote): fica fora do registro do W001, que só varre data-ozi-*. Atributo novo = entrada aqui na mesma mudança, senão o CI reprova.",
+ "manifest": 1,
+ "plugin": "ozi-loaddata",
+ "namespace": "loaddata",
+ "type": "module",
+ "prefix": "data-zld",
+ "langNamespace": "loadData",
+ "deps": ["validate", "actions"],
+ "groups": [
+  { "id": "send", "title": { "pt-BR": "Envio", "en": "Sending", "es": "Envío" },
+    "note": { "pt-BR": "O gatilho é qualquer elemento com `data-zld-url`: envia no clique e, num `<select>`, também no `change`. Os nomes antigos com prefixo `ld` (`ldUrl`, `ldDestinyId`...) valem só na chamada por JavaScript (`oziLoadData({...})`).", "en": "The trigger is any element with `data-zld-url`: it sends on click and, on a `<select>`, also on `change`. The old `ld`-prefixed names (`ldUrl`, `ldDestinyId`...) only work in the JavaScript call (`oziLoadData({...})`).", "es": "El disparador es cualquier elemento con `data-zld-url`: envía al hacer clic y, en un `<select>`, también en el `change`. Los nombres antiguos con prefijo `ld` (`ldUrl`, `ldDestinyId`...) solo valen en la llamada por JavaScript (`oziLoadData({...})`)." } },
+  { "id": "collect", "title": { "pt-BR": "Coleta de dados", "en": "Data collection", "es": "Recolección de datos" } },
+  { "id": "response", "title": { "pt-BR": "Resposta e destino", "en": "Response and target", "es": "Respuesta y destino" } },
+  { "id": "behavior", "title": { "pt-BR": "Comportamento", "en": "Behavior", "es": "Comportamiento" } },
+  { "id": "debug", "title": { "pt-BR": "Depuração", "en": "Debugging", "es": "Depuración" } },
+  { "id": "legacy", "title": { "pt-BR": "Legado", "en": "Legacy", "es": "Legado" } }
+ ],
+ "attributes": [
+  { "name": "data-zld-url", "group": "send", "type": "url", "required": true, "example": "/clientes/salvar",
+    "desc": { "pt-BR": "Endereço de envio. Também marca o elemento como gatilho: o plugin liga o clique (e o `change` num `<select>`) e mantém o estado do botão conforme a validação do grupo", "en": "Endpoint. It also marks the element as a trigger: the plugin binds the click (and `change` on a `<select>`) and keeps the button state in step with the group's validation", "es": "Endpoint de envío. También marca el elemento como disparador: el plugin enlaza el clic (y el `change` en un `<select>`) y mantiene el estado del botón según la validación del grupo" } },
+  { "name": "data-zld-mode", "group": "send", "type": "enum", "values": ["fetch", "window", "page"], "default": "fetch",
+    "desc": { "pt-BR": "Modo de envio: `fetch` (AJAX, a resposta vai para o destino), `window` (abre uma aba nova com os campos na URL) ou `page` (envia um `<form>` e navega)", "en": "Sending mode: `fetch` (AJAX, the response goes to the target), `window` (opens a new tab with the fields in the URL) or `page` (submits a `<form>` and navigates)", "es": "Modo de envío: `fetch` (AJAX, la respuesta va al destino), `window` (abre una pestaña nueva con los campos en la URL) o `page` (envía un `<form>` y navega)" } },
+  { "name": "data-zld-mode-method", "group": "send", "type": "string", "default": "POST", "example": "GET",
+    "desc": { "pt-BR": "Método HTTP. No modo `page` só `GET` ou `POST`. Com `GET` no modo `fetch` os campos coletados não são enviados", "en": "HTTP method. In `page` mode only `GET` or `POST`. With `GET` in `fetch` mode the collected fields are not sent", "es": "Método HTTP. En el modo `page` solo `GET` o `POST`. Con `GET` en el modo `fetch` los campos recolectados no se envían" } },
+  { "name": "data-zld-mode-page-target", "group": "send", "type": "string", "default": "_self", "example": "_blank",
+    "desc": { "pt-BR": "Alvo do modo `page`: `_self`, `_blank`, `_parent`, `_top` ou o nome de um frame", "en": "Target for `page` mode: `_self`, `_blank`, `_parent`, `_top` or a frame name", "es": "Destino del modo `page`: `_self`, `_blank`, `_parent`, `_top` o el nombre de un frame" } },
+
+  { "name": "data-zld-catch-group-id", "group": "collect", "type": "list", "example": "dados,endereco",
+    "desc": { "pt-BR": "Ids dos containers cujos campos são coletados e validados, separados por vírgula", "en": "Ids of the containers whose fields are collected and validated, comma-separated", "es": "Ids de los contenedores cuyos campos se recolectan y validan, separados por comas" } },
+  { "name": "data-zld-catch-item-name", "group": "collect", "type": "list", "example": "car,moto,aviao:santos dumont",
+    "desc": { "pt-BR": "Coleta só os campos com estes `name`. `campo:valor` envia o campo com valor fixo, sem precisar existir no DOM", "en": "Collects only the fields with these `name`s. `field:value` sends the field with a fixed value, no DOM element needed", "es": "Recolecta solo los campos con estos `name`. `campo:valor` envía el campo con valor fijo, sin que exista en el DOM" } },
+  { "name": "data-zld-json", "group": "collect", "type": "string", "example": "[{\"id\":1},{\"id\":2}]",
+    "desc": { "pt-BR": "Array JSON enviado junto do `FormData`: cada item vai como `zldJson[i]` (texto JSON). JSON inválido é ignorado (o `data-zld-log` avisa)", "en": "JSON array sent with the `FormData`: each item goes as `zldJson[i]` (JSON text). Invalid JSON is ignored (`data-zld-log` warns)", "es": "Array JSON enviado junto con el `FormData`: cada ítem va como `zldJson[i]` (texto JSON). El JSON inválido se ignora (`data-zld-log` avisa)" } },
+  { "name": "data-zld-checkbox", "group": "collect", "type": "string",
+    "desc": { "pt-BR": "Lido e sem efeito na 2.x: os checkboxes do grupo já são coletados pelo `name`. Sai ou ganha função na 3.0", "en": "Read and has no effect in 2.x: the group's checkboxes are already collected by `name`. Removed or given a purpose in 3.0", "es": "Se lee y no tiene efecto en la 2.x: los checkboxes del grupo ya se recolectan por `name`. Se quita o gana función en la 3.0" } },
+
+  { "name": "data-zld-destiny-id", "group": "response", "type": "string", "example": "resposta",
+    "desc": { "pt-BR": "Id do elemento que recebe a resposta HTML (substitui o conteúdo). Um envio novo ao mesmo destino cancela o anterior, que volta com `aborted: true`", "en": "Id of the element that receives the HTML response (replaces its content). A new send to the same target cancels the previous one, which returns `aborted: true`", "es": "Id del elemento que recibe la respuesta HTML (reemplaza el contenido). Un envío nuevo al mismo destino cancela el anterior, que vuelve con `aborted: true`" } },
+  { "name": "data-zld-destiny-append", "group": "response", "type": "bool", "since": "2.11.4",
+    "desc": { "pt-BR": "Acrescenta a resposta no fim do destino em vez de substituir (\"carregar mais\"). Envios ao mesmo destino não se cancelam. Aceita `true`, `1`, `on` ou `yes`. Até a 2.11.3 só valia na chamada por JS", "en": "Appends the response to the end of the target instead of replacing it (\"load more\"). Sends to the same target do not cancel each other. Accepts `true`, `1`, `on` or `yes`. Up to 2.11.3 it only worked in the JS call", "es": "Agrega la respuesta al final del destino en vez de reemplazarlo (\"cargar más\"). Los envíos al mismo destino no se cancelan. Acepta `true`, `1`, `on` o `yes`. Hasta la 2.11.3 solo valía en la llamada por JS" } },
+  { "name": "data-zld-destiny-before", "group": "response", "type": "bool", "since": "2.11.4",
+    "desc": { "pt-BR": "Insere a resposta antes do destino, como irmão dele. Envios ao mesmo destino não se cancelam. Aceita `true`, `1`, `on` ou `yes`. Até a 2.11.3 só valia na chamada por JS", "en": "Inserts the response before the target, as its sibling. Sends to the same target do not cancel each other. Accepts `true`, `1`, `on` or `yes`. Up to 2.11.3 it only worked in the JS call", "es": "Inserta la respuesta antes del destino, como hermano suyo. Los envíos al mismo destino no se cancelan. Acepta `true`, `1`, `on` o `yes`. Hasta la 2.11.3 solo valía en la llamada por JS" } },
+  { "name": "data-zld-expect-json", "group": "response", "type": "bool",
+    "desc": { "pt-BR": "Pede JSON no `Accept` também em `GET` (envios que não são `GET` já pedem). Aceita `true`, `1`, `on` ou `yes`", "en": "Asks for JSON in `Accept` for `GET` too (non-`GET` sends already do). Accepts `true`, `1`, `on` or `yes`", "es": "Pide JSON en el `Accept` también en `GET` (los envíos que no son `GET` ya lo piden). Acepta `true`, `1`, `on` o `yes`" } },
+  { "name": "data-zld-api", "group": "response", "type": "bool",
+    "desc": { "pt-BR": "Chamada de API: mesmo efeito do `data-zld-expect-json` (pede JSON). Aceita `true`, `1`, `on` ou `yes`", "en": "API call: same effect as `data-zld-expect-json` (asks for JSON). Accepts `true`, `1`, `on` or `yes`", "es": "Llamada de API: mismo efecto que `data-zld-expect-json` (pide JSON). Acepta `true`, `1`, `on` o `yes`" } },
+
+  { "name": "data-zld-form-busy", "group": "behavior", "type": "bool",
+    "desc": { "pt-BR": "Bloqueia novos cliques enquanto o envio não termina (`aria-disabled` e `data-zld-busy` no botão). Precisa de `=\"true\"`", "en": "Blocks new clicks until the send finishes (`aria-disabled` and `data-zld-busy` on the button). Needs `=\"true\"`", "es": "Bloquea nuevos clics hasta que el envío termine (`aria-disabled` y `data-zld-busy` en el botón). Necesita `=\"true\"`" } },
+  { "name": "data-zld-form-clear", "group": "behavior", "type": "bool",
+    "desc": { "pt-BR": "Limpa os campos coletados do grupo depois do envio, menos os `hidden`. Só com resposta ok: com erro (rede, 422, 500) o que foi digitado fica. Aceita `true`, `1`, `on` ou `yes`", "en": "Clears the group's collected fields after sending, except `hidden` ones. Only on an ok response: on error (network, 422, 500) what was typed is kept. Accepts `true`, `1`, `on` or `yes`", "es": "Limpia los campos recolectados del grupo tras el envío, excepto los `hidden`. Solo con respuesta ok: con error (red, 422, 500) se mantiene lo escrito. Acepta `true`, `1`, `on` o `yes`" } },
+  { "name": "data-zld-reload-script", "group": "behavior", "type": "bool",
+    "desc": { "pt-BR": "Lido e sem efeito na 2.x (era o recarregamento dos scripts `ld-reload` da v0). Para re-inicializar componentes no HTML recebido, o `OZI.hooks.afterRender` já roda sozinho. Sai na 3.0", "en": "Read and has no effect in 2.x (it was the v0 reload of `ld-reload` scripts). To re-initialize components in the received HTML, `OZI.hooks.afterRender` already runs on its own. Removed in 3.0", "es": "Se lee y no tiene efecto en la 2.x (era la recarga de scripts `ld-reload` de la v0). Para reinicializar componentes en el HTML recibido, `OZI.hooks.afterRender` ya corre solo. Se quita en la 3.0" } },
+
+  { "name": "data-zld-log", "group": "debug", "type": "bool",
+    "desc": { "pt-BR": "Logs de depuração no console (`[oziLoadData]`). Aceita `true`, `1`, `on` ou `yes` (até a 2.11.3, `yes` e `on` quebravam o clique)", "en": "Debug logs in the console (`[oziLoadData]`). Accepts `true`, `1`, `on` or `yes` (up to 2.11.3, `yes` and `on` broke the click)", "es": "Logs de depuración en la consola (`[oziLoadData]`). Acepta `true`, `1`, `on` o `yes` (hasta la 2.11.3, `yes` y `on` rompían el clic)" } },
+
+  { "name": "data-zld-required-message", "group": "legacy", "type": "string", "readBy": "validate",
+    "desc": { "pt-BR": "Nome antigo do `data-ozi-required-message` (lido pelo `ozi-validate`). Prefira o novo", "en": "Old name of `data-ozi-required-message` (read by `ozi-validate`). Prefer the new one", "es": "Nombre antiguo de `data-ozi-required-message` (lo lee `ozi-validate`). Prefiera el nuevo" } }
+ ],
+ "shared": [],
+ "internal": ["data-zld-busy", "data-zld-disabled", "data-zld-show-errors", "data-zld-valid"],
+ "events": [],
+ "lang": ["loadData.error", "loadData.invalidJson", "loadData.invalidJsonHint", "loadData.network", "loadData.networkHint",
+  "loadData.processError", "loadData.status"]
+}

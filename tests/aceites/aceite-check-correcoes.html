@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite ozi-check 3.0.1 (achados do manifesto)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .35rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite <small>(ozi-check 3.0.1 + ozi-attrs 1.1.2, pacote 2.11.4)</small></h1>
+<p>Achados ao escrever o <code>ozi-check.manifest.json</code>. Cada bloco tem o teste negativo: a
+asserção falha no ozi-check 3.0.0 / ozi-attrs 1.1.1.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<!-- grupo "perm": group + itens, sem switch -->
+<input type="checkbox" id="pg" data-ozi-check-group="perm">
+<input type="checkbox" id="p1" data-ozi-check-item="perm" value="1">
+<input type="checkbox" id="p2" data-ozi-check-item="perm" value="2">
+
+<!-- grupo "mod": switch + group + 2 itens marcados -->
+<input type="checkbox" id="sw" data-ozi-check-switch="mod" checked>
+<input type="checkbox" id="mg" data-ozi-check-group="mod">
+<input type="checkbox" id="m1" data-ozi-check-item="mod" checked>
+<input type="checkbox" id="m2" data-ozi-check-item="mod" checked>
+
+<!-- grupo "parte": um de dois marcados → indeterminate, com switch -->
+<input type="checkbox" id="sp" data-ozi-check-switch="parte" checked>
+<input type="checkbox" id="xg" data-ozi-check-group="parte">
+<input type="checkbox" id="x1" data-ozi-check-item="parte" checked>
+<input type="checkbox" id="x2" data-ozi-check-item="parte">
+
+<div id="dinamico"></div>
+
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['check'] });
+
+    var erros = [], errosOpacos = 0, _step = 'boot';
+    window.addEventListener('error', function (ev) {
+        if (ev.message === 'Script error.' && !ev.filename && !ev.lineno) { errosOpacos++; return; }
+        erros.push('[' + _step + '] ' + (ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function $(id) { return document.getElementById(id); }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+    var vered = $('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 10s';
+        vered.className = 'fail';
+    }, 10000);
+
+    OZI.ready(function () {
+        (async function () {
+            var todos = true, ev = [];
+            document.addEventListener('ozi:check-change', function (e) { ev.push(e.detail); });
+            var api = OZI.components.check;
+            await wait(50);
+
+            // ── 1. grupo com aspas no nome ────────────────────────────────
+            _step = 'aspas';
+            var q = document.createElement('input');
+            q.type = 'checkbox'; q.setAttribute('data-ozi-check-item', 'a"b');
+            var qg = document.createElement('input');
+            qg.type = 'checkbox'; qg.setAttribute('data-ozi-check-group', 'a"b');
+            $('dinamico').appendChild(qg); $('dinamico').appendChild(q);
+            var aspas = 'ok';
+            try { api.refresh(); } catch (e) { aspas = e.name + ': ' + e.message; }
+            // 3.0.0: SyntaxError no querySelectorAll; como o refresh passa por todos os grupos, nenhum sincronizava
+            todos = check('[aspas] refresh() com grupo a"b não lança', aspas === 'ok', aspas) && todos;
+            q.click();
+            todos = check('[aspas] o group a"b acompanha o item', qg.checked === true, 'group=' + qg.checked) && todos;
+            $('dinamico').innerHTML = '';
+
+            // ── 2. refresh com switch desligado preserva o group ──────────
+            _step = 'switch';
+            api.refresh();
+            todos = check('[switch] ligado: group "mod" marcado (2 de 2)', $('mg').checked === true) && todos;
+            $('sw').click(); // desliga
+            todos = check('[switch] desligado: itens e group desabilitados', $('m1').disabled && $('mg').disabled) && todos;
+            api.refresh();
+            // 3.0.0: o tristate contava só itens habilitados → 0 de 0 → group desmarcado
+            todos = check('[switch] refresh() com o switch desligado mantém o group marcado',
+                $('mg').checked === true, 'group=' + $('mg').checked) && todos;
+            todos = check('[switch] e a marcação dos itens não muda', $('m1').checked && $('m2').checked) && todos;
+            $('sp').click(); // desliga "parte"
+            api.refresh();
+            todos = check('[switch] desligado com parte marcada: group fica indeterminate',
+                $('xg').indeterminate === true && $('xg').checked === false,
+                'indeterminate=' + $('xg').indeterminate) && todos;
+            $('sw').click(); $('sp').click(); // religa
+            todos = check('[switch] religado: interatividade volta e o group continua certo',
+                !$('m1').disabled && $('mg').checked === true && $('xg').indeterminate === true) && todos;
+
+            // ── 3. source pela API × pelo clique ──────────────────────────
+            _step = 'source';
+            ev.length = 0;
+            api.setAllItems('perm', true);
+            // 3.0.0: sempre 'user'
+            todos = check('[source] setAllItems() pela API emite source "api"',
+                ev.length === 1 && ev[0].source === 'api', ev[0] && ev[0].source) && todos;
+            ev.length = 0;
+            api.setGroupEnabledState('mod', false);
+            todos = check('[source] setGroupEnabledState() pela API emite source "api"',
+                ev.length === 1 && ev[0].source === 'api' && ev[0].enabled === false, ev[0] && ev[0].source) && todos;
+            api.setGroupEnabledState('mod', true);
+            ev.length = 0;
+            $('p1').click();
+            todos = check('[source] clique num item continua "user"', ev.length === 1 && ev[0].source === 'user', ev[0] && ev[0].source) && todos;
+            ev.length = 0;
+            $('pg').click();
+            todos = check('[source] clique no group continua "user"', ev.length === 1 && ev[0].source === 'user', ev[0] && ev[0].source) && todos;
+            ev.length = 0;
+            $('sw').click(); $('sw').click();
+            todos = check('[source] clique no switch continua "user"', ev.length === 2 && ev.every(function (d) { return d.source === 'user'; }),
+                ev.map(function (d) { return d.source; }).join(',')) && todos;
+
+            // ── 4. detail.group ───────────────────────────────────────────
+            _step = 'group';
+            ev.length = 0;
+            $('p2').click();
+            var d = ev[0] || {};
+            // 3.0.0: `group` era tirado do detail (só `name`)
+            todos = check('[detail] item: group, name, level, checked e value', d.group === 'perm' && d.name === 'perm' &&
+                d.level === 'item' && typeof d.checked === 'boolean' && d.value === '2', JSON.stringify(d)) && todos;
+            ev.length = 0;
+            $('sw').click(); $('sw').click();
+            todos = check('[detail] switch: group e enabled', ev[0] && ev[0].group === 'mod' && ev[0].enabled === false &&
+                ev[0].level === 'switch', JSON.stringify(ev[0])) && todos;
+
+            // ── 5. W001: nomes antigos com sugestão ───────────────────────
+            _step = 'w001';
+            var at = window.OZI && OZI.attrs;
+            if (at) {
+                // 1.1.1: `all` e `enabled` estavam no registro como válidos → o aviso ficava calado
+                todos = check('[W001] data-ozi-check-all não é mais "conhecido"', at.isKnown('data-ozi-check-all') === false) && todos;
+                todos = check('[W001] data-ozi-check-all sugere data-ozi-check-group',
+                    JSON.stringify(at.suggest('data-ozi-check-all')) === '["data-ozi-check-group"]', JSON.stringify(at.suggest('data-ozi-check-all'))) && todos;
+                todos = check('[W001] data-ozi-check-enabled sugere data-ozi-check-switch',
+                    JSON.stringify(at.suggest('data-ozi-check-enabled')) === '["data-ozi-check-switch"]', JSON.stringify(at.suggest('data-ozi-check-enabled'))) && todos;
+                todos = check('[W001] os 3 atuais continuam conhecidos', ['switch', 'group', 'item'].every(function (n) {
+                    return at.isKnown('data-ozi-check-' + n);
+                })) && todos;
+            } else {
+                todos = check('[W001] OZI.attrs presente', false) && todos;
+            }
+
+            _step = 'fim';
+            todos = check('zero erros JS reais (opacos filtrados: ' + errosOpacos + ')', erros.length === 0, erros.join(' | ') || null) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ ACEITE ozi-check 3.0.1: PASSOU' : '✗ ACEITE ozi-check 3.0.1: FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+        })().catch(function (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err && err.stack || err));
+            vered.textContent = '✗ ACEITE ozi-check 3.0.1: FALHOU (exceção)';
+            vered.className = 'fail';
+        });
+    });
+</script>
+</body>
+</html>

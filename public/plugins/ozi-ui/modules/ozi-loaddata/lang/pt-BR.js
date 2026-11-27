@@ -9,9 +9,13 @@
 
     lang.register('pt-BR', {
         loadData: {
-            sending: 'Enviando...',
-            error:   'Erro ao carregar',
-            success: 'Concluído'
+            error:           'Erro ao carregar.',
+            processError:    'Erro ao processar.',
+            invalidJson:     'Resposta JSON inválida.',
+            invalidJsonHint: 'Verifique o retorno da rota.',
+            network:         'Não foi possível carregar.',
+            networkHint:     'Verifique sua conexão.',
+            status:          'Status {status}'
         }
     });
 })(window);
