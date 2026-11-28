@@ -26,10 +26,16 @@ use OziUI\Core\OziAssets;
  *   4. Deriva OziAssets ↔ _pluginMap (dois sentidos, com exceções documentadas)
  *   4c. Deriva do `deps:` — o $scriptDeps do OziAssets espelha o _pluginMap
  *   5. config/ozi-ui.php disponível (publicado OU merge do pacote)
+ *   6. Chaves do @oziScripts/@oziStyles nas views (OZI-W002, só avisa)
+ *   7. Com --lint (2.12.0, N7 do roadmap "pronto para IA"): os data-ozi-* / data-zld-* das views
+ *      contra o registro dos manifestos (OZI-W001, o mesmo do aviso do navegador, lido de
+ *      core/ozi-attrs.json) e os plugins usados que nenhum @oziScripts carrega (OZI-W003).
+ *      Achado em 6 ou 7 termina com erro (código 1): serve de verificação no CI e para o agente.
  */
 class OziCheckCommand extends Command
 {
-    protected $signature   = 'ozi:check';
+    protected $signature   = 'ozi:check
+        {--lint : Confere os atributos data-ozi-* das views (OZI-W001) e se os plugins usados são carregados (OZI-W003); termina com erro se achar algo}';
     protected $description = 'Verifica se o ecossistema ozi-ui está instalado corretamente (deriva do _pluginMap)';
 
     /** Base publicada no app (public/plugins/ozi-ui) — null se não publicado. */
@@ -186,7 +192,14 @@ class OziCheckCommand extends Command
 
         // ── 6. Chaves do @oziScripts/@oziStyles nos Blade (OZI-W002, 2.10.0) ──
         // Só avisa (não muda o código de saída): é a mesma regra do aviso em runtime.
-        $this->checkBladeKeys(app(OziAssets::class));
+        $w002 = $this->checkBladeKeys(app(OziAssets::class));
+
+        // ── 7. --lint: atributos das views e plugins carregados (OZI-W001 / OZI-W003, 2.12.0) ──
+        $lintFound = 0;
+        if ($this->option('lint')) {
+            $this->newLine();
+            $lintFound = $w002 + $this->lintBlade(app(OziAssets::class));
+        }
 
         $this->newLine();
 
@@ -201,7 +214,186 @@ class OziCheckCommand extends Command
 
         $this->newLine();
 
-        return $allOk ? self::SUCCESS : self::FAILURE;
+        if ($lintFound > 0) {
+            $this->line("  <fg=yellow>⚠ --lint: {$lintFound} achado(s) nas views.</> Corrija e rode de novo (código de saída 1).");
+            $this->newLine();
+        }
+
+        return ($allOk && $lintFound === 0) ? self::SUCCESS : self::FAILURE;
+    }
+
+    /**
+     * --lint (2.12.0): percorre as views Blade e confere cada atributo `data-ozi-*` / `data-zld-*`
+     * contra o registro gerado dos manifestos (core/ozi-attrs.json). Depois confere se os plugins
+     * usados nas views são carregados por algum `@oziScripts([...])`. Devolve quantos achou.
+     */
+    protected function lintBlade(OziAssets $assets): int
+    {
+        $regPath = $this->resolvePath('core/ozi-attrs.json');
+        $reg     = $regPath ? json_decode((string) file_get_contents($regPath), true) : null;
+        if (!is_array($reg) || empty($reg['known'])) {
+            $this->line('  <fg=yellow>⚠</> --lint: <fg=white>core/ozi-attrs.json</> indisponível (pacote anterior à 2.12.0?): atributos não conferidos');
+            return 0;
+        }
+
+        $dir = resource_path('views');
+        if (!is_dir($dir)) {
+            $this->line('  <fg=gray>--lint: sem resources/views.</>');
+            return 0;
+        }
+
+        $known     = array_flip($reg['known']);
+        $zldKnown  = array_flip($reg['zld']['known'] ?? []);
+        $found     = 0;
+        $used      = [];   // chave do @oziScripts => "arquivo:linha" do 1º uso
+        $loaded    = [];   // chaves carregadas (união de todos os @oziScripts)
+        $loadsAll  = false;
+        $hasScript = false;
+
+        $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS));
+        $list  = [];
+        foreach ($files as $file) {
+            if (str_ends_with($file->getFilename(), '.blade.php')) $list[] = $file->getPathname();
+        }
+        sort($list);
+
+        foreach ($list as $path) {
+            $src = (string) file_get_contents($path);
+            $rel = ltrim(str_replace([base_path(), '\\'], ['', '/'], $path), '/');
+
+            // @oziScripts das views: o que fica carregado
+            if (preg_match_all('/@oziScripts\b(\s*\(\s*(\[(.*?)\])?\s*\))?/s', $src, $calls, PREG_SET_ORDER)) {
+                foreach ($calls as $call) {
+                    $hasScript = true;
+                    $only = [];
+                    if (!empty($call[3])) {
+                        preg_match_all('/[\'"]([^\'"]+)[\'"]/', $call[3], $k);
+                        $only = $k[1];
+                    }
+                    $keys = $assets->scriptKeysFor($only);
+                    if ($keys === null) $loadsAll = true;
+                    else foreach ($keys as $key) $loaded[$key] = true;
+                }
+            }
+
+            // atributos: só em posição de atributo HTML (espaço antes; =, espaço ou > depois).
+            // Nome montado no Blade (`data-ozi-{{ $x }}`) e string de JS ('[data-ozi-x]') ficam de fora.
+            foreach (preg_split('/\R/', $src) as $i => $line) {
+                if (!preg_match_all('/(?<=\s)(data-(?:ozi|zld)-[a-z0-9][a-z0-9-]*)(?=\s*=|\s|\/?>|$)/i', $line, $m)) continue;
+                foreach ($m[1] as $raw) {
+                    $name  = strtolower($raw);
+                    $where = $rel . ':' . ($i + 1);
+                    $isZld = str_starts_with($name, 'data-zld');
+
+                    if ($isZld ? !isset($zldKnown[$name]) : !isset($known[$name])) {
+                        $found++;
+                        $this->line(sprintf(
+                            "  <fg=yellow>⚠</> OZI-W001 <fg=white>%s</> atributo desconhecido <fg=white>'%s'</>%s",
+                            $where, $raw, $this->lintHint($name, $reg)
+                        ));
+                        continue;
+                    }
+
+                    $key = $this->lintPluginKey($name, $reg['namespaces'] ?? []);
+                    if ($key !== null && !isset($used[$key])) $used[$key] = $where;
+                }
+            }
+        }
+
+        // plugins usados que nenhum @oziScripts carrega (OZI-W003)
+        if (!$hasScript) {
+            $this->line('  <fg=gray>--lint: nenhum @oziScripts nas views (ozi.js ou carga manual): plugins carregados não conferidos.</>');
+        } elseif (!$loadsAll) {
+            ksort($used);
+            foreach ($used as $key => $where) {
+                if (isset($loaded[$key])) continue;
+                $found++;
+                $tip = $key === 'livewire-adapter' ? "o grupo 'livewire'" : "'{$key}'";
+                $this->line(sprintf(
+                    "  <fg=yellow>⚠</> OZI-W003 <fg=white>%s</> plugin <fg=white>'%s'</> usado e nenhum @oziScripts das views o carrega — acrescente %s",
+                    $where, $key, $tip
+                ));
+            }
+        }
+
+        if ($found === 0) {
+            $this->line('  <fg=green>✔</> <fg=white>--lint: atributos data-ozi-* e plugins carregados nas views</> <fg=gray>OK</>');
+        }
+
+        return $found;
+    }
+
+    /** Chave do @oziScripts que um atributo conhecido exige, ou null (atributo compartilhado). */
+    protected function lintPluginKey(string $name, array $namespaces): ?string
+    {
+        if (str_starts_with($name, 'data-zld')) return 'loaddata';
+        if ($name === 'data-ozi-editor-md') return 'editor-md';
+        foreach ($namespaces as $ns) {
+            $base = 'data-ozi-' . $ns;
+            if ($name === $base || str_starts_with($name, $base . '-')) {
+                return $ns === 'livewire' ? 'livewire-adapter' : $ns;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Sugestão para um nome desconhecido, com as mesmas regras do aviso do navegador
+     * (core/ozi-attrs.js): nome que saiu, troca conhecida, `zld-` sobrando ou faltando,
+     * distância de edição <= 2 (até 3 candidatos), fim do nome igual a um atributo do plugin.
+     */
+    protected function lintHint(string $name, array $reg): string
+    {
+        $special = $reg['special'][$name] ?? null;
+        if (!empty($special['suggest'])) {
+            return ' — você quis dizer ' . $this->lintQuote($special['suggest']) . '?';
+        }
+        if (!empty($special['gone'])) {
+            return " — ele saiu na {$special['gone']}";
+        }
+        foreach ($reg['gonePrefixes'] ?? [] as $g) {
+            if ($name === $g['prefix'] || str_starts_with($name, $g['prefix'] . '-')) {
+                return " — saiu na {$g['since']}" . (!empty($g['hint']) ? " ({$g['hint']})" : '');
+            }
+        }
+
+        $isZld  = str_starts_with($name, 'data-zld');
+        $author = $isZld ? ($reg['zld']['author'] ?? []) : ($reg['author'] ?? []);
+
+        $ns = null;
+        if (!$isZld) {
+            $first = explode('-', substr($name, strlen('data-ozi-')))[0];
+            if (in_array($first, $reg['namespaces'] ?? [], true)) $ns = $first;
+        }
+        $base = $ns !== null ? 'data-ozi-' . $ns . '-' : '';
+        $tail = $ns !== null ? (string) substr($name, strlen($base)) : '';
+
+        if ($ns !== null && $tail !== '') {
+            $alt = str_starts_with($tail, 'zld-') ? $base . substr($tail, 4) : $base . 'zld-' . $tail;
+            if (in_array($alt, $author, true)) return ' — você quis dizer ' . $this->lintQuote([$alt]) . '?';
+        }
+
+        $best = 3; $hits = [];
+        foreach ($author as $n) {
+            if (abs(strlen($n) - strlen($name)) > 2) continue;
+            $d = levenshtein($name, $n);
+            if ($d > 2) continue;
+            if ($d < $best) { $best = $d; $hits = [$n]; }
+            elseif ($d === $best) $hits[] = $n;
+        }
+        if ($hits && count($hits) <= 3) return ' — você quis dizer ' . $this->lintQuote($hits) . '?';
+
+        if ($ns !== null && $tail !== '') {
+            $ends = array_values(array_filter($author, fn ($n) => str_starts_with($n, $base) && $n !== $name && str_ends_with($n, '-' . $tail)));
+            if ($ends && count($ends) <= 3) return ' — você quis dizer ' . $this->lintQuote($ends) . '?';
+        }
+
+        return '';
+    }
+
+    protected function lintQuote(array $names): string
+    {
+        return implode(' ou ', array_map(fn ($n) => "<fg=white>'{$n}'</>", $names));
     }
 
     /**

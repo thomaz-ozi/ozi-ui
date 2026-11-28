@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Route;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use OziUI\Core\Commands\OziCheckCommand;
+use OziUI\Core\Commands\OziUpgradeCommand;
 
 class OziCoreServiceProvider extends ServiceProvider
 {
@@ -41,7 +42,7 @@ class OziCoreServiceProvider extends ServiceProvider
         $this->registerAssetRoute();
 
         if ($this->app->runningInConsole()) {
-            $this->commands([OziCheckCommand::class]);
+            $this->commands([OziCheckCommand::class, OziUpgradeCommand::class]);
         }
 
         Blade::directive('oziStyles', function (string $expression) {

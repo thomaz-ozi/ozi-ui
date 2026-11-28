@@ -176,7 +176,16 @@ php artisan vendor:publish --tag=ozi-ui
 ```
 
 **Health check.** `php artisan ozi:check` verifies the installation and fails if anything is
-missing or out of sync.
+missing or out of sync. `php artisan ozi:check --lint` (2.12+) also checks every `data-ozi-*`
+attribute in your Blade views against the plugin manifests (with the correct name for a typo) and
+whether each plugin you use is loaded by `@oziScripts`; it exits with code 1 on any finding, so it
+can run in CI or after an AI assistant edits a view.
+
+**Updating.** After `composer update ozi-ui/core`, run `php artisan ozi:upgrade` (2.12+). It updates
+the published copy in `public/plugins/ozi-ui` (if you ran `vendor:publish`; otherwise the web server
+keeps serving the old files), lists the versions since the last update with security fixes
+highlighted, and runs `ozi:check --lint`. It never runs composer or touches `config/ozi-ui.php`;
+`--dry-run` shows what it would do.
 
 **Themes.** A theme is data, not code: the same JavaScript serves `default`, `bootstrap5` and
 `tailwind`. Link the theme's CSS after `@oziStyles` and pick it with `oziConf()`:

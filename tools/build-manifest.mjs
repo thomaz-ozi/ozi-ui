@@ -403,6 +403,61 @@ if (attrsJs !== attrsJsOriginal) {
     console.log('ok       core/ozi-attrs.js em dia');
 }
 
+// ─── 4. registro em JSON: core/ozi-attrs.json (2.12.0, `ozi:check --lint`) ────────────────────
+// O lado PHP precisa da mesma lista que o aviso OZI-W001 do navegador. Em vez de duplicá-la, este
+// script grava o registro inteiro: os nomes dos manifestos + as listas escritas à mão no
+// ozi-attrs.js (SHARED_*, SPECIAL, GONE_PREFIXES, lidas dele). `--check` reprova se estiver velho.
+
+const JSON_FILE = join(root, 'core', 'ozi-attrs.json');
+
+function jsLiteral(name) {
+    const src = stripComments(attrsJs);
+    const m = src.match(new RegExp(`var\\s+${name}\\s*=\\s*([\\[{][\\s\\S]*?[\\]}])\\s*;`));
+    if (!m) { fail(`core/ozi-attrs.js: não achei "var ${name} = ..." para o ozi-attrs.json`); return null; }
+    try { return new Function(`return (${m[1]});`)(); }
+    catch (e) { fail(`core/ozi-attrs.js: ${name} não é um literal válido (${e.message})`); return null; }
+}
+
+const reg = { known: new Set(), author: new Set(), zldKnown: new Set(), zldAuthor: new Set(), namespaces: [] };
+for (const m of manifests) {
+    const d = m.data;
+    if (!d.namespace) continue;
+    const own = (d.attributes || []).filter((a) => !a.shared);
+    const names = own.flatMap(expandNames);
+    if (inW001(d)) {
+        reg.namespaces.push(d.namespace);
+        names.forEach((n) => { reg.known.add(n); reg.author.add(n); });
+        (d.internal || []).forEach((n) => reg.known.add(n));
+    } else if (prefixOf(d) === 'data-zld') {
+        names.forEach((n) => { reg.zldKnown.add(n); reg.zldAuthor.add(n); });
+        (d.internal || []).forEach((n) => reg.zldKnown.add(n));
+    }
+}
+const sharedAuthor   = jsLiteral('SHARED_AUTHOR')   || [];
+const sharedInternal = jsLiteral('SHARED_INTERNAL') || [];
+sharedAuthor.forEach((n) => { reg.known.add(n); reg.author.add(n); });
+sharedInternal.forEach((n) => reg.known.add(n));
+
+const sorted = (s) => [...s].sort();
+const special = jsLiteral('SPECIAL') || {};
+const registryJson = JSON.stringify({
+    _: 'Gerado por tools/build-manifest.mjs a partir dos manifestos e do core/ozi-attrs.js; não editar à mão. Lido pelo `php artisan ozi:check --lint` (o mesmo registro do aviso OZI-W001 do navegador).',
+    known:        sorted(reg.known),
+    author:       sorted(reg.author),
+    special:      Object.fromEntries(Object.keys(special).sort().map((k) => [k, special[k]])),
+    gonePrefixes: jsLiteral('GONE_PREFIXES') || [],
+    namespaces:   reg.namespaces.slice().sort(),
+    zld:          { known: sorted(reg.zldKnown), author: sorted(reg.zldAuthor) },
+}, null, 1) + '\n';
+
+const jsonOld = existsSync(JSON_FILE) ? read(JSON_FILE) : '';
+if (jsonOld !== registryJson) {
+    if (check) fail('core/ozi-attrs.json desatualizado: rode node tools/build-manifest.mjs');
+    else { writeFileSync(JSON_FILE, registryJson); console.log('gerado   core/ozi-attrs.json (registro para o ozi:check --lint)'); }
+} else {
+    console.log('ok       core/ozi-attrs.json em dia');
+}
+
 if (problems) {
     console.log(`\n${problems} problema(s).`);
     process.exit(1);

@@ -577,6 +577,41 @@ class OziAssets
         return $this->scriptDeps;
     }
 
+    /**
+     * Chaves de script que um `@oziScripts($only)` carrega, com grupos e dependências (2.12.0,
+     * `ozi:check --lint`). `null` = carrega todos (lista vazia ou o grupo `full`). Chave
+     * desconhecida é ignorada aqui (o OZI-W002 já a aponta) e não toca no estado do aviso.
+     *
+     * @param  array<int,string>  $only
+     * @return array<int,string>|null
+     */
+    public function scriptKeysFor(array $only): ?array
+    {
+        if (empty($only)) {
+            return null;
+        }
+
+        $keys = [];
+        foreach ($only as $key) {
+            $key = strtolower(trim((string) $key));
+            if (isset($this->groups[$key])) {
+                if (empty($this->groups[$key])) {
+                    return null;
+                }
+                foreach ($this->groups[$key] as $gk) {
+                    $keys[] = $gk;
+                }
+                continue;
+            }
+            // alias ('markdown', 'password-rules') NÃO carrega nada no @oziScripts: aqui também não
+            if (isset($this->availableScripts[$key])) {
+                $keys[] = $key;
+            }
+        }
+
+        return $this->expandDeps(array_values(array_unique($keys)));
+    }
+
     public function setBase(string $base): static
     {
         $this->base = rtrim($base, '/') . '/';
