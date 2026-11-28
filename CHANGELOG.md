@@ -6,6 +6,8 @@ listed where they changed.
 
 ## [Unreleased]
 
+## [2.11.6] — 2026-11-27
+
 ### Fixed
 - **`ozi-toggle`: content hidden by CSS now opens.** Showing only cleared the inline `display`, so content
   hidden by a class (`display: none`) or by the `hidden` attribute never appeared (the jQuery-based v1
@@ -623,7 +625,8 @@ Version 2: every plugin rewritten in plain JavaScript, no jQuery, zero runtime d
 A v1 compatibility ramp (jQuery shims, `zld*` aliases) is included and opt-in. `ozi-copy` and
 `ozi-paste` were discontinued. See the [migration guide](https://oziui.com/en/docs/migration).
 
-[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.11.5...HEAD
+[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.11.6...HEAD
+[2.11.6]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.11.5...v2.11.6
 [2.11.5]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.11.4...v2.11.5
 [2.11.4]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.11.3...v2.11.4
 [2.11.3]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.11.2...v2.11.3
