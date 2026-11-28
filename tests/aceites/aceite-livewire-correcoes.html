@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite ozi-livewire.adapter 2.3.1 (achados do manifesto)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .35rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite <small>(ozi-livewire.adapter 2.3.1, pacote 2.11.9)</small></h1>
+<p>Achados ao escrever o <code>ozi-livewire.manifest.json</code>. <code>window.Livewire</code> falso
+(guarda os <code>on()</code> e os <code>set()</code>) e um plugin falso registrado no
+<code>OZI.integrations</code>. Cada bloco tem o teste negativo: a asserção falha no adapter 2.3.0.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<div wire:id="c1" id="host">
+    <div id="e1" data-fake="a" data-ozi-livewire-options-event="opts"></div>
+    <div id="e2" data-fake="b" data-ozi-livewire-options-event="opts"></div>
+    <div id="e3" data-fake="c" data-ozi-livewire-model="cidade"></div>
+    <div id="e4" data-fake="d" data-ozi-livewire-options-event="opts4"></div>
+    <div id="e5" data-fake='x"y' data-ozi-livewire-model="aspas"></div>
+</div>
+
+<script>
+    /* Livewire falso, ANTES do ozi.js */
+    window.__sets = [];
+    var _lwHandlers = {};
+    window.Livewire = {
+        on:   function (n, fn) { (_lwHandlers[n] = _lwHandlers[n] || []).push(fn); },
+        find: function () { return { set: function (p, v) { window.__sets.push([p, v]); }, call: function () {} }; },
+        __fire: function (n, payload) { (_lwHandlers[n] || []).forEach(function (fn) { fn(payload); }); },
+        __count: function (n) { return (_lwHandlers[n] || []).length; }
+    };
+</script>
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['livewire'] });
+
+    var erros = [];
+    window.addEventListener('error', function (ev) {
+        if (ev.message === 'Script error.' && !ev.filename && !ev.lineno) return;
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    function $(id) { return document.getElementById(id); }
+    function emit(el, src) { OZI.helpers.emit(el, 'ozi:change', { component: 'fake', name: el.id, value: el.__v, source: src }); }
+
+    var vered = $('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 9s';
+        vered.className = 'fail';
+    }, 9000);
+
+    OZI.ready(function () {
+        (async function () {
+            var todos = true;
+            await wait(100);
+            OZI.integrations.registerPlugin({
+                name: 'fake', selector: '[data-fake]', keyAttribute: 'data-fake', changeEvent: 'ozi:change',
+                getInstance: function (el) { return el; },
+                getValue:    function (el) { return el.__v; },
+                setValue:    function (el, v) { el.__v = v; emit(el, 'api'); },
+                setOptions:  function (el, o) { el.__opts = o; },
+                destroy: function () {}, reinit: function () {}
+            });
+            await wait(100);
+            todos = check('adapter ligou os elementos', $('e1').hasAttribute('data-ozi-livewire-bound') && $('e3').hasAttribute('data-ozi-livewire-bound')) && todos;
+
+            // ---- [1] dois elementos no mesmo options-event ----
+            Livewire.__fire('opts', { options: [1, 2] });
+            todos = check('[1] options-event com 2 elementos: o 1º recebe', JSON.stringify($('e1').__opts) === '[1,2]') && todos;
+            todos = check('[1] e o 2º também', JSON.stringify($('e2').__opts) === '[1,2]', 'e2=' + JSON.stringify($('e2').__opts)) && todos;
+            todos = check('[1] um Livewire.on só por nome de evento', Livewire.__count('opts') === 1, 'on=' + Livewire.__count('opts')) && todos;
+
+            // ---- [2] elemento trocado pelo morph ----
+            var velho = $('e4'), novo = velho.cloneNode(false);
+            novo.removeAttribute('data-ozi-livewire-bound');
+            velho.parentNode.replaceChild(novo, velho);
+            OZI.hooks.afterRender.run($('host'));
+            await wait(50);
+            Livewire.__fire('opts4', { options: ['x'] });
+            todos = check('[2] elemento recriado pelo morph recebe as opções',
+                JSON.stringify(novo.__opts) === '["x"]', 'novo=' + JSON.stringify(novo.__opts) + ' velho=' + JSON.stringify(velho.__opts)) && todos;
+            todos = check('[2] o elemento que saiu da página não recebe', velho.__opts === undefined) && todos;
+            todos = check('[2] payload como lista também vale', (Livewire.__fire('opts4', ['y']), JSON.stringify(novo.__opts) === '["y"]')) && todos;
+
+            // ---- [3] valor repetido depois de setValue vindo do servidor ----
+            var e3 = $('e3'), fake = OZI.integrations.getPlugin('fake');
+            window.__sets = [];
+            e3.__v = 'A'; emit(e3, 'user');
+            todos = check('[3] mudança do usuário propaga', JSON.stringify(window.__sets) === '[["cidade","A"]]', JSON.stringify(window.__sets)) && todos;
+            e3.__v = 'A'; emit(e3, 'user');
+            todos = check('[3] mesmo valor de novo, sem nada no meio: não propaga (trava mantida)', window.__sets.length === 1) && todos;
+            fake.setValue(e3, null);
+            todos = check('[3] setValue do servidor (source api) não propaga', window.__sets.length === 1) && todos;
+            e3.__v = 'A'; emit(e3, 'user');
+            todos = check('[3] depois do servidor limpar, escolher "A" de novo propaga',
+                window.__sets.length === 2 && window.__sets[1][1] === 'A', JSON.stringify(window.__sets)) && todos;
+
+            // ---- [4] aspas na chave de ozi:set-value / ozi:set-options ----
+            var antes = erros.length;
+            document.dispatchEvent(new CustomEvent('ozi:set-value', { detail: { plugin: 'fake', key: 'x"y', value: 'Z' } }));
+            document.dispatchEvent(new CustomEvent('ozi:set-options', { detail: { plugin: 'fake', key: 'x"y', options: [9] } }));
+            await wait(20);
+            todos = check('[4] chave com aspas: sem SyntaxError', erros.length === antes, erros.slice(antes).join(' | ') || null) && todos;
+            todos = check('[4] e acha o elemento (set-value e set-options aplicados)',
+                $('e5').__v === 'Z' && JSON.stringify($('e5').__opts) === '[9]', 'v=' + $('e5').__v + ' opts=' + JSON.stringify($('e5').__opts)) && todos;
+
+            todos = check('zero erros JS', erros.length === 0, erros.join(' | ') || null) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ ACEITE ozi-livewire.adapter 2.3.1: PASSOU' : '✗ ACEITE ozi-livewire.adapter 2.3.1: FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+        })().catch(function (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+            vered.textContent = '✗ ACEITE ozi-livewire.adapter 2.3.1: FALHOU (exceção)';
+            vered.className = 'fail';
+        });
+    });
+</script>
+</body>
+</html>

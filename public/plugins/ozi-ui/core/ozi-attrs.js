@@ -2,7 +2,7 @@
  * ------------------------------------------
  * ozi-attrs
  * ------------------------------------------
- * Ver: 1.1.6
+ * Ver: 1.1.7
  * 2026-11-27
  *
  * Responsabilidade:
@@ -39,6 +39,9 @@
  *        known() }.
  *
  * Changelog:
+ *   - v1.1.7: registro do livewire gerado do manifesto do adapter (integrations/adapters/,
+ *       2.11.9). Mesma lista. Agora todo registro por plugin sai de um manifesto; sobram à mão só
+ *       SHARED_* e SPECIAL.
  *   - v1.1.6: registro do auth gerado do manifesto (2.11.8). Mesma lista que já estava escrita à
  *       mão (nenhum nome entra nem sai). Com ele, todos os plugins com `data-ozi-*` têm o registro gerado.
  *   - v1.1.5: registro do audio gerado do manifesto (2.11.7). Sai `preview` (saiu no ozi-audio
@@ -147,10 +150,13 @@
             internal: []
         },
         // <<< manifest:toggle
+        // >>> manifest:livewire — gerado de integrations/adapters/ozi-livewire.manifest.json por tools/build-manifest.mjs; não editar à mão
         livewire: {
-            author: ['args', 'call', 'defer', 'model', 'native', 'options-event', 'text-model', 'value'],
+            author: ['args', 'call', 'defer', 'model', 'native', 'options-event', 'text-model',
+                'value'],
             internal: ['bound', 'last-value']
         },
+        // <<< manifest:livewire
         // >>> manifest:validate — gerado de modules/ozi-validate/ozi-validate.manifest.json por tools/build-manifest.mjs; não editar à mão
         validate: {
             author: ['', 'group'],

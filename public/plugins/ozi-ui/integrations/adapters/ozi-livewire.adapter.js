@@ -3,8 +3,8 @@
  * ------------------------------------------
  * ozi-livewire.adapter
  * ------------------------------------------
- * Ver: 2.3.0
- * 2026-11-16
+ * Ver: 2.3.1
+ * 2026-11-27
  *
  *
  * Responsabilidade:
@@ -44,6 +44,18 @@
  *     adapter NÃO instala hooks de render próprios.
  *
  * Changelog:
+ *   - v2.3.1: achados do manifesto (2.11.9):
+ *     - [FIX] data-ozi-livewire-options-event: o Livewire.on era registrado uma vez por
+ *       nome de evento, preso ao 1o elemento. Dois elementos com o mesmo evento: so o 1o
+ *       recebia; elemento trocado pelo morph (wire:key): as opcoes iam para o antigo, fora
+ *       da pagina. Agora cada nome guarda a lista dos elementos ligados e entrega a todos os
+ *       que ainda estao no documento (os que sairam sao descartados).
+ *     - [FIX] Trava de valor repetido (data-ozi-livewire-last-value) so acompanhava o que o
+ *       adapter propagava. Depois de um setValue vindo do servidor (source 'api'), escolher
+ *       de novo o valor anterior era "sem mudanca" e nao propagava: o Livewire ficava com o
+ *       valor do servidor. Agora o source 'api' atualiza a trava (sem propagar).
+ *     - [FIX] ozi:set-value / ozi:set-options com aspas (ou \) na chave: o seletor ia sem
+ *       escape e lancava SyntaxError. Agora CSS.escape.
  *   - v2.3.0: [FEAT] [OZI-15] do SNDESK. Modo C `data-ozi-livewire-call` (+ `-args`):
  *     `component.call(metodo, ...args, valor)` no ozi:change do usuário — o SNDESK tinha 10
  *     ouvintes manuais de ozi:change com o mesmo molde. `data-ozi-livewire-defer`: o modo B
@@ -137,19 +149,32 @@
         return _H.stableStringify ? _H.stableStringify(val) : JSON.stringify(val);
     }
 
-    // Registry de eventos Livewire já registrados — evita duplicatas
-    var _registeredEvents = {};
+    // [2.3.1] Por nome de evento: UM Livewire.on e a lista dos elementos ligados. Antes o
+    // registro era so por nome, preso ao 1o elemento: o 2o com o mesmo evento nunca recebia,
+    // e um elemento trocado pelo morph (wire:key) deixava as opcoes indo para o antigo.
+    var _eventTargets = {};   // nome -> [{ el, deliver }]
 
-    function _registerLivewireEvent(eventName, handler) {
-        if (_registeredEvents[eventName]) return;
-        _registeredEvents[eventName] = true;
+    function _registerLivewireEvent(eventName, el, deliver) {
+        var list = _eventTargets[eventName];
+        if (list) {
+            for (var i = 0; i < list.length; i++) if (list[i].el === el) return;
+            list.push({ el: el, deliver: deliver });
+            return;
+        }
+        list = _eventTargets[eventName] = [{ el: el, deliver: deliver }];
         if (!_hasLivewire()) return;
+
+        function dispatch(payload) {
+            // entrega aos que ainda estao na pagina; os que o morph tirou saem da lista
+            _eventTargets[eventName] = list = list.filter(function (t) { return document.contains(t.el); });
+            list.forEach(function (t) { t.deliver(payload); });
+        }
         try {
-            window.Livewire.on(eventName, handler);
+            window.Livewire.on(eventName, dispatch);
         } catch (e) {
             // Livewire 4 pode ter API diferente — tenta via document
             document.addEventListener('livewire:' + eventName, function (ev) {
-                handler(ev.detail || {});
+                dispatch(ev.detail || {});
             });
         }
     }
@@ -272,9 +297,14 @@
                 // v2 (contrato §1.3): source:'api' = mudança programática (setValue,
                 // tipicamente originada do próprio Livewire) — não repropaga, senão
                 // vira loop wire:model → setValue → ozi:change → set.
-                if (e.detail && e.detail.source === 'api') return;
-
                 var inst = plugin.getInstance(el);
+                if (e.detail && e.detail.source === 'api') {
+                    // [2.3.1] o valor mudou fora do usuario (tipicamente o proprio Livewire): a
+                    // trava passa a ser esse valor, senao escolher de novo o anterior seria
+                    // "sem mudanca" e o Livewire ficaria com o do servidor
+                    if (inst) el.setAttribute(ATTR.lastValue, _stableStr(plugin.getValue(inst)));
+                    return;
+                }
                 if (!inst) return;
 
                 var value    = plugin.getValue(inst);
@@ -291,10 +321,10 @@
 
         // — Livewire.on(optionsEvent) → atualiza opções —
         if (optEvent) {
-            _registerLivewireEvent(optEvent, function (payload) {
+            _registerLivewireEvent(optEvent, el, function (payload) {
                 var options = Array.isArray(payload)
                     ? payload
-                    : (payload.options || payload.data || []);
+                    : ((payload && (payload.options || payload.data)) || []);
 
                 var inst = plugin.getInstance(el);
                 if (inst && typeof plugin.setOptions === 'function') {
@@ -343,11 +373,17 @@
         if (!plugin || !plugin.selector) return null;
 
         var attrs = _keyAttributes(plugin);
+        // [2.3.1] a chave vai escapada: aspas (ou \\) lancavam SyntaxError no querySelector
+        var k = String(key == null ? '' : key);
+        k = (window.CSS && typeof window.CSS.escape === 'function') ? window.CSS.escape(k) : k.replace(/["\\]/g, '\\$&');
 
         for (var i = 0; i < attrs.length; i++) {
-            var el = document.querySelector(
-                _composeSelector(plugin.selector, '[' + attrs[i] + '="' + key + '"]')
-            );
+            var el = null;
+            try {
+                el = document.querySelector(
+                    _composeSelector(plugin.selector, '[' + attrs[i] + '="' + k + '"]')
+                );
+            } catch (e) { el = null; }
             if (el) return el;
         }
 

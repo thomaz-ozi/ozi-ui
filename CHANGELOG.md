@@ -6,6 +6,20 @@ listed where they changed.
 
 ## [Unreleased]
 
+### Fixed
+- **Livewire: `data-ozi-livewire-options-event` reaches every element using it.** The `Livewire.on`
+  listener was registered once per event name and tied to the first element: a second element with the
+  same event never got the options, and after a morph (`wire:key`) the options went to the removed element.
+- **Livewire: picking the previous value again after a server-side change is sent.** The repeated-value
+  guard only tracked what the adapter had sent; after a `setValue` from Livewire (`source: 'api'`), choosing
+  the earlier value again counted as "no change" and Livewire kept the server value.
+- **Livewire: `ozi:set-value` / `ozi:set-options` accept quotes in the key** (the selector was not escaped
+  and threw a `SyntaxError`). `ozi-livewire.adapter` 2.3.1.
+
+### Added
+- `integrations/adapters/ozi-livewire.manifest.json` (8 attributes, 2 internal); the OZI-W001 registry for
+  `data-ozi-livewire-*` is generated from it. `ozi-attrs` 1.1.7.
+
 ## [2.11.8] — 2026-11-27
 
 ### Fixed

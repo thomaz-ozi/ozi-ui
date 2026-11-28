@@ -1,0 +1,37 @@
+{
+ "_": "Fonte única dos atributos data-ozi-livewire-* (adapter Livewire, roadmap pronto-para-ia, N3). Lido por tools/build-manifest.mjs (confere a deriva com o código e gera o registro do OZI-W001 em core/ozi-attrs.js) e pelo site (tabela de atributos e llms-full.txt). Atributo novo = entrada aqui na mesma mudança, senão o CI reprova.",
+ "manifest": 1,
+ "plugin": "ozi-livewire",
+ "namespace": "livewire",
+ "type": "integration",
+ "js": ["integrations/adapters/ozi-livewire.adapter.js"],
+ "deps": [],
+ "groups": [
+  { "id": "value", "title": { "pt-BR": "Valor do componente → Livewire", "en": "Component value → Livewire", "es": "Valor del componente → Livewire" },
+    "note": { "pt-BR": "Vão na **raiz do componente** (o mesmo elemento do `data-ozi-select`, `data-ozi-autocomplete`, `data-ozi-editor-*`...), dentro de um componente Livewire (ancestral com `wire:id`). Carregue o grupo `livewire` no `@oziScripts`. Mudanças feitas pelo código (`source: 'api'`, como um `setValue` vindo do servidor) não voltam ao Livewire, para não fazer laço. Na 3.0, o `wire:model` direto no componente substitui estes atributos (decisão #29).", "en": "They go on the **component root** (the same element as `data-ozi-select`, `data-ozi-autocomplete`, `data-ozi-editor-*`...), inside a Livewire component (an ancestor with `wire:id`). Load the `livewire` group in `@oziScripts`. Changes made by code (`source: 'api'`, such as a `setValue` coming from the server) are not sent back to Livewire, to avoid loops. In 3.0, `wire:model` directly on the component replaces these attributes (decision #29).", "es": "Van en la **raíz del componente** (el mismo elemento de `data-ozi-select`, `data-ozi-autocomplete`, `data-ozi-editor-*`...), dentro de un componente Livewire (ancestro con `wire:id`). Cargue el grupo `livewire` en `@oziScripts`. Los cambios hechos por código (`source: 'api'`, como un `setValue` que viene del servidor) no vuelven a Livewire, para no crear un bucle. En la 3.0, `wire:model` directo en el componente reemplaza estos atributos (decisión #29)." } },
+  { "id": "server", "title": { "pt-BR": "Livewire → componente", "en": "Livewire → component", "es": "Livewire → componente" } },
+  { "id": "call", "title": { "pt-BR": "Chamar um método", "en": "Calling a method", "es": "Llamar a un método" } }
+ ],
+ "attributes": [
+  { "name": "data-ozi-livewire-native", "group": "value", "type": "string", "example": "#uf",
+    "desc": { "pt-BR": "**Preferido.** Repassa cada mudança a um `<input wire:model>` (seletor CSS dele; vazio ou `true` = o próprio elemento) com os eventos `input` e `change` nativos: valem `.live`, `.debounce` e `.lazy`", "en": "**Preferred.** Passes every change to an `<input wire:model>` (its CSS selector; empty or `true` = the element itself) with native `input` and `change` events: `.live`, `.debounce` and `.lazy` apply", "es": "**Preferido.** Pasa cada cambio a un `<input wire:model>` (su selector CSS; vacío o `true` = el propio elemento) con los eventos nativos `input` y `change`: valen `.live`, `.debounce` y `.lazy`" } },
+  { "name": "data-ozi-livewire-model", "group": "value", "type": "string", "example": "cidade",
+    "desc": { "pt-BR": "Propriedade do componente que recebe o valor, por `component.set()`. Sem o `-native`, é este o caminho", "en": "Component property that receives the value, through `component.set()`. Without `-native`, this is the path used", "es": "Propiedad del componente que recibe el valor, por `component.set()`. Sin `-native`, es este el camino" } },
+  { "name": "data-ozi-livewire-text-model", "group": "value", "type": "string", "example": "cidadeNome",
+    "desc": { "pt-BR": "Com `-model`: propriedade que recebe o texto da opção escolhida (o `label`), além do valor. Usado pelo `ozi-autocomplete`", "en": "With `-model`: property that receives the chosen option's text (the `label`) besides the value. Used by `ozi-autocomplete`", "es": "Con `-model`: propiedad que recibe el texto de la opción elegida (el `label`), además del valor. Usado por `ozi-autocomplete`" } },
+  { "name": "data-ozi-livewire-defer", "group": "value", "type": "bool", "since": "2.8",
+    "desc": { "pt-BR": "Com `-model`: grava sem ida ao servidor (o valor vai junto da próxima requisição). Útil no editor, que muda a cada tecla. A presença liga; `false`, `0`, `no` ou `off` desliga", "en": "With `-model`: stores without a server round trip (the value goes along with the next request). Useful for the editor, which changes on every keystroke. Presence turns it on; `false`, `0`, `no` or `off` turns it off", "es": "Con `-model`: guarda sin ir al servidor (el valor va con la próxima petición). Útil en el editor, que cambia en cada tecla. La presencia lo activa; `false`, `0`, `no` u `off` lo desactiva" } },
+  { "name": "data-ozi-livewire-value", "group": "server", "type": "string", "example": "\"SP\"",
+    "desc": { "pt-BR": "Com `-model`: valor inicial aplicado ao componente depois do init (JSON ou texto). Use `{{ json_encode($uf) }}`", "en": "With `-model`: initial value applied to the component after init (JSON or text). Use `{{ json_encode($uf) }}`", "es": "Con `-model`: valor inicial aplicado al componente después del init (JSON o texto). Use `{{ json_encode($uf) }}`" } },
+  { "name": "data-ozi-livewire-options-event", "group": "server", "type": "string", "example": "cidades-updated",
+    "desc": { "pt-BR": "Nome do evento do Livewire (`$this->dispatch('nome', options: [...])`) que troca as opções do componente. Vale para todos os elementos com o mesmo nome, inclusive os recriados pelo morph (2.11.9+; antes só o 1º recebia)", "en": "Name of the Livewire event (`$this->dispatch('name', options: [...])`) that replaces the component options. It applies to every element with the same name, including those recreated by morph (2.11.9+; before, only the first received them)", "es": "Nombre del evento de Livewire (`$this->dispatch('nombre', options: [...])`) que reemplaza las opciones del componente. Vale para todos los elementos con el mismo nombre, incluso los recreados por el morph (2.11.9+; antes solo el 1º las recibía)" } },
+  { "name": "data-ozi-livewire-call", "group": "call", "type": "string", "since": "2.8", "example": "filtrar",
+    "desc": { "pt-BR": "Método do componente chamado a cada mudança feita pelo usuário: `metodo(...args, valor)`. Pode ser usado sozinho ou junto do `-model`/`-native`", "en": "Component method called on every change made by the user: `method(...args, value)`. It can be used alone or with `-model`/`-native`", "es": "Método del componente llamado en cada cambio hecho por el usuario: `metodo(...args, valor)`. Se puede usar solo o junto con `-model`/`-native`" } },
+  { "name": "data-ozi-livewire-args", "group": "call", "type": "string", "since": "2.8", "example": "[\"status\"]",
+    "desc": { "pt-BR": "Com `-call`: argumentos em JSON (lista), passados **antes** do valor. JSON inválido não chama o método e avisa no console", "en": "With `-call`: arguments as JSON (a list), passed **before** the value. Invalid JSON does not call the method and warns in the console", "es": "Con `-call`: argumentos en JSON (lista), pasados **antes** del valor. Un JSON inválido no llama al método y avisa en la consola" } }
+ ],
+ "shared": [],
+ "internal": ["data-ozi-livewire-bound", "data-ozi-livewire-last-value"],
+ "events": [],
+ "lang": []
+}

@@ -106,12 +106,18 @@ guard por <code>e.detail.source==='api'</code> (não repropaga mudança program�
         fire(b1, { component: 'faketest', name: 'uf', value: 'RJ', source: 'api' });
         check('guard source=api: NÃO propaga (component.set não chamado)', window.__lwCalls.length === n1);
 
-        // — GUARD de loop: mesmo valor não propaga —
-        // (após modo B, lastValue='SP'; api foi ignorado antes do lastValue) —
+        // — Depois do api (RJ, vindo do servidor), o usuário volta para SP: PROPAGA —
+        // (2.3.1: o source 'api' atualiza a trava; até a 2.3.0 este caso não propagava e o
+        // Livewire ficava com RJ enquanto a tela mostrava SP)
         var n2 = window.__lwCalls.length;
         b1.__v = 'SP';
         fire(b1, { component: 'faketest', name: 'uf', value: 'SP', source: 'user' });
-        check('guard de loop: valor igual (SP) não repropaga', window.__lwCalls.length === n2);
+        check('depois do api (RJ), voltar para SP propaga (2.3.1)', window.__lwCalls.length === n2 + 1);
+
+        // — GUARD de loop: mesmo valor duas vezes seguidas não propaga —
+        var n2b = window.__lwCalls.length;
+        fire(b1, { component: 'faketest', name: 'uf', value: 'SP', source: 'user' });
+        check('guard de loop: valor igual (SP) de novo não repropaga', window.__lwCalls.length === n2b);
 
         // — MODO A: dispatch nativo em wire:model —
         var inputFired = false, changeFired = false;

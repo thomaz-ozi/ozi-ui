@@ -65,6 +65,19 @@ for (const kind of KINDS) {
         manifests.push({ file, dir: join(kindDir, dir), kind, data });
     }
 }
+// [2.11.9] integrações: integrations/adapters/{nome}.manifest.json ("type": "integration"). O JS
+// do plugin vem da lista "js" do manifesto (o adapter não fica numa pasta própria com js/).
+const adaptersDir = join(root, 'integrations', 'adapters');
+if (existsSync(adaptersDir)) {
+    for (const f of readdirSync(adaptersDir).sort()) {
+        if (!f.endsWith('.manifest.json')) continue;
+        const file = join(adaptersDir, f);
+        let data;
+        try { data = JSON.parse(read(file)); }
+        catch (e) { fail(`${rel(file)}: JSON inválido (${e.message})`); continue; }
+        manifests.push({ file, dir: adaptersDir, kind: 'integrations', data });
+    }
+}
 
 if (!manifests.length) {
     console.log('nenhum manifesto encontrado');
@@ -85,6 +98,10 @@ function validate(m) {
     if (!ns || !/^[a-z]+$/.test(ns)) { fail(`${where}: "namespace" ausente ou inválido`); return false; }
     if (d.plugin !== `ozi-${ns}`) fail(`${where}: "plugin" deve ser "ozi-${ns}"`);
     if (m.kind.slice(0, -1) !== d.type) fail(`${where}: "type" deve ser "${m.kind.slice(0, -1)}" (pasta ${m.kind}/)`);
+    if (m.kind === 'integrations') {
+        if (!Array.isArray(d.js) || !d.js.length) fail(`${where}: integração precisa de "js" (arquivos do plugin, relativos a plugins/ozi-ui)`);
+        else for (const j of d.js) if (!existsSync(join(root, j))) fail(`${where}: "js" aponta "${j}", que não existe`);
+    }
 
     const groups = new Set();
     for (const g of d.groups || []) {
@@ -227,6 +244,10 @@ function attrsInCode(base, families = []) {
         for (const m of src.matchAll(reAttr)) {
             if (m[2]) {
                 const prefix = `${base}${m[1]}-`;
+                // [2.11.9] literal que termina em "-" e NÃO é concatenado (`attrPrefix:
+                // 'data-ozi-livewire-'` no registerAdapter) declara o prefixo; não é nome montado
+                const after = src.slice(m.index + m[0].length, m.index + m[0].length + 8);
+                if (/^['"`]\s*[,;)\]}\n]/.test(after)) continue;
                 if (families.includes(prefix)) { add(prefix, f); continue; }
                 fail(`${rel(f)}: nome montado por concatenação ("${prefix}" + ...): escreva o nome inteiro ou declare a família no manifesto ("${prefix}{x}" com "variants")`);
                 continue;
@@ -289,7 +310,10 @@ for (const m of manifests) {
     const declared = new Set([...own.filter((a) => !a.name.includes('{')).map((a) => a.name),
                               ...(d.internal || [])]);
     // compartilhados: o JS do próprio plugin tem de lê-los (literal no código, sem comentários)
-    const ownSrcAll = code.filter(({ f }) => f.startsWith(m.dir + sep)).map(({ src }) => src).join('\n');
+    // JS do próprio plugin: a pasta dele, ou a lista "js" (integrações)
+    const ownFiles = Array.isArray(d.js) ? new Set(d.js.map((j) => resolve(root, j))) : null;
+    const isOwn    = (f) => (ownFiles ? ownFiles.has(resolve(f)) : f.startsWith(m.dir + sep));
+    const ownSrcAll = code.filter(({ f }) => isOwn(f)).map(({ src }) => src).join('\n');
     // (entradas `"shared": true` em attributes, documentadas no site, e a lista simples `shared: [...]`)
     const sharedNames = [...(d.attributes || []).filter((x) => x.shared).map((x) => x.name), ...(d.shared || [])];
     for (const n of sharedNames) {
@@ -320,7 +344,7 @@ for (const m of manifests) {
     }
 
     // deriva: eventos (JS do próprio plugin)
-    const ownJs = code.filter(({ f }) => f.startsWith(join(m.dir, 'js') + sep));
+    const ownJs = ownFiles ? code.filter(({ f }) => isOwn(f)) : code.filter(({ f }) => f.startsWith(join(m.dir, 'js') + sep));
     const emitted = new Set();
     // emit('ozi:x'...), _emit('ozi:x'...) e _emitEvent(el, 'ozi:x'...) (editor: o elemento vem antes)
     for (const { src } of ownJs) for (const e of src.matchAll(/[eE]mit\w*\(\s*(?:[\w.$]+\s*,\s*)?'(ozi:[a-z-]+)'/g)) emitted.add(e[1]);
