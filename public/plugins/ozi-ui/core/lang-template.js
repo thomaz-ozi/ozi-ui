@@ -70,8 +70,10 @@ OZI.lang.register('XX', {
 
     // ─── OZI-SEARCH (ozi-search/lang/XX.js) ──────
     search: {
-        minCharsMessage:  '',   // ex: 'Digite ao menos {min} caracteres'
-        noResultsMessage: ''
+        pagination: '',   // aria-label do <nav> (ex: 'Paginação')
+        prev:       '',
+        next:       '',
+        page:       ''    // vem antes do número: 'Página 2'
     },
 
     // ─── OZI-EDITOR (ozi-editor/lang/XX.js) ──────

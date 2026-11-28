@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite ozi-search 4.0.1 (achados do manifesto)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .35rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+    /* fixtures em layout (visíveis): o modo sem filtro destaca só itens com _isVisible() */
+    .fixtures { border-top: 1px dashed #ddd; margin-top: 1rem; padding-top: 1rem; opacity: .35; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite <small>(ozi-search 4.0.1, pacote 2.11.5)</small></h1>
+<p>Achados ao escrever o <code>ozi-search.manifest.json</code>. Cada bloco tem o teste negativo: a
+asserção falha no ozi-search 4.0.0.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<div class="fixtures">
+    <!-- [1] texto escapado que parece HTML + highlight -->
+    <input id="q1" data-ozi-search=".s1" data-ozi-search-highlight="true">
+    <div class="s1" id="s1a">&lt;img src=x onerror="window.__oziXss=1"&gt; alvo</div>
+    <div class="s1" id="s1b">&lt;b&gt;negrito&lt;/b&gt; alvo</div>
+
+    <!-- [2] classe do highlight com aspas: não pode virar atributo -->
+    <input id="q2" data-ozi-search=".s2" data-ozi-search-highlight='hl-a" onclick="window.__oziXss2=1'>
+    <div class="s2" id="s2a">alvo dois</div>
+
+    <!-- [3] sem highlight: o item não pode ser recriado a cada tecla -->
+    <input id="q3" data-ozi-search=".s3">
+    <div class="s3"><label><input type="checkbox" id="cb3"> marcar alfa</label></div>
+    <div class="s3"><button type="button" id="btn3">botao alfa</button></div>
+    <div class="s3"><input type="text" id="txt3"> campo alfa</div>
+
+    <!-- [4] com highlight: limpar desembrulha só as marcas -->
+    <input id="q4" data-ozi-search=".s4" data-ozi-search-highlight="true" data-ozi-search-words="true">
+    <div class="s4" id="s4a">Rio <button type="button" id="btn4">Grande do Sul</button> e Rio de Janeiro</div>
+
+    <!-- [5] conteúdo trocado depois da 1ª busca (Livewire) -->
+    <input id="q5" data-ozi-search=".s5" data-ozi-search-highlight="true">
+    <div class="s5" id="s5a">Texto antigo</div>
+
+    <!-- [6] setItems() depois de lista vazia -->
+    <input id="q6" data-ozi-search=".s6">
+    <div id="wrap6"><div class="s6">um</div></div>
+</div>
+
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['search'] });
+
+    var erros = [];
+    window.addEventListener('error', function (ev) {
+        if (ev.message === 'Script error.' && !ev.filename && !ev.lineno) return;
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    function type(el, val) { el.value = val; el.dispatchEvent(new Event('input', { bubbles: true })); }
+    function $(id) { return document.getElementById(id); }
+
+    var vered = $('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 9s';
+        vered.className = 'fail';
+    }, 9000);
+
+    OZI.ready(function () {
+        (async function () {
+            var todos = true;
+            var api = OZI.components.search;
+
+            // ---- [1] texto que parece HTML continua texto ----
+            var txt1a = $('s1a').textContent, txt1b = $('s1b').textContent;
+            type($('q1'), 'alvo');
+            await wait(250);    // dá tempo de um <img onerror> disparar
+            todos = check('[1] texto escapado com <img onerror> não vira HTML no highlight',
+                !window.__oziXss && !document.querySelector('.s1 img'),
+                'xss=' + window.__oziXss + ' imgs=' + document.querySelectorAll('.s1 img').length) && todos;
+            todos = check('[1] <b> escrito como texto não vira negrito',
+                !document.querySelector('.s1 b')) && todos;
+            var marks1 = document.querySelectorAll('#s1a span.ozi-search-highlight');
+            todos = check('[1] o termo segue destacado (1 marca com o texto "alvo")',
+                marks1.length === 1 && marks1[0].textContent === 'alvo') && todos;
+            todos = check('[1] textContent do item igual ao original',
+                $('s1a').textContent === txt1a && $('s1b').textContent === txt1b) && todos;
+
+            // ---- [2] classe com aspas não abre atributo ----
+            type($('q2'), 'alvo');
+            var m2 = document.querySelector('#s2a span');
+            todos = check('[2] aspas na classe do highlight não criam atributo onclick',
+                !!m2 && !m2.hasAttribute('onclick'), m2 ? m2.outerHTML : 'sem marca') && todos;
+
+            // ---- [3] sem highlight: item intacto ----
+            var cb = $('cb3'), btn = $('btn3'), txt = $('txt3'), clicks = 0;
+            cb.checked = true; txt.value = 'digitado';
+            btn.addEventListener('click', function () { clicks++; });
+            type($('q3'), 'alf');
+            type($('q3'), 'alfa');
+            $('btn3').click();
+            todos = check('[3] checkbox dentro do item: mesmo nó e continua marcado',
+                $('cb3') === cb && $('cb3').checked) && todos;
+            todos = check('[3] texto digitado num input dentro do item continua lá',
+                $('txt3') === txt && $('txt3').value === 'digitado', 'value=' + $('txt3').value) && todos;
+            todos = check('[3] listener de botão dentro do item continua vivo',
+                $('btn3') === btn && clicks === 1, 'clicks=' + clicks) && todos;
+
+            // ---- [4] com highlight: limpar desembrulha só as marcas ----
+            var btn4 = $('btn4'), clicks4 = 0, nodes4 = $('s4a').childNodes.length, html4 = $('s4a').innerHTML;
+            btn4.addEventListener('click', function () { clicks4++; });
+            type($('q4'), 'rio sul');
+            var marks4 = $('s4a').querySelectorAll('span.ozi-search-highlight');
+            todos = check('[4] palavras destacadas, inclusive dentro do botão (3 marcas)',
+                marks4.length === 3, 'marcas=' + marks4.length) && todos;
+            type($('q4'), '');
+            $('btn4').click();
+            todos = check('[4] busca vazia: sem marcas e o HTML volta ao original',
+                !$('s4a').querySelector('span') && $('s4a').innerHTML === html4 &&
+                $('s4a').childNodes.length === nodes4, $('s4a').innerHTML) && todos;
+            todos = check('[4] botão com destaque: mesmo nó e listener vivo',
+                $('btn4') === btn4 && clicks4 === 1, 'clicks=' + clicks4) && todos;
+
+            // ---- [5] conteúdo trocado depois da 1ª busca ----
+            type($('q5'), 'texto');
+            $('s5a').textContent = 'Texto novo do servidor';
+            type($('q5'), 'tex');
+            todos = check('[5] conteúdo trocado depois da 1ª busca não volta ao antigo',
+                $('s5a').textContent === 'Texto novo do servidor', $('s5a').textContent) && todos;
+            type($('q5'), '');
+            todos = check('[5] e segue certo depois de limpar a busca',
+                $('s5a').textContent === 'Texto novo do servidor' && !$('s5a').querySelector('span')) && todos;
+
+            // ---- [6] setItems() depois de lista vazia ----
+            api.setItems('#q6', []);
+            todos = check('[6] setItems([]) esvazia a lista', document.querySelectorAll('.s6').length === 0) && todos;
+            api.setItems('#q6', ['A', 'B']);
+            var s6 = document.querySelectorAll('.s6');
+            todos = check('[6] setItems() depois da lista vazia preenche de novo, no mesmo container',
+                s6.length === 2 && s6[0].parentNode === $('wrap6') && s6[1].textContent === 'B',
+                'itens=' + s6.length) && todos;
+
+            await wait(100);
+            todos = check('zero erros JS', erros.length === 0, erros.join(' | ') || null) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ ACEITE ozi-search 4.0.1: PASSOU' : '✗ ACEITE ozi-search 4.0.1: FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+        })().catch(function (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+            vered.textContent = '✗ ACEITE ozi-search 4.0.1: FALHOU (exceção)';
+            vered.className = 'fail';
+        });
+    });
+</script>
+</body>
+</html>

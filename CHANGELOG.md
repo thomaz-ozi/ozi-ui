@@ -6,6 +6,29 @@ listed where they changed.
 
 ## [Unreleased]
 
+### Security
+- **`ozi-search`: highlighted item text is no longer parsed as HTML.** The highlight built the marked
+  term as a string and inserted it with `innerHTML`, so an item whose text was escaped by Blade
+  (`{{ $name }}`) but contained `<img src=x onerror=...>` became a real element and ran the script when
+  the term was highlighted. The `data-ozi-search-highlight` class was also inserted raw (a quote opened a
+  new attribute). The highlight is now built from text nodes and a `<span>` (`textContent`,
+  `className`). **Upgrade if you use `data-ozi-search-highlight` on user-provided text.** `ozi-search` 4.0.1.
+
+### Fixed
+- **`ozi-search`: items are no longer rebuilt on every keystroke.** Clearing the previous highlight
+  rewrote each item's `innerHTML` from a copy taken on the first search, even with highlight off: a
+  checkbox inside an item was unchecked, text typed in an input was lost, button listeners died, and
+  content updated after the first search (Livewire) went back to the old one. Now only the highlight
+  marks are unwrapped.
+- **`ozi-search`: `setItems()` fills the list again after an empty list.** With no item left it could not
+  find the container and did nothing; the container is now remembered per input.
+- **`ozi-search`: removed the unused keys `search.minCharsMessage` and `search.noResultsMessage`** (no
+  screen ever showed them).
+
+### Added
+- `ozi-search.manifest.json` (9 attributes, 1 event, 4 keys); the OZI-W001 registry for `search` is
+  generated from it (same list as before). `ozi-attrs` 1.1.3.
+
 ## [2.11.4] — 2026-11-27
 
 ### Fixed

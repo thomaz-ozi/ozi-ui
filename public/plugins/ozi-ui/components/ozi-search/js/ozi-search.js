@@ -2,8 +2,8 @@
  * ------------------------------------------
  * ozi-search
  * ------------------------------------------
- * Ver: 4.0.0
- * 2026-07-04
+ * Ver: 4.0.1
+ * 2026-11-27
  *
  * Responsabilidade:
  *   - Filtro local de elementos DOM por texto, em tempo real
@@ -31,6 +31,19 @@
  * Eventos: ozi:search-filtered
  *
  * Changelog:
+ *   - v4.0.1: [SEGURANCA] achados do manifesto (2.11.5):
+ *       - Highlight montado por nos de texto + <span> (textContent), nunca por
+ *         innerHTML. Antes o texto do item voltava a ser lido como HTML: um item
+ *         com texto escapado (Blade {{ }}) contendo "<img onerror=...>" executava
+ *         o script ao destacar o termo.
+ *       - Limpeza do highlight desembrulha so as marcas (<span __oziSearchMark>)
+ *         em vez de regravar o innerHTML guardado na 1a busca. Antes, a cada tecla
+ *         (mesmo sem highlight) todo item era recriado: checkbox desmarcava, texto
+ *         digitado sumia, listener de botao morria, e conteudo trocado depois da
+ *         1a busca (Livewire) voltava ao antigo.
+ *       - setItems(): lembra o container dos itens; depois de uma lista vazia
+ *         voltava a nao preencher nunca mais.
+ *       - lang: saem search.minCharsMessage/noResultsMessage (nenhuma tela usava).
  *   - v4.0.0: [V2-F2] Migracao para JS puro (docs/ozi-ui-v2-contratos.md, dev-hard):
  *       - Zero jQuery. Delegacao de 'input' nativa no document
  *         (e.target.closest('[data-ozi-search]')); TreeWalker/regex ja eram nativos.
@@ -82,8 +95,14 @@
     // [2] ESTADO POR-ELEMENTO (substitui $.data)
     // ─────────────────────────────────────────────
 
-    // por item/grupo: { originalHtml?, originalVisible: '0'|'1', originalInlineDisplay }
+    // por item/grupo: { originalVisible: '0'|'1', originalInlineDisplay }
     var _itemState = new WeakMap();
+    // por input: container onde o setItems() poe os itens (sobrevive a lista vazia)
+    var _itemsHost = new WeakMap();
+
+    // marca do highlight (o parser HTML guarda o nome em minusculas)
+    var MARK_ATTR = '__oziSearchMark';
+    var MARK_SEL  = '[__ozisearchmark]';
     // por input: estado de paginacao { pageSize, currentPage, totalPages, container, currentItems }
     var _pagination = new WeakMap();
     // por input: flag de paginacao ja inicializada
@@ -204,17 +223,21 @@
         return st;
     }
 
-    function _storeOriginalHtml(items) {
-        items.forEach(function (el) {
-            var st = _state(el);
-            if (st.originalHtml === undefined) st.originalHtml = el.innerHTML;
-        });
-    }
-
+    // [4.0.1] Desembrulha so as marcas do highlight: o resto do item (inputs,
+    // listeners, conteudo trocado pelo Livewire) fica intacto. Antes regravava o
+    // innerHTML guardado na 1a busca, recriando o item inteiro a cada tecla.
     function _clearHighlights(items) {
         items.forEach(function (el) {
-            var st = _itemState.get(el);
-            if (st && st.originalHtml !== undefined) el.innerHTML = st.originalHtml;
+            var marks = el.querySelectorAll(MARK_SEL);
+            if (!marks.length) return;
+            var parents = [];
+            Array.prototype.forEach.call(marks, function (mark) {
+                var p = mark.parentNode;
+                if (!p) return;
+                p.replaceChild(document.createTextNode(mark.textContent), mark);
+                if (parents.indexOf(p) < 0) parents.push(p);
+            });
+            parents.forEach(function (p) { p.normalize(); });
         });
     }
 
@@ -263,7 +286,7 @@
                     var parent = node.parentElement;
                     if (!parent) return NodeFilter.FILTER_REJECT;
                     if (blocked.indexOf(parent.tagName) > -1) return NodeFilter.FILTER_REJECT;
-                    if (parent.hasAttribute('__oziSearchMark')) return NodeFilter.FILTER_REJECT;
+                    if (parent.hasAttribute(MARK_ATTR)) return NodeFilter.FILTER_REJECT;
                     if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
                     return NodeFilter.FILTER_ACCEPT;
                 }
@@ -274,21 +297,27 @@
         var node;
         while ((node = walker.nextNode())) nodes.push(node);
 
+        // [4.0.1] Monta por nos (texto + <span> com textContent), nunca por
+        // innerHTML: o texto do item e texto, mesmo quando parece HTML.
         nodes.forEach(function (textNode) {
             var text = textNode.nodeValue;
             regex.lastIndex = 0;
             if (!regex.test(text)) return;
             regex.lastIndex = 0;
 
-            var highlighted = text.replace(regex, function (m) {
-                return '<span __oziSearchMark class="' + highlightClass + '">' + m + '</span>';
-            });
-
-            var temp = document.createElement('span');
-            temp.innerHTML = highlighted;
-
             var frag = document.createDocumentFragment();
-            while (temp.firstChild) frag.appendChild(temp.firstChild);
+            var last = 0, m;
+            while ((m = regex.exec(text)) !== null) {
+                if (!m[0]) { regex.lastIndex++; continue; }
+                if (m.index > last) frag.appendChild(document.createTextNode(text.slice(last, m.index)));
+                var mark = document.createElement('span');
+                mark.setAttribute(MARK_ATTR, '');
+                mark.className   = highlightClass;
+                mark.textContent = m[0];
+                frag.appendChild(mark);
+                last = m.index + m[0].length;
+            }
+            if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
 
             if (textNode.parentNode) textNode.parentNode.replaceChild(frag, textNode);
         });
@@ -570,7 +599,6 @@
             _initPagination(input, items);
         }
 
-        _storeOriginalHtml(items);
         _clearHighlights(items);
         _storeOriginalVisibility(items);
         _storeOriginalVisibility(groups);
@@ -697,10 +725,12 @@
 
             var itemClass = rawSelector.charAt(0) === '.' ? rawSelector.slice(1) : rawSelector;
             var existing  = _queryAll('.' + itemClass);
-            if (!existing.length) return;
 
-            var container = existing[0].parentNode;
-            if (!container) return;
+            // [4.0.1] o container fica lembrado por input: depois de uma lista
+            // vazia nao ha item para achar o pai, e o setItems() nao preenchia mais
+            var container = existing.length ? existing[0].parentNode : _itemsHost.get(input);
+            if (!container || !container.isConnected) return;
+            _itemsHost.set(input, container);
 
             existing.forEach(function (el) { if (el.parentNode) el.parentNode.removeChild(el); });
 

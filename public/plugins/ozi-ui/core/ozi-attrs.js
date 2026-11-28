@@ -2,7 +2,7 @@
  * ------------------------------------------
  * ozi-attrs
  * ------------------------------------------
- * Ver: 1.1.2
+ * Ver: 1.1.3
  * 2026-11-27
  *
  * Responsabilidade:
@@ -39,6 +39,8 @@
  *        known() }.
  *
  * Changelog:
+ *   - v1.1.3: registro do search gerado do manifesto (2.11.5). Mesma lista que já estava escrita à
+ *       mão (nenhum nome entra nem sai).
  *   - v1.1.2: registro do check gerado do manifesto (2.11.4). Saem `all` e `enabled`, que o
  *       ozi-check não lê desde a 2.2.0 e o aviso aceitava calado; agora avisam com a resposta pronta
  *       (`data-ozi-check-enabled` → `-switch`, `data-ozi-check-all` → `-group`, no SPECIAL).
@@ -121,11 +123,13 @@
             internal: []
         },
         // <<< manifest:check
+        // >>> manifest:search — gerado de components/ozi-search/ozi-search.manifest.json por tools/build-manifest.mjs; não editar à mão
         search: {
-            author: ['', 'group', 'highlight', 'min', 'multi', 'no-filter', 'pagination', 'pagination-id',
-                'words'],
+            author: ['', 'group', 'highlight', 'min', 'multi', 'no-filter', 'pagination',
+                'pagination-id', 'words'],
             internal: []
         },
+        // <<< manifest:search
         toggle: {
             author: ['content', 'hide', 'icon', 'options', 'show', 'trigger'],
             internal: []

@@ -9,8 +9,6 @@
     if (!lang || !lang.register) return;
     lang.register('pt-BR', {
         search: {
-            minCharsMessage:  'Digite ao menos {min} caracteres',
-            noResultsMessage: 'Nenhum resultado encontrado',
             pagination:       'Paginação',
             prev:             'Anterior',
             next:             'Próxima',

@@ -86,8 +86,10 @@
     // ─── OZI-SEARCH ──────────────────────────────────────
     lang.register('XX', {
         search: {
-            minCharsMessage:  '',   // {min} disponível
-            noResultsMessage: ''
+            pagination: '',   // aria-label do <nav> (ex: 'Paginação')
+            prev:       '',
+            next:       '',
+            page:       ''    // vem antes do número: 'Página 2'
         }
     });
 
