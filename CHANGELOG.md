@@ -6,6 +6,8 @@ listed where they changed.
 
 ## [Unreleased]
 
+## [2.11.9] — 2026-11-27
+
 ### Fixed
 - **Livewire: `data-ozi-livewire-options-event` reaches every element using it.** The `Livewire.on`
   listener was registered once per event name and tied to the first element: a second element with the
@@ -689,7 +691,8 @@ Version 2: every plugin rewritten in plain JavaScript, no jQuery, zero runtime d
 A v1 compatibility ramp (jQuery shims, `zld*` aliases) is included and opt-in. `ozi-copy` and
 `ozi-paste` were discontinued. See the [migration guide](https://oziui.com/en/docs/migration).
 
-[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.11.8...HEAD
+[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.11.9...HEAD
+[2.11.9]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.11.8...v2.11.9
 [2.11.8]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.11.7...v2.11.8
 [2.11.7]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.11.6...v2.11.7
 [2.11.6]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.11.5...v2.11.6
