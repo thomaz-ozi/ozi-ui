@@ -6,6 +6,8 @@ listed where they changed.
 
 ## [Unreleased]
 
+## [2.11.7] — 2026-11-27
+
 ### Fixed
 - **`ozi-audio`: stopping a paused recording no longer counts the pause in its duration.** The timer was
   only adjusted on `recordResume()`, so stopping while paused sent the paused time to the server
@@ -649,7 +651,8 @@ Version 2: every plugin rewritten in plain JavaScript, no jQuery, zero runtime d
 A v1 compatibility ramp (jQuery shims, `zld*` aliases) is included and opt-in. `ozi-copy` and
 `ozi-paste` were discontinued. See the [migration guide](https://oziui.com/en/docs/migration).
 
-[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.11.6...HEAD
+[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.11.7...HEAD
+[2.11.7]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.11.6...v2.11.7
 [2.11.6]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.11.5...v2.11.6
 [2.11.5]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.11.4...v2.11.5
 [2.11.4]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.11.3...v2.11.4
