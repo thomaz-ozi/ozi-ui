@@ -6,6 +6,8 @@ listed where they changed.
 
 ## [Unreleased]
 
+## [2.12.0] — 2026-11-28
+
 ### Added
 - **`php artisan ozi:check --lint`.** Reads the Blade views and checks every `data-ozi-*` / `data-zld-*`
   attribute against the plugin manifests (`OZI-W001`, the same registry as the browser warning, with the
@@ -710,7 +712,8 @@ Version 2: every plugin rewritten in plain JavaScript, no jQuery, zero runtime d
 A v1 compatibility ramp (jQuery shims, `zld*` aliases) is included and opt-in. `ozi-copy` and
 `ozi-paste` were discontinued. See the [migration guide](https://oziui.com/en/docs/migration).
 
-[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.11.9...HEAD
+[Unreleased]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.12.0...HEAD
+[2.12.0]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.11.9...v2.12.0
 [2.11.9]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.11.8...v2.11.9
 [2.11.8]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.11.7...v2.11.8
 [2.11.7]: https://github.com/thomaz-ozi/ozi-ui/compare/v2.11.6...v2.11.7
