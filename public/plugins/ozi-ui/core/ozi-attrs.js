@@ -2,7 +2,7 @@
  * ------------------------------------------
  * ozi-attrs
  * ------------------------------------------
- * Ver: 1.1.5
+ * Ver: 1.1.6
  * 2026-11-27
  *
  * Responsabilidade:
@@ -39,6 +39,8 @@
  *        known() }.
  *
  * Changelog:
+ *   - v1.1.6: registro do auth gerado do manifesto (2.11.8). Mesma lista que já estava escrita à
+ *       mão (nenhum nome entra nem sai). Com ele, todos os plugins com `data-ozi-*` têm o registro gerado.
  *   - v1.1.5: registro do audio gerado do manifesto (2.11.7). Sai `preview` (saiu no ozi-audio
  *       4.2.0, pacote 2.2.0), que o registro manual aceitava calado; agora avisa que saiu (SPECIAL).
  *       `bg` fica: é lido pelo CSS do skin clarity (`"readBy": "css"` no manifesto).
@@ -119,11 +121,13 @@
             internal: []
         },
         // <<< manifest:audio
+        // >>> manifest:auth — gerado de components/ozi-auth/ozi-auth.manifest.json por tools/build-manifest.mjs; não editar à mão
         auth: {
             author: ['check', 'class', 'confirm', 'disable', 'dropdown', 'list-id', 'mail', 'pass',
                 'pass-max', 'pass-min', 'submit', 'user', 'user-caracter'],
             internal: []
         },
+        // <<< manifest:auth
         // >>> manifest:check — gerado de components/ozi-check/ozi-check.manifest.json por tools/build-manifest.mjs; não editar à mão
         check: {
             author: ['group', 'item', 'switch'],

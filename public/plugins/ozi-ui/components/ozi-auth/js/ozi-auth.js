@@ -2,8 +2,8 @@
  * ------------------------------------------
  * ozi-auth
  * ------------------------------------------
- * Ver: 4.1.1
- * 2026-11-25
+ * Ver: 4.1.2
+ * 2026-11-27
  *
  * Responsabilidade:
  *   - Validacao de senha/confirmacao/email/usuario aplicada a um <form> inteiro
@@ -24,6 +24,18 @@
  * Eventos: ozi:init, ozi:auth-change, ozi:auth-ready, ozi:auth-broken, ozi:destroy
  *
  * Changelog:
+ *   - v4.1.2: achados do manifesto (2.11.8):
+ *       - [FIX] "Nao pode conter partes do email": o fim do dominio (com, net, org, br...)
+ *         entrava na lista, e com joao@empresa.com qualquer senha com "com" era barrada
+ *         (Comunidade, Recomeco). Depois do 1o pedaco do dominio, partes com ate 3 letras
+ *         nao contam; o usuario e o nome do dominio seguem barrados. Igual no motor puro
+ *         ozi-password-rules 1.1.1.
+ *       - [FIX] destroy() devolve o botao de envio habilitado (ficava desabilitado e o form
+ *         nunca mais enviava).
+ *       - [FIX] Form SEM campo de usuario nunca liberava o botao: o padrao do ozi-conf e
+ *         pluginConf.auth.userCaracter = 4, e o motor comparava um usuario vazio com 4. A
+ *         regra nao aparece em lista nenhuma, entao tudo ficava verde e o botao travado.
+ *         Agora a regra de usuario so vale quando o form tem data-ozi-auth-user.
  *   - v4.1.1: [fix] o contador "faltam N" da regra de tamanho conta ate o minimo configurado
  *       (data-ozi-auth-pass-min / pluginConf.auth.passMin), nao ate 8 fixo. [seguranca] titulo,
  *       regras e resumo da lista montados com DOM + textContent (eram string HTML em innerHTML):
@@ -224,9 +236,14 @@
             var mailParts  = mail.split('@');
             var localPart  = mailParts[0] || '';
             var domainPart = mailParts[1] || '';
+            // [4.1.2] depois do 1o pedaco do dominio, partes com ate 3 letras (com, net, org,
+            // br...) nao contam: com elas, qualquer senha com "com" era barrada
+            var domainLabels = domainPart.split(/[.\-]/).filter(function (v, i) {
+                return i === 0 || String(v || '').trim().length > 3;
+            });
             var parts = [localPart, domainPart]
                 .concat(localPart.split(/[._\-+]/))
-                .concat(domainPart.split(/[.\-]/))
+                .concat(domainLabels)
                 .map(function (v) { return String(v || '').trim(); })
                 .filter(function (v) { return v.length >= 3; });
 
@@ -671,6 +688,9 @@
         var passMin      = parseInt(_attr(pass, 'data-ozi-auth-pass-min') || '', 10)      || (pluginConf && pluginConf.passMin)      || 8;
         var passMax      = parseInt(_attr(pass, 'data-ozi-auth-pass-max') || '', 10)      || (pluginConf && pluginConf.passMax)      || 64;
         var userCaracter = parseInt(_attr(user, 'data-ozi-auth-user-caracter') || '', 10) || (pluginConf && pluginConf.userCaracter) || 0;
+        // [4.1.2] sem campo de usuario nao ha regra de usuario (o padrao do pluginConf e 4, e
+        // o usuario vazio travava o botao sem aparecer em lista nenhuma)
+        if (!user) userCaracter = 0;
 
         var result = _oziAuth({
             user:         _val(user),
@@ -776,6 +796,12 @@
         _collectForms(root).forEach(function (form) {
             if (!_inited.has(form)) return;
             _inited.delete(form);
+            // [4.1.2] o botao fica como estava antes do init (desabilitado, o form nao enviava mais)
+            var submit = form.querySelector('[data-ozi-auth-submit]');
+            if (submit) {
+                submit.disabled = false;
+                submit.classList.remove('ozi-auth-submit--disabled', 'ozi-auth-submit--ready');
+            }
             _emit(form, 'ozi:destroy', { result: null, access: null }, 'api');
         });
     }

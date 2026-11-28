@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite ozi-auth 4.1.2 (achados do manifesto)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .35rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+    .fixtures { border-top: 1px dashed #ddd; margin-top: 1rem; padding-top: 1rem; opacity: .35; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite <small>(ozi-auth 4.1.2 + ozi-password-rules 1.1.1, pacote 2.11.8)</small></h1>
+<p>Achados ao escrever o <code>ozi-auth.manifest.json</code>. Cada bloco tem o teste negativo: a
+asserção falha no ozi-auth 4.1.1 / ozi-password-rules 1.1.0.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<div class="fixtures">
+    <form id="f1" onsubmit="return false">
+        <input id="m1" data-ozi-auth-mail value="joao.silva@empresa.com">
+        <input id="p1" type="password" data-ozi-auth-pass>
+        <input id="c1" type="password" data-ozi-auth-confirm>
+        <button id="s1" data-ozi-auth-submit>Salvar</button>
+    </form>
+    <form id="f3" onsubmit="return false">
+        <input id="u3" data-ozi-auth-user>
+        <input data-ozi-auth-mail value="joao@empresa.com">
+        <input id="p3" type="password" data-ozi-auth-pass>
+        <input id="c3" type="password" data-ozi-auth-confirm>
+        <button id="s3" data-ozi-auth-submit>Salvar</button>
+    </form>
+    <form id="f2" onsubmit="return false">
+        <input data-ozi-auth-mail value="a@b.com">
+        <input type="password" data-ozi-auth-pass>
+        <button id="s2" data-ozi-auth-submit>Salvar</button>
+    </form>
+</div>
+
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['auth', 'password-rules'] });
+
+    var erros = [];
+    window.addEventListener('error', function (ev) {
+        if (ev.message === 'Script error.' && !ev.filename && !ev.lineno) return;
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    function $(id) { return document.getElementById(id); }
+    function type(el, v) { el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); }
+
+    var vered = $('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 9s';
+        vered.className = 'fail';
+    }, 9000);
+
+    // [mail, senha, deve passar na regra "sem partes do email"?]
+    var CASOS = [
+        ['joao@empresa.com',             'Comunidade#2026', true,  'senha com "com" (fim do domínio)'],
+        ['joao@empresa.com',             'Recomeço#2026x',  true,  'senha com "com" no meio'],
+        ['joao@minha-empresa.com.br',    'Combrasil#2026',  true,  'domínio .com.br: "com" e "br" não contam'],
+        ['ana@rede.net',                 'Internet#2026x',  true,  'senha com "net" (fim do domínio)'],
+        ['joao@empresa.com',             'Empresa#2026x',   false, 'nome do domínio segue barrado'],
+        ['joao@empresa.com',             'Joao#2026xyzw',   false, 'usuário segue barrado'],
+        ['joao.silva@empresa.com',       'Silva#2026xyz',   false, 'pedaço do usuário (por ".") segue barrado'],
+        ['joao_silva@empresa.com',       'Silva#2026xyz',   false, 'pedaço do usuário (por "_") barrado'],
+        ['joao@minha-empresa.com.br',    'Minha#2026xyz',   false, '1º pedaço do domínio segue barrado'],
+        ['joao@minha-empresa.com.br',    'Empresa#2026x',   false, 'pedaço do domínio com mais de 3 letras segue barrado']
+    ];
+
+    OZI.ready(function () {
+        (async function () {
+            var todos = true;
+            await wait(100);
+            var pr = OZI.modules && OZI.modules.passwordRules;
+            todos = check('motor puro OZI.modules.passwordRules presente', !!(pr && pr.run)) && todos;
+
+            // ---- [1] os dois motores, mesmas respostas ----
+            CASOS.forEach(function (c) {
+                var a = window.oziAuth({ mail: c[0], password: c[1], confirm: c[1] }).passNoEmailParts;
+                var b = pr ? pr.run({ mail: c[0], password: c[1], confirm: c[1] }).passNoEmailParts : null;
+                todos = check('[1] ozi-auth: ' + c[3] + ' (' + c[0] + ' / ' + c[1] + ')', a === c[2], 'passNoEmailParts=' + a) && todos;
+                todos = check('[1] password-rules: ' + c[3], b === c[2], 'passNoEmailParts=' + b) && todos;
+            });
+
+            // ---- [1b] no formulário: a senha válida libera o botão ----
+            type($('p1'), 'Comunidade#2026'); type($('c1'), 'Comunidade#2026');
+            todos = check('[1b] form: "Comunidade#2026" com joao.silva@empresa.com libera o botão',
+                $('s1').disabled === false, 'disabled=' + $('s1').disabled) && todos;
+
+            // ---- [3] regra de usuário só com o campo (padrão pluginConf.auth.userCaracter = 4) ----
+            todos = check('[3] padrão do ozi-conf: userCaracter = 4 (o que travava o form sem usuário)',
+                OZI.conf.pluginConf.auth.userCaracter === 4) && todos;
+            todos = check('[3] form sem campo de usuário (o caso do [1b]) não trava pela regra de usuário',
+                $('s1').disabled === false) && todos;
+            type($('u3'), 'ab');
+            type($('p3'), 'Comunidade#2026'); type($('c3'), 'Comunidade#2026');
+            todos = check('[3] form COM campo de usuário: "ab" (< 4) segue barrando',
+                $('s3').disabled === true) && todos;
+            type($('u3'), 'abcd');
+            todos = check('[3] form COM campo de usuário: "abcd" libera', $('s3').disabled === false) && todos;
+            var semUser = pr ? pr.run({ mail: 'joao@empresa.com', password: 'Comunidade#2026', confirm: 'Comunidade#2026' }) : {};
+            todos = check('[3] password-rules sem `user`: userValid e access true',
+                semUser.userValid === true && semUser.access === true, JSON.stringify({ userValid: semUser.userValid, access: semUser.access })) && todos;
+            var userVazio = pr ? pr.run({ user: '', mail: 'joao@empresa.com', password: 'Comunidade#2026', confirm: 'Comunidade#2026' }) : {};
+            todos = check('[3] password-rules com `user` vazio: userValid false (regra vale)',
+                userVazio.userValid === false) && todos;
+
+            // ---- [2] destroy devolve o botão ----
+            todos = check('[2] antes: botão desabilitado (senha vazia)', $('s2').disabled === true) && todos;
+            OZI.components.auth.destroy($('f2'));
+            todos = check('[2] destroy() devolve o botão habilitado e sem as classes do auth',
+                $('s2').disabled === false && !/ozi-auth-submit--/.test($('s2').className),
+                'disabled=' + $('s2').disabled + ' class="' + $('s2').className + '"') && todos;
+
+            todos = check('zero erros JS', erros.length === 0, erros.join(' | ') || null) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ ACEITE ozi-auth 4.1.2: PASSOU' : '✗ ACEITE ozi-auth 4.1.2: FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+        })().catch(function (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+            vered.textContent = '✗ ACEITE ozi-auth 4.1.2: FALHOU (exceção)';
+            vered.className = 'fail';
+        });
+    });
+</script>
+</body>
+</html>

@@ -6,6 +6,28 @@ listed where they changed.
 
 ## [Unreleased]
 
+### Fixed
+- **`ozi-auth`: a form without a username field no longer keeps the submit button locked.** The default
+  `pluginConf.auth.userCaracter` is 4, so an empty username failed a rule that is not shown in the list or
+  the dropdown: every rule looked green and the button stayed disabled (the common e-mail + password form).
+  The username rule now applies only when the form has `data-ozi-auth-user`.
+- **`ozi-auth`: "must not contain parts of the e-mail" no longer counts the end of the domain.** With
+  `john@company.com`, any password containing "com" was rejected. After the first domain label, labels of
+  up to 3 letters (`com`, `net`, `org`, `br`...) are ignored; the user name and the domain name are still blocked.
+- **`ozi-auth`: `destroy()` re-enables the submit button** (it stayed disabled and the form could not be
+  sent). `ozi-auth` 4.1.2.
+- **`ozi-password-rules`: the same two fixes** (no `user` → no username rule; same e-mail parts as
+  `ozi-auth`, which also split the user name by `_`, `-` and `+`). `ozi-password-rules` 1.1.1.
+
+### Added
+- `ozi-auth.manifest.json` (13 attributes, 5 events, 17 keys); the OZI-W001 registry for `auth` is
+  generated from it (same list as before). Every plugin with `data-ozi-*` attributes now has a manifest.
+  `ozi-attrs` 1.1.6.
+
+### Known issues
+- The `ozi-auth` Livewire binding calls a method that does not exist. Use `wire:model` on the inputs
+  themselves (they are regular inputs).
+
 ## [2.11.7] — 2026-11-27
 
 ### Fixed

@@ -2,8 +2,8 @@
  * ------------------------------------------
  * ozi-password-rules
  * ------------------------------------------
- * Ver: 1.1.0
- * 2026-08-18
+ * Ver: 1.1.1
+ * 2026-11-27
  *
  * Responsabilidade:
  *   - Motor puro de validacao de regras de senha
@@ -19,6 +19,12 @@
  * Expoe: OZI.modules.passwordRules, window.oziPasswordRules (compat)
  *
  * Changelog:
+ *   - v1.1.1: [fix] "nao pode conter partes do email" igual ao ozi-auth 4.1.2: o fim do
+ *     dominio (com, net, org, br...) nao conta mais (barrava qualquer senha com "com");
+ *     o usuario (inteiro e em pedacos por . _ - +) e o nome do dominio seguem barrados.
+ *     Antes so cortava por ".", entao "joao_silva" nao barrava "silva".
+ *     [fix] sem `user` nos parametros nao ha regra de usuario: o padrao userCaracter = 4 do
+ *     pluginConf reprovava (access false) quem chamava so com mail/senha.
  *   - v1.1.0: [feat] params.disabled — array de tokens publicos (lowercase,
  *     uppercase, number, special, no-space, no-email-parts, confirm, user,
  *     length) e/ou chaves internas. Regras desligadas saem do access e do
@@ -123,6 +129,10 @@
             ? window.parseInt(params.passMax, 10)
             : _getDefault('passMax', 64);
 
+        // [1.1.1] sem `user` nos parametros, nao ha regra de usuario (o padrao 4 do pluginConf
+        // reprovava quem so validava e-mail e senha)
+        if (params.user === undefined || params.user === null) userCaracter = 0;
+
         var userValid = userCaracter > 0
             ? user.trim().length >= userCaracter
             : true;
@@ -144,10 +154,20 @@
         var passNoSpace = password.length > 0 && !/\s/.test(password);
 
         var passNoEmailParts = true;
-        if (mail.trim() && password.length > 0) {
-            var mailParts = mail.toLowerCase()
-                .replace('@', '.')
-                .split('.')
+        var mailLower = mail.trim().toLowerCase();
+        if (mailLower.indexOf('@') > -1 && password.length > 0) {
+            // [1.1.1] mesmas partes do ozi-auth: usuario (inteiro e em pedacos), dominio
+            // inteiro, 1o pedaco do dominio e os demais com mais de 3 letras
+            var at         = mailLower.split('@');
+            var localPart  = at[0] || '';
+            var domainPart = at[1] || '';
+            var domainLabels = domainPart.split(/[.\-]/).filter(function (v, i) {
+                return i === 0 || v.length > 3;
+            });
+            var mailParts = [localPart, domainPart]
+                .concat(localPart.split(/[._\-+]/))
+                .concat(domainLabels)
+                .map(function (v) { return String(v || '').trim(); })
                 .filter(function (p) { return p.length >= 3; });
 
             var passLower = password.toLowerCase();
@@ -206,6 +226,8 @@
         var passMin      = params.passMin      !== undefined ? params.passMin      : _getDefault('passMin',      12);
         var passMax      = params.passMax      !== undefined ? params.passMax      : _getDefault('passMax',      64);
         var userCaracter = params.userCaracter !== undefined ? params.userCaracter : _getDefault('userCaracter', 4);
+        // [1.1.1] mesma regra do run(): sem `user`, a regra de usuario nao entra na lista
+        if (params.user === undefined || params.user === null) userCaracter = 0;
 
         function label(key, fallback, p) {
             var lang = window.OZI && window.OZI.lang;

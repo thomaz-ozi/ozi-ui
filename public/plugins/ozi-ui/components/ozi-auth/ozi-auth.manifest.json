@@ -1,0 +1,52 @@
+{
+ "_": "Fonte única dos atributos do ozi-auth (roadmap pronto-para-ia, N3). Lido por tools/build-manifest.mjs (confere a deriva com o código e gera o registro do OZI-W001 em core/ozi-attrs.js) e pelo site (tabela de atributos e llms-full.txt). Atributo novo = entrada aqui na mesma mudança, senão o CI reprova.",
+ "manifest": 1,
+ "plugin": "ozi-auth",
+ "namespace": "auth",
+ "type": "component",
+ "deps": ["password-rules"],
+ "groups": [
+  { "id": "fields", "title": { "pt-BR": "Campos", "en": "Fields", "es": "Campos" },
+    "note": { "pt-BR": "Vão nos `<input>` de um mesmo `<form>`: o ozi-auth valida o formulário inteiro. Precisa de pelo menos um campo de e-mail, senha ou confirmação. O e-mail é sempre obrigatório. Os campos são inputs normais: o `name` e o `wire:model` funcionam como sempre.", "en": "They go on the `<input>`s of the same `<form>`: ozi-auth validates the whole form. It needs at least an e-mail, password or confirmation field. The e-mail is always required. The fields are regular inputs: `name` and `wire:model` work as usual.", "es": "Van en los `<input>` de un mismo `<form>`: ozi-auth valida el formulario entero. Necesita al menos un campo de e-mail, contraseña o confirmación. El e-mail siempre es obligatorio. Los campos son inputs normales: `name` y `wire:model` funcionan como siempre." } },
+  { "id": "submit", "title": { "pt-BR": "Botão de envio e feedback", "en": "Submit button and feedback", "es": "Botón de envío y feedback" },
+    "note": { "pt-BR": "Vão no botão de envio. Ele fica desabilitado até todas as regras passarem, e o envio é barrado se algo falhar (evento `ozi:auth-broken`). Só o botão: dropdown nas senhas. Com `-list-id`: lista no container. Com os dois: lista e dropdown.", "en": "They go on the submit button. It stays disabled until every rule passes, and submission is blocked if something fails (`ozi:auth-broken` event). Button only: dropdown on the password fields. With `-list-id`: list in the container. With both: list and dropdown.", "es": "Van en el botón de envío. Queda deshabilitado hasta que pasen todas las reglas, y el envío se bloquea si algo falla (evento `ozi:auth-broken`). Solo el botón: dropdown en las contraseñas. Con `-list-id`: lista en el contenedor. Con los dos: lista y dropdown." } }
+ ],
+ "attributes": [
+  { "name": "data-ozi-auth-mail", "group": "fields", "type": "flag",
+    "desc": { "pt-BR": "Campo de e-mail: valida o formato, e as partes dele (usuário e nome do domínio) não podem aparecer na senha. O fim do domínio (`com`, `net`, `br`...) não conta (2.11.8+)", "en": "E-mail field: validates the format, and its parts (user and domain name) cannot appear in the password. The end of the domain (`com`, `net`, `br`...) does not count (2.11.8+)", "es": "Campo de e-mail: valida el formato, y sus partes (usuario y nombre del dominio) no pueden aparecer en la contraseña. El final del dominio (`com`, `net`, `br`...) no cuenta (2.11.8+)" } },
+  { "name": "data-ozi-auth-pass", "group": "fields", "type": "list", "example": "bi bi-eye-slash,bi bi-eye",
+    "desc": { "pt-BR": "Campo de senha. Com valor (`ícone mostrar,ícone ocultar`, classes CSS) e `type=\"password\"`, ganha o botão de mostrar/ocultar", "en": "Password field. With a value (`show icon,hide icon`, CSS classes) and `type=\"password\"`, it gets the show/hide button", "es": "Campo de contraseña. Con valor (`ícono mostrar,ícono ocultar`, clases CSS) y `type=\"password\"`, recibe el botón de mostrar/ocultar" } },
+  { "name": "data-ozi-auth-pass-min", "group": "fields", "type": "int", "default": "12", "example": "10",
+    "desc": { "pt-BR": "Vai no **campo de senha**: tamanho mínimo. Sem ele, vale `pluginConf.auth.passMin` (12 no `ozi-conf`)", "en": "Goes on the **password field**: minimum length. Without it, `pluginConf.auth.passMin` applies (12 in `ozi-conf`)", "es": "Va en el **campo de contraseña**: longitud mínima. Sin él, vale `pluginConf.auth.passMin` (12 en `ozi-conf`)" } },
+  { "name": "data-ozi-auth-pass-max", "group": "fields", "type": "int", "default": "64", "example": "32",
+    "desc": { "pt-BR": "Vai no **campo de senha**: tamanho máximo. Sem ele, vale `pluginConf.auth.passMax` (64 no `ozi-conf`)", "en": "Goes on the **password field**: maximum length. Without it, `pluginConf.auth.passMax` applies (64 in `ozi-conf`)", "es": "Va en el **campo de contraseña**: longitud máxima. Sin él, vale `pluginConf.auth.passMax` (64 en `ozi-conf`)" } },
+  { "name": "data-ozi-auth-confirm", "group": "fields", "type": "list", "example": "bi bi-eye-slash,bi bi-eye",
+    "desc": { "pt-BR": "Campo de confirmação: tem de ser igual à senha. O valor liga o botão de mostrar/ocultar, como no `-pass`", "en": "Confirmation field: must match the password. The value turns on the show/hide button, as in `-pass`", "es": "Campo de confirmación: debe ser igual a la contraseña. El valor activa el botón de mostrar/ocultar, como en `-pass`" } },
+  { "name": "data-ozi-auth-class", "group": "fields", "type": "string", "example": "btn btn-outline-secondary",
+    "desc": { "pt-BR": "No campo de senha ou de confirmação: classes do botão de mostrar/ocultar, no lugar de `ozi-auth-btn-toggle`", "en": "On the password or confirmation field: classes of the show/hide button, instead of `ozi-auth-btn-toggle`", "es": "En el campo de contraseña o de confirmación: clases del botón de mostrar/ocultar, en lugar de `ozi-auth-btn-toggle`" } },
+  { "name": "data-ozi-auth-user", "group": "fields", "type": "flag",
+    "desc": { "pt-BR": "Campo de usuário: mínimo de caracteres (`-user-caracter`). Sem este campo no form, não há regra de usuário (2.11.8+; antes o padrão 4 travava o botão de quem só tinha e-mail e senha)", "en": "Username field: minimum number of characters (`-user-caracter`). Without this field in the form there is no username rule (2.11.8+; before, the default 4 locked the button of forms with only e-mail and password)", "es": "Campo de usuario: mínimo de caracteres (`-user-caracter`). Sin este campo en el form no hay regla de usuario (2.11.8+; antes el valor por defecto 4 bloqueaba el botón de quien solo tenía e-mail y contraseña)" } },
+  { "name": "data-ozi-auth-user-caracter", "group": "fields", "type": "int", "default": "4", "example": "6",
+    "desc": { "pt-BR": "Vai no **campo de usuário**: mínimo de caracteres. Sem ele, vale `pluginConf.auth.userCaracter` (4 no `ozi-conf`); `0` tira a regra", "en": "Goes on the **username field**: minimum number of characters. Without it, `pluginConf.auth.userCaracter` applies (4 in `ozi-conf`); `0` removes the rule", "es": "Va en el **campo de usuario**: mínimo de caracteres. Sin él, vale `pluginConf.auth.userCaracter` (4 en `ozi-conf`); `0` quita la regla" } },
+  { "name": "data-ozi-auth-submit", "group": "submit", "type": "flag",
+    "desc": { "pt-BR": "Botão de envio do formulário: desabilitado até as regras passarem", "en": "The form's submit button: disabled until the rules pass", "es": "Botón de envío del formulario: deshabilitado hasta que pasen las reglas" } },
+  { "name": "data-ozi-auth-list-id", "group": "submit", "type": "string", "example": "regras-senha",
+    "desc": { "pt-BR": "`id` (sem `#`) do container onde a lista de regras é montada", "en": "`id` (no `#`) of the container where the rule list is built", "es": "`id` (sin `#`) del contenedor donde se arma la lista de reglas" } },
+  { "name": "data-ozi-auth-dropdown", "group": "submit", "type": "flag",
+    "desc": { "pt-BR": "Mostra as regras num dropdown ao focar a senha e a confirmação. Sem `-list-id`, o dropdown já é o padrão", "en": "Shows the rules in a dropdown when the password and confirmation get focus. Without `-list-id`, the dropdown is already the default", "es": "Muestra las reglas en un dropdown al enfocar la contraseña y la confirmación. Sin `-list-id`, el dropdown ya es el comportamiento por defecto" } },
+  { "name": "data-ozi-auth-check", "group": "submit", "type": "list", "example": "bi bi-circle,bi bi-check2-circle",
+    "desc": { "pt-BR": "Ícones das regras e do botão: `inválido,válido` (classes CSS). Sem ele, os ícones do tema", "en": "Icons of the rules and the button: `invalid,valid` (CSS classes). Without it, the theme icons", "es": "Íconos de las reglas y del botón: `inválido,válido` (clases CSS). Sin él, los íconos del tema" } },
+  { "name": "data-ozi-auth-disable", "group": "submit", "type": "list", "since": "2.4", "example": "special,no-email-parts",
+    "desc": { "pt-BR": "Desliga regras: `lowercase`, `uppercase`, `number`, `special`, `no-space`, `no-email-parts`, `confirm`, `user`, `length`. A regra some da lista e do dropdown e deixa de barrar o envio. `mail` não pode ser desligado (o console avisa)", "en": "Turns rules off: `lowercase`, `uppercase`, `number`, `special`, `no-space`, `no-email-parts`, `confirm`, `user`, `length`. The rule leaves the list and the dropdown and stops blocking submission. `mail` cannot be turned off (the console warns)", "es": "Desactiva reglas: `lowercase`, `uppercase`, `number`, `special`, `no-space`, `no-email-parts`, `confirm`, `user`, `length`. La regla sale de la lista y del dropdown y deja de bloquear el envío. `mail` no se puede desactivar (la consola avisa)" } }
+ ],
+ "shared": [],
+ "internal": [],
+ "events": [
+  { "name": "ozi:init", "detail": ["component", "name", "value", "source"] },
+  { "name": "ozi:auth-change", "detail": ["component", "name", "value", "source", "result", "access"] },
+  { "name": "ozi:auth-ready", "detail": ["component", "name", "value", "source", "result", "access"] },
+  { "name": "ozi:auth-broken", "detail": ["component", "name", "value", "source", "result", "access"] },
+  { "name": "ozi:destroy", "detail": ["component", "name", "value", "source"] }
+ ],
+ "lang": ["auth.confirm", "auth.exceeded", "auth.hidePassword", "auth.lowercase", "auth.mailRequired", "auth.noEmailParts", "auth.noSpace", "auth.number", "auth.passLength", "auth.remaining", "auth.rulesTitle", "auth.showPassword", "auth.special", "auth.summaryInvalid", "auth.summaryValid", "auth.uppercase", "auth.userMin"]
+}
