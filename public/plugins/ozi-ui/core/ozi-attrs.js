@@ -2,7 +2,7 @@
  * ------------------------------------------
  * ozi-attrs
  * ------------------------------------------
- * Ver: 1.1.4
+ * Ver: 1.1.5
  * 2026-11-27
  *
  * Responsabilidade:
@@ -39,6 +39,9 @@
  *        known() }.
  *
  * Changelog:
+ *   - v1.1.5: registro do audio gerado do manifesto (2.11.7). Sai `preview` (saiu no ozi-audio
+ *       4.2.0, pacote 2.2.0), que o registro manual aceitava calado; agora avisa que saiu (SPECIAL).
+ *       `bg` fica: é lido pelo CSS do skin clarity (`"readBy": "css"` no manifesto).
  *   - v1.1.4: registro do toggle gerado do manifesto (2.11.6). Mesma lista que já estava escrita à
  *       mão (nenhum nome entra nem sai).
  *   - v1.1.3: registro do search gerado do manifesto (2.11.5). Mesma lista que já estava escrita à
@@ -109,11 +112,13 @@
                 'tool', 'tool-blocked', 'toolbar-bp', 'toolbar-bp-until', 'type']
         },
         // <<< manifest:editor
+        // >>> manifest:audio — gerado de components/ozi-audio/ozi-audio.manifest.json por tools/build-manifest.mjs; não editar à mão
         audio: {
-            author: ['', 'bg', 'log', 'preview', 'save-field', 'save-url', 'saved', 'speed', 'title', 'url',
+            author: ['', 'bg', 'log', 'save-field', 'save-url', 'saved', 'speed', 'title', 'url',
                 'volume'],
             internal: []
         },
+        // <<< manifest:audio
         auth: {
             author: ['check', 'class', 'confirm', 'disable', 'dropdown', 'list-id', 'mail', 'pass',
                 'pass-max', 'pass-min', 'submit', 'user', 'user-caracter'],
@@ -162,7 +167,9 @@
         // [1.1.2] renomeados no ozi-check 2.2.0
         'data-ozi-check-enabled': { suggest: ['data-ozi-check-switch'] },
         'data-ozi-check-all': { suggest: ['data-ozi-check-group'] },
-        'data-ozi-search-menu': { gone: '2.0' }
+        'data-ozi-search-menu': { gone: '2.0' },
+        // [1.1.5] saiu no ozi-audio 4.2.0 (pacote 2.2.0); o registro manual ainda o aceitava
+        'data-ozi-audio-preview': { gone: '2.2' }
     };
     var GONE_PREFIXES = [
         { prefix: 'data-ozi-copy', since: '2.0', hint: 'receitas Alpine' },

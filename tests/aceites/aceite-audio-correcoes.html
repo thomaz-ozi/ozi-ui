@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite ozi-audio 4.3.1 (achados do manifesto)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .35rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+    .fixtures { border-top: 1px dashed #ddd; margin-top: 1rem; padding-top: 1rem; opacity: .35; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite <small>(ozi-audio 4.3.1 + ozi-attrs 1.1.5, pacote 2.11.7)</small></h1>
+<p>Achados ao escrever o <code>ozi-audio.manifest.json</code>. Cada bloco tem o teste negativo: a
+asserção falha no ozi-audio 4.3.0 / ozi-attrs 1.1.4. Gravação com <code>MediaRecorder</code> e
+<code>getUserMedia</code> falsos (o microfone responde em 60 ms).</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<div class="fixtures">
+    <div id="a1" data-ozi-audio="recorder"></div>
+    <div id="a2" data-ozi-audio="recorder"></div>
+    <div id="a3" data-ozi-audio="recorder"></div>
+    <div id="a4" data-ozi-audio="full" data-ozi-audio-save-url="/audios"></div>
+    <div id="a5" data-ozi-audio="player" data-ozi-audio-url="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA="></div>
+    <div id="a6" data-ozi-audio="recorder" aria-label="Recado para o cliente"></div>
+</div>
+
+<script>
+    /* ── stubs determinísticos ANTES do ozi.js ── */
+    window.MediaRecorder = function (stream, opts) {
+        this.stream = stream;
+        this.mimeType = (opts && opts.mimeType) || 'audio/webm';
+        this.state = 'inactive';
+        this._l = {};
+    };
+    window.MediaRecorder.isTypeSupported = function () { return true; };
+    window.MediaRecorder.prototype.addEventListener = function (t, f) { (this._l[t] = this._l[t] || []).push(f); };
+    window.MediaRecorder.prototype._fire = function (t, e) { (this._l[t] || []).forEach(function (f) { f(e); }); };
+    window.MediaRecorder.prototype.start = function () {
+        var self = this; self.state = 'recording';
+        setTimeout(function () {
+            self._fire('dataavailable', { data: new Blob([new Uint8Array([1, 2, 3, 4])], { type: self.mimeType }) });
+        }, 0);
+    };
+    window.MediaRecorder.prototype.pause  = function () { this.state = 'paused'; };
+    window.MediaRecorder.prototype.resume = function () { this.state = 'recording'; };
+    window.MediaRecorder.prototype.stop = function () {
+        var self = this; self.state = 'inactive';
+        setTimeout(function () { self._fire('stop', {}); }, 0);
+    };
+    if (!navigator.mediaDevices) navigator.mediaDevices = {};
+    window.__gum = 0;
+    navigator.mediaDevices.getUserMedia = function () {
+        window.__gum++;
+        return new Promise(function (r) { setTimeout(r, 60); }).then(function () {
+            return { getTracks: function () { return [{ stop: function () {} }]; } };
+        });
+    };
+</script>
+
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['audio'] });
+
+    var erros = [];
+    window.addEventListener('error', function (ev) {
+        if (ev.message === 'Script error.' && !ev.filename && !ev.lineno) return;
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    function $(id) { return document.getElementById(id); }
+
+    var vered = $('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 12s';
+        vered.className = 'fail';
+    }, 12000);
+
+    var ev = [];
+    ['ozi:audio-recorded', 'ozi:change', 'ozi:audio-saved', 'ozi:audio-record-start'].forEach(function (n) {
+        document.addEventListener(n, function (e) { ev.push({ n: n, id: e.target.id, d: e.detail }); });
+    });
+    function last(n, id) { return ev.filter(function (x) { return x.n === n && x.id === id; }).pop(); }
+
+    OZI.ready(function () {
+        (async function () {
+            var todos = true;
+            var api = OZI.components.audio;
+            await wait(100);
+
+            // ---- [1] parar com a gravação pausada ----
+            api.record('a1'); await wait(500);
+            api.recordPause('a1'); await wait(1200);
+            api.stopRecord('a1'); await wait(100);
+            var r1 = last('ozi:audio-recorded', 'a1');
+            todos = check('[1] parar pausado: a duração não conta a pausa (~0,45 s, não ~1,6 s)',
+                !!r1 && r1.d.duration > 0.2 && r1.d.duration < 0.9, 'duration=' + (r1 && r1.d.duration)) && todos;
+
+            // ---- [2] clique duplo em Gravar ----
+            window.__gum = 0; ev = [];
+            var btn = $('a2').querySelector('.ozi-audio__record');
+            btn.click(); btn.click(); await wait(200);
+            todos = check('[2] clique duplo em Gravar abre o microfone uma vez só',
+                window.__gum === 1, 'getUserMedia=' + window.__gum) && todos;
+            todos = check('[2] e começa uma gravação só',
+                ev.filter(function (x) { return x.n === 'ozi:audio-record-start' && x.id === 'a2'; }).length === 1) && todos;
+            api.stopRecord('a2'); await wait(100);
+
+            // ---- [3] destroy limpa as classes de estado ----
+            todos = check('[3] antes: recorder com is-empty', $('a3').classList.contains('is-empty')) && todos;
+            api.destroy('a3');
+            todos = check('[3] destroy remove is-empty (e as outras classes de estado)',
+                !/is-empty|is-paused|ozi-audio--invalid/.test($('a3').className), 'class="' + $('a3').className + '"') && todos;
+            $('a3').setAttribute('data-ozi-audio', 'player');
+            $('a3').setAttribute('data-ozi-audio-url', $('a5').getAttribute('data-ozi-audio-url'));
+            api.init('#a3');
+            todos = check('[3] re-init como player não herda o is-empty (player visível)',
+                !$('a3').classList.contains('is-empty') && $('a3').classList.contains('ozi-audio-player')) && todos;
+
+            // ---- [4] source 'api' em stopRecord() e save() ----
+            ev = [];
+            api.record('a4'); await wait(150);
+            api.stopRecord('a4'); await wait(100);
+            var r4 = last('ozi:audio-recorded', 'a4'), c4 = last('ozi:change', 'a4');
+            todos = check('[4] stopRecord() pela API: ozi:audio-recorded com source "api"',
+                !!r4 && r4.d.source === 'api', 'source=' + (r4 && r4.d.source)) && todos;
+            todos = check('[4] stopRecord() pela API: ozi:change com source "api"',
+                !!c4 && c4.d.source === 'api', 'source=' + (c4 && c4.d.source)) && todos;
+            window.oziLoadData = function () { return Promise.resolve({ ok: true, status: 200 }); };
+            api.save('a4'); await wait(100);
+            var s4 = last('ozi:audio-saved', 'a4');
+            todos = check('[4] save() pela API: ozi:audio-saved com source "api"',
+                !!s4 && s4.d.source === 'api', 'source=' + (s4 && s4.d.source)) && todos;
+            ev = [];
+            var btn1 = $('a1').querySelector('.ozi-audio__record');
+            btn1.click(); await wait(150); btn1.click(); await wait(100);
+            var r1u = last('ozi:audio-recorded', 'a1');
+            todos = check('[4] pelo botão: ozi:audio-recorded segue com source "user"',
+                !!r1u && r1u.d.source === 'user', 'source=' + (r1u && r1u.d.source)) && todos;
+
+            // ---- [5] nome acessível do widget ----
+            // o texto vem do dicionário no idioma ativo (o headless roda em inglês)
+            var nomeRec = OZI.lang.t('audio.recorder'), nomePlay = OZI.lang.t('audio.player');
+            todos = check('[5] nomes vêm do dicionário (não a chave crua)',
+                nomeRec !== 'audio.recorder' && nomePlay !== 'audio.player', nomeRec + ' / ' + nomePlay) && todos;
+            todos = check('[5] recorder: role="group" + aria-label do dicionário (audio.recorder)',
+                $('a2').getAttribute('role') === 'group' && $('a2').getAttribute('aria-label') === nomeRec,
+                'role=' + $('a2').getAttribute('role') + ' aria-label=' + $('a2').getAttribute('aria-label')) && todos;
+            todos = check('[5] player: aria-label do dicionário (audio.player)',
+                $('a5').getAttribute('aria-label') === nomePlay, 'aria-label=' + $('a5').getAttribute('aria-label')) && todos;
+            todos = check('[5] aria-label do app é mantido',
+                $('a6').getAttribute('aria-label') === 'Recado para o cliente') && todos;
+            api.destroy('a5');
+            todos = check('[5] destroy tira o role/aria-label que o componente pôs',
+                !$('a5').hasAttribute('aria-label') && !$('a5').hasAttribute('role')) && todos;
+
+            // ---- [6] W001: atributos que não existem ----
+            var at = window.OZI && OZI.attrs;
+            todos = check('[6] W001: data-ozi-audio-preview não é "conhecido" (saiu na 2.2)',
+                !!at && at.isKnown('data-ozi-audio-preview') === false) && todos;
+            todos = check('[6] W001: os 10 atuais seguem conhecidos (o -bg é lido pelo CSS do skin clarity)', !!at && ['', '-url', '-title', '-volume', '-speed',
+                '-save-url', '-save-field', '-saved', '-bg', '-log'].every(function (s) { return at.isKnown('data-ozi-audio' + s); })) && todos;
+
+            todos = check('zero erros JS', erros.length === 0, erros.join(' | ') || null) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ ACEITE ozi-audio 4.3.1: PASSOU' : '✗ ACEITE ozi-audio 4.3.1: FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+        })().catch(function (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+            vered.textContent = '✗ ACEITE ozi-audio 4.3.1: FALHOU (exceção)';
+            vered.className = 'fail';
+        });
+    });
+</script>
+</body>
+</html>

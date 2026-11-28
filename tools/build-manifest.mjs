@@ -191,6 +191,17 @@ function walk(dir, acc = []) {
 const codeFiles = walk(root).filter((f) => f !== ATTRS_FILE && !rel(f).includes('/lang/'));
 const code = codeFiles.map((f) => ({ f, src: stripComments(read(f)) }));
 
+// todo CSS do pacote, sem comentários (para os atributos `"readBy": "css"`)
+function walkCss(dir, acc = []) {
+    for (const f of readdirSync(dir)) {
+        const p = join(dir, f);
+        if (statSync(p).isDirectory()) walkCss(p, acc);
+        else if (f.endsWith('.css') && !f.endsWith('.min.css')) acc.push(p);
+    }
+    return acc;
+}
+const cssFiles = walkCss(root).map((f) => ({ f, src: read(f).replace(/\/\*[\s\S]*?\*\//g, ' ') }));
+
 const kebab = (s) => s.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase());
 
 // Família de nomes: `"name": "data-ozi-editor-tools-{bp}", "variants": ["sm", "md", ...]`. Vira um nome
@@ -290,7 +301,15 @@ for (const m of manifests) {
         if (prefixes.includes(name) || variantNames.has(name)) continue;   // família: conferida abaixo
         if (!declared.has(name)) fail(`${where}: o código usa "${name}" (${[...files].join(', ')}) e o manifesto não o declara`);
     }
+    // [2.11.7] `"readBy": "css"`: atributo lido só por seletor CSS (o skin clarity tem
+    // `[data-ozi-audio-bg="off"]`). A conferência procura o nome nos .css do pacote, não nos JS.
+    const cssOnly = new Set(own.filter((a) => a.readBy === 'css').map((a) => a.name));
+    for (const name of cssOnly) {
+        const inCss = cssFiles.filter(({ src }) => new RegExp(`\\[${name}(?![a-z0-9-])`).test(src)).map(({ f }) => rel(f));
+        if (!inCss.length) fail(`${where}: "${name}" marcado readBy css e nenhum CSS do pacote o usa num seletor`);
+    }
     for (const name of declared) {
+        if (cssOnly.has(name)) continue;
         if (!found.has(name)) fail(`${where}: "${name}" está no manifesto e nenhum JS do pacote o lê (atributo morto?)`);
     }
     for (const a of families) {
@@ -327,11 +346,15 @@ for (const m of manifests) {
     // deriva: chave i18n declarada e nunca lida pelo JS do plugin (chave morta, e o texto da tela
     // vem de outro lugar). Achado no ozi-autocomplete 4.1.1: lang/*.js tinha `autocomplete.empty`, o
     // JS mostrava "No results" fixo em inglês. Procura a chave como literal ('ns.chave' ou "ns.chave").
+    // [2.11.7] Uma chave lida só fora do plugin (o skin clarity lê audio.resume/conclude/discard em
+    // themes/clarity/js/) também vale: procura em todo JS do pacote e diz onde.
     const ownSrc = ownJs.map(({ src }) => src).join('\n');
+    const readsKey = (src, k) => src.includes(`'${k}'`) || src.includes(`"${k}"`);
     for (const k of langDecl) {
-        if (!ownSrc.includes(`'${k}'`) && !ownSrc.includes(`"${k}"`)) {
-            fail(`${where}: chave "${k}" declarada e o JS do plugin nunca a lê (texto fixo no lugar?)`);
-        }
+        if (readsKey(ownSrc, k)) continue;
+        const elsewhere = code.filter(({ src }) => readsKey(src, k)).map(({ f }) => rel(f));
+        if (elsewhere.length) console.log(`info     ${d.plugin}: chave "${k}" lida fora do plugin (${elsewhere.join(', ')})`);
+        else fail(`${where}: chave "${k}" declarada e nenhum JS do pacote a lê (texto fixo no lugar?)`);
     }
 
     // deriva: deps × _pluginMap

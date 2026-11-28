@@ -6,6 +6,30 @@ listed where they changed.
 
 ## [Unreleased]
 
+### Fixed
+- **`ozi-audio`: stopping a paused recording no longer counts the pause in its duration.** The timer was
+  only adjusted on `recordResume()`, so stopping while paused sent the paused time to the server
+  (`duration`) and to `ozi:audio-recorded`.
+- **`ozi-audio`: a double click on Record no longer opens the microphone twice.** The recording state only
+  turns on after the browser grants the microphone, so a second click in between started a second
+  recording and left the first one orphaned.
+- **`ozi-audio`: `destroy()` also removes the state classes** (`is-empty`, `is-paused`,
+  `ozi-audio--invalid`). A re-init in another mode (recorder → player) kept `is-empty` and the CSS hid the player.
+- **`ozi-audio`: `source` is `'api'` for `stopRecord()` and `save()` called from the API**
+  (`ozi:audio-recorded`, `ozi:change`, `ozi:audio-saved`, `ozi:audio-save-error`); it was always `'user'`.
+- **`ozi-audio`: the widget has an accessible name.** The root gets `role="group"` and `aria-label`
+  ("Audio player" / "Audio recorder", in the page language) unless the app already set one. `ozi-audio` 4.3.1.
+- **`OZI-W001`: `data-ozi-audio-preview` (removed in 2.2) now warns.** The hand-written registry still
+  accepted it. `ozi-attrs` 1.1.5.
+
+### Added
+- `ozi-audio.manifest.json` (10 attributes, 12 events, 24 keys); the OZI-W001 registry for `audio` is
+  generated from it.
+
+### Known issues
+- The `ozi-audio` Livewire binding sends the recorded `File` as its value, which `wire:model` cannot carry.
+  Use `data-ozi-audio-save-url` and listen to `ozi:audio-saved` to notify your component.
+
 ## [2.11.6] — 2026-11-27
 
 ### Fixed

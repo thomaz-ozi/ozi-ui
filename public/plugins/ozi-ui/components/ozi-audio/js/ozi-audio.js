@@ -2,10 +2,24 @@
  * ------------------------------------------
  * ozi-audio
  * ------------------------------------------
- * Ver: 4.3.0
- * 2026-08-21
+ * Ver: 4.3.1
+ * 2026-11-27
  *
  * Changelog:
+ *   - v4.3.1: achados do manifesto (2.11.7):
+ *       - [FIX] Parar a gravacao com ela PAUSADA contava o tempo de pausa na
+ *         duracao (evento ozi:audio-recorded e o `duration` enviado ao servidor):
+ *         o recordStartedAt so era compensado no resume.
+ *       - [FIX] Clique duplo em Gravar abria o microfone duas vezes (isRecording so
+ *         vira true depois do getUserMedia): duas gravacoes, a 1a orfa. Trava
+ *         `_starting` ate o microfone responder.
+ *       - [FIX] destroy() remove tambem is-empty, is-paused e ozi-audio--invalid
+ *         (re-init em outro modo herdava o is-empty e escondia o player).
+ *       - [FIX] source 'api' em stopRecord()/save() pela API: ozi:audio-recorded,
+ *         ozi:change, ozi:audio-saved/-save-error e os erros de parar/pausar.
+ *       - [A11Y] A raiz ganha role="group" + aria-label ("Player de audio" /
+ *         "Gravador de audio", chaves audio.player/recorder, que existiam e
+ *         ninguem lia), so quando o app nao deu aria-label/aria-labelledby.
  *   - v4.3.0: [FEAT] Pausar/retomar gravação — API pública nova `recordPause(id)` /
  *       `recordResume(id)` (e métodos _pauseRecording/_resumeRecording). Usa
  *       MediaRecorder.pause()/resume(); o cronômetro compensa o tempo pausado
@@ -251,6 +265,9 @@
         this.isRecording      = false;
         this.isPaused         = false;   // v4.3 — pausa da gravação (recordPause/Resume)
         this.recordPausedAt   = 0;       // instante da pausa, p/ compensar o cronômetro
+        this._starting        = false;   // v4.3.1 — getUserMedia em curso (trava o 2o clique)
+        this._stopSource      = null;    // v4.3.1 — 'user'|'api' de quem parou (eventos do stop)
+        this._ariaAdded       = [];      // v4.3.1 — role/aria-label postos por nos (sai no destroy)
 
         this._listeners = []; // { el, type, handler } — removidos no destroy
 
@@ -350,7 +367,7 @@
 
     OziAudio.prototype._buildShell = function () {
         _empty(this.root);
-        this.root.classList.remove('ozi-audio-player', 'ozi-audio-recorder', 'ozi-audio-full');
+        this.root.classList.remove('ozi-audio-player', 'ozi-audio-recorder', 'ozi-audio-full', 'is-empty', 'is-paused');
         this.root.classList.add('ozi-audio');
         this.ui = _el('div', { class: 'ozi-audio__main' });
         this.root.appendChild(this.ui);
@@ -481,7 +498,24 @@
         else if (this.mode === 'full')     this._initFull();
         else console.warn('[OZI:audio] modo inválido em #' + this.uid);
 
+        this._applyAccessibleName();
+
         this.emit('ozi:init', { source: 'api', mode: this.mode });
+    };
+
+    // [4.3.1] nome do widget para leitores de tela, no idioma do app. So quando o
+    // app nao deu o seu; o que for posto aqui sai no destroy().
+    OziAudio.prototype._applyAccessibleName = function () {
+        this._ariaAdded = [];
+        var r = this.root;
+        if (['player', 'recorder', 'full'].indexOf(this.mode) === -1) return;
+        if (!r.hasAttribute('role')) { r.setAttribute('role', 'group'); this._ariaAdded.push('role'); }
+        if (!r.hasAttribute('aria-label') && !r.hasAttribute('aria-labelledby')) {
+            r.setAttribute('aria-label', this.mode === 'player'
+                ? _t('audio.player', 'Player de áudio')
+                : _t('audio.recorder', 'Gravador de áudio'));
+            this._ariaAdded.push('aria-label');
+        }
     };
 
     OziAudio.prototype._initPlayer = function () {
@@ -713,6 +747,9 @@
 
     OziAudio.prototype._startRecording = function (source) {
         var self = this;
+        // [4.3.1] isRecording so vira true depois do getUserMedia: sem a trava, um 2o
+        // clique nesse intervalo abria o microfone de novo (duas gravacoes)
+        if (this.isRecording || this._starting) return;
         if (this.audio && !this.audio.paused) this.pause();
 
         if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
@@ -726,7 +763,9 @@
             return;
         }
 
+        this._starting = true;
         navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+            self._starting = false;
             var mimeType = self._getPreferredMimeType();
             var config   = mimeType ? { mimeType: mimeType } : {};
 
@@ -761,13 +800,18 @@
             self.emit('ozi:audio-record-start', { source: source || 'user', mode: self.mode });
 
         }).catch(function (err) {
+            self._starting = false;
             self._setStatus(_t('audio.micUnavailable', 'Permissão negada'));
             self.emit('ozi:audio-record-error', { source: source || 'user', message: err && err.message ? err.message : 'Erro ao acessar microfone' });
         });
     };
 
-    OziAudio.prototype._stopRecording = function () {
+    OziAudio.prototype._stopRecording = function (source) {
         if (!this.mediaRecorder || !this.isRecording) return;
+        // [4.3.1] parar pausado: desconta a pausa em curso (antes so o resume compensava,
+        // e a duracao enviada ao servidor incluia o tempo pausado)
+        if (this.isPaused && this.recordPausedAt) this.recordStartedAt += (Date.now() - this.recordPausedAt);
+        this._stopSource = source || 'user';
         this.isRecording = false;
         this.isPaused    = false;
         this.recordPausedAt = 0;
@@ -778,7 +822,7 @@
         try { this.mediaRecorder.stop(); }
         catch (err) {
             this._setStatus(_t('audio.micUnavailable', 'Erro ao parar'));
-            this.emit('ozi:audio-record-error', { message: err && err.message ? err.message : 'Erro ao parar gravação' });
+            this.emit('ozi:audio-record-error', { source: this._stopSource, message: err && err.message ? err.message : 'Erro ao parar gravação' });
             this._cleanupRecorderMedia();
         }
     };
@@ -791,7 +835,7 @@
         if (this.mediaRecorder.state !== 'recording') return;
         try { this.mediaRecorder.pause(); }
         catch (err) {
-            this.emit('ozi:audio-record-error', { message: err && err.message ? err.message : 'Erro ao pausar gravação' });
+            this.emit('ozi:audio-record-error', { source: source || 'user', message: err && err.message ? err.message : 'Erro ao pausar gravação' });
             return;
         }
         this.isPaused = true;
@@ -807,7 +851,7 @@
         if (!this.mediaRecorder || !this.isRecording || !this.isPaused) return;
         try { this.mediaRecorder.resume(); }
         catch (err) {
-            this.emit('ozi:audio-record-error', { message: err && err.message ? err.message : 'Erro ao retomar gravação' });
+            this.emit('ozi:audio-record-error', { source: source || 'user', message: err && err.message ? err.message : 'Erro ao retomar gravação' });
             return;
         }
         if (this.recordPausedAt) this.recordStartedAt += (Date.now() - this.recordPausedAt);
@@ -845,7 +889,10 @@
         this._setStatus(_t('audio.stopped', 'Parado'));
         this._cleanupRecorderMedia();
 
+        var source = this._stopSource || 'user';
+        this._stopSource = null;
         var payload = {
+            source:   source,
             duration: parseFloat(this.recordDuration.toFixed(2)),
             mimeType: mimeType,
             size:     file.size || blob.size || 0,
@@ -854,7 +901,7 @@
         this._dbg('gravado', { duration: payload.duration, size: payload.size, mime: mimeType });
         this.emit('ozi:audio-recorded', payload);
         // Contrato v2: nova gravação = mudança de valor canônico.
-        this.emit('ozi:change', { file: file, duration: payload.duration });
+        this.emit('ozi:change', { source: source, file: file, duration: payload.duration });
     };
 
     OziAudio.prototype._attachRecordedToPlayer = function (blob) {
@@ -911,8 +958,9 @@
         if (this.save) this.save.disabled = true;
     };
 
-    OziAudio.prototype._saveRecording = function () {
+    OziAudio.prototype._saveRecording = function (source) {
         var self   = this;
+        source     = source || 'user';
         var sender = window.oziLoadData || window.oziLoaddata || null;
 
         if (!this.recordedFile) { this._dbg('save abortado: sem gravação');   this._setStatus(_t('audio.noRecording', 'Sem gravação'));    return; }
@@ -949,19 +997,19 @@
                 if (res && res.ok === true) {
                     self._dbg('save ok (HTTP ' + (res.status || '?') + ')');
                     self._setStatus(_t('audio.saved', 'Salvo'));
-                    self.emit('ozi:audio-saved', { response: res });
+                    self.emit('ozi:audio-saved', { source: source, response: res });
                     // recorder é "só gravar": após salvar volta ao início (pronto p/ nova gravação).
                     // O status "Salvo" fica visível na visão recolhida até o próximo record.
                     if (self.mode === 'recorder') self._resetRecorder();
                 } else {
                     self._dbg('save falhou (res.ok!==true)', res);
                     self._setStatus(_t('audio.saveError', 'Erro ao salvar'));
-                    self.emit('ozi:audio-save-error', { response: res });
+                    self.emit('ozi:audio-save-error', { source: source, response: res });
                 }
             }).catch(function (err) {
                 self._dbg('save rejeitado', err && err.message ? err.message : err);
                 self._setStatus(_t('audio.saveError', 'Erro ao salvar'));
-                self.emit('ozi:audio-save-error', { error: err });
+                self.emit('ozi:audio-save-error', { source: source, error: err });
             }).then(function () {
                 // .finally() substituído por .then() para compat com browsers legados.
                 // Após reset do recorder (recordedFile=null) o salvar segue desabilitado;
@@ -1010,7 +1058,12 @@
         this.emit('ozi:destroy', { source: 'api' });
 
         delete this.root.__oziAudioInitialized;
-        this.root.classList.remove('ozi-audio', 'ozi-audio-player', 'ozi-audio-recorder', 'ozi-audio-full');
+        // [4.3.1] tambem as classes de estado (re-init em outro modo herdava o is-empty)
+        this.root.classList.remove('ozi-audio', 'ozi-audio-player', 'ozi-audio-recorder', 'ozi-audio-full',
+            'is-empty', 'is-paused', 'ozi-audio--invalid');
+        var self = this;
+        (this._ariaAdded || []).forEach(function (a) { self.root.removeAttribute(a); });
+        this._ariaAdded = [];
         _empty(this.root);
 
         if (_activePlayerInstance === this) _activePlayerInstance = null;
@@ -1076,8 +1129,8 @@
         play:       function (id) { var i = this.get(id); if (i) i.play_('api'); },
         pause:      function (id) { var i = this.get(id); if (i) i.pause('api'); },
         record:     function (id) { var i = this.get(id); if (i) i._startRecording('api'); },
-        stopRecord: function (id) { var i = this.get(id); if (i) i._stopRecording(); },
-        save:       function (id) { var i = this.get(id); if (i) i._saveRecording(); },
+        stopRecord: function (id) { var i = this.get(id); if (i) i._stopRecording('api'); },
+        save:       function (id) { var i = this.get(id); if (i) i._saveRecording('api'); },
         recordPause:  function (id) { var i = this.get(id); if (i) i._pauseRecording('api'); },
         recordResume: function (id) { var i = this.get(id); if (i) i._resumeRecording('api'); },
 
