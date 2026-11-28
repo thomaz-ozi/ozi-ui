@@ -6,6 +6,26 @@ listed where they changed.
 
 ## [Unreleased]
 
+### Fixed
+- **`ozi-toggle`: content hidden by CSS now opens.** Showing only cleared the inline `display`, so content
+  hidden by a class (`display: none`) or by the `hidden` attribute never appeared (the jQuery-based v1
+  opened it). If CSS still hides it, `display: block` is used. A class with `!important` (Bootstrap's
+  `.d-none`) still wins.
+- **`ozi-toggle`: labels and ARIA are right on page load.** With `ozi.js` the initial sync never ran
+  (both the `-show` and `-hide` labels were visible until the first click), and the state was read from
+  the trigger labels instead of the content, so content open at start had `aria-expanded="false"`.
+- **`ozi-toggle`: `aria-controls` points to real ids** (those of the contents that have one); it held the
+  group name, which is not an element id.
+- **`ozi-toggle`: `source` is `'api'` for API calls** (`open`, `close`, `toggle` and the `oziToggle*`
+  aliases), as the event contract says; it was always `'user'`. Clicks stay `'user'`. `ozi-toggle` 3.0.1.
+- **`ozi-toggle` Livewire binding: the value is no longer always `false`.** The adapter calls
+  `getValue(instance)` without the element, and the instance was the shared singleton. The trigger is now
+  the instance; `setValue("false")` closes. `ozi-toggle.plugin.js` 3.0.1.
+
+### Added
+- `ozi-toggle.manifest.json` (6 attributes, 3 events); the OZI-W001 registry for `toggle` is generated from
+  it (same list as before). `ozi-attrs` 1.1.4.
+
 ## [2.11.5] — 2026-11-27
 
 ### Security

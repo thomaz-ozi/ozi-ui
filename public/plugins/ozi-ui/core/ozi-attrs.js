@@ -2,7 +2,7 @@
  * ------------------------------------------
  * ozi-attrs
  * ------------------------------------------
- * Ver: 1.1.3
+ * Ver: 1.1.4
  * 2026-11-27
  *
  * Responsabilidade:
@@ -39,6 +39,8 @@
  *        known() }.
  *
  * Changelog:
+ *   - v1.1.4: registro do toggle gerado do manifesto (2.11.6). Mesma lista que já estava escrita à
+ *       mão (nenhum nome entra nem sai).
  *   - v1.1.3: registro do search gerado do manifesto (2.11.5). Mesma lista que já estava escrita à
  *       mão (nenhum nome entra nem sai).
  *   - v1.1.2: registro do check gerado do manifesto (2.11.4). Saem `all` e `enabled`, que o
@@ -130,10 +132,12 @@
             internal: []
         },
         // <<< manifest:search
+        // >>> manifest:toggle — gerado de behaviors/ozi-toggle/ozi-toggle.manifest.json por tools/build-manifest.mjs; não editar à mão
         toggle: {
             author: ['content', 'hide', 'icon', 'options', 'show', 'trigger'],
             internal: []
         },
+        // <<< manifest:toggle
         livewire: {
             author: ['args', 'call', 'defer', 'model', 'native', 'options-event', 'text-model', 'value'],
             internal: ['bound', 'last-value']

@@ -2,8 +2,8 @@
  * ------------------------------------------
  * ozi-toggle
  * ------------------------------------------
- * Ver: 3.0.0
- * 2026-07-03
+ * Ver: 3.0.1
+ * 2026-11-27
  *
  *
  *
@@ -32,6 +32,22 @@
  *        window.oziToggleToggle/Open/Close/Sync (compat v0.x)
  *
  * Changelog:
+ *   - v3.0.1: achados do manifesto (2.11.6):
+ *       - [FIX] Conteudo escondido por CSS (classe com display:none, atributo
+ *         hidden) agora abre: depois de limpar o display inline, se o CSS ainda
+ *         esconde, usa display:block (o show() do jQuery da v1 fazia isso; a 3.0.0
+ *         so limpava o inline e o conteudo nunca aparecia). Classe com !important
+ *         (.d-none do Bootstrap) continua vencendo.
+ *       - [FIX] Sincronizacao inicial no boot: o hook afterRender era registrado
+ *         depois da 1a rodada (fonte 'dom' do ozi-hooks), e com o ozi.js o trigger
+ *         ficava com os dois rotulos (show e hide) visiveis ate o 1o clique.
+ *       - [FIX] Estado lido do CONTEUDO (display proprio), nao dos rotulos do
+ *         trigger: conteudo aberto de inicio ficava com aria-expanded="false" e o
+ *         rotulo "mostrar". toggle() passa o estado final aos indicadores.
+ *       - [FIX] aria-controls = ids reais dos conteudos (sem id, o atributo nao e
+ *         posto). Antes recebia o nome do grupo, que nao e id de nada.
+ *       - [FIX] source: 'api' em open/close/toggle chamados pela API (e aliases
+ *         oziToggle*); 'user' so no clique. Antes sempre 'user'.
  *   - v3.0.0: [V2-F2] Migracao para JS puro (docs/ozi-ui-v2-contratos.md, dev-hard):
  *       - Coleta/estado via querySelectorAll, closest, classList, style.display —
  *         zero jQuery no motor.
@@ -105,6 +121,19 @@
     // heuristica equivalente ao jQuery :visible — sem depender de layout forçado extra
     function isVisible(el) {
         return !!(el.offsetWidth || el.offsetHeight || (el.getClientRects && el.getClientRects().length));
+    }
+
+    // [3.0.1] estado do CONTEUDO pelo display dele mesmo, nao pelo layout: um
+    // conteudo aberto dentro de um pai oculto (aba, painel) continua "aberto"
+    function isOpen(el) {
+        return !!el && window.getComputedStyle(el).display !== 'none';
+    }
+
+    // [3.0.1] mostra limpando o display inline; se o CSS ainda esconde (classe com
+    // display:none, atributo hidden), usa block, como o show() do jQuery da v1
+    function reveal(el) {
+        el.style.display = '';
+        if (window.getComputedStyle(el).display === 'none') el.style.display = 'block';
     }
 
 
@@ -200,7 +229,7 @@
 
     function syncContentAria(id) {
         getContentsById(id).forEach(function (el) {
-            el.setAttribute('aria-hidden', isVisible(el) ? 'false' : 'true');
+            el.setAttribute('aria-hidden', isOpen(el) ? 'false' : 'true');
         });
     }
 
@@ -232,7 +261,11 @@
 
         // aria-expanded e aria-controls (adicionado v1.0.0)
         trigger.setAttribute('aria-expanded', state === 'hide' ? 'true' : 'false');
-        trigger.setAttribute('aria-controls', id);
+        // [3.0.1] aria-controls aponta para ids de elementos: os dos conteudos que
+        // tem id. O nome do grupo nao e id de nada; sem id, o atributo sai.
+        var ids = getContentsById(id).map(function (el) { return el.id; }).filter(Boolean);
+        if (ids.length) trigger.setAttribute('aria-controls', ids.join(' '));
+        else trigger.removeAttribute('aria-controls');
     }
 
     function updateIndicators(id, state) {
@@ -282,7 +315,7 @@
     }
 
     function _slideDown(el, duration, done) {
-        el.style.display  = '';
+        reveal(el);
         el.style.overflow = 'hidden';
         var target = el.scrollHeight;
 
@@ -417,7 +450,7 @@
             return;
         }
 
-        content.style.display = '';
+        reveal(content);
         if (typeof done === 'function') done();
     }
 
@@ -434,7 +467,7 @@
     }
 
     function invertContentState(content, done) {
-        if (isVisible(content)) {
+        if (isOpen(content)) {
             applyHide(content, done);
         } else {
             applyShow(content, done);
@@ -446,7 +479,8 @@
     // [12] OPEN / CLOSE / TOGGLE
     // ---------------------------------------------
 
-    function open(id) {
+    // source: 'user' (clique) | 'api' (chamada pela API publica) — contrato v2
+    function open(id, source) {
         id = str(id);
         if (!id) return;
 
@@ -456,18 +490,18 @@
         runBatch(
             contents,
             function (content, next) {
-                if (isVisible(content)) { next(); return; }
+                if (isOpen(content)) { next(); return; }
                 applyShow(content, next);
             },
             function () {
                 animateIndicators(id, 'hide');
-                _emit(id, 'ozi:toggle-open', { open: true });
-                _emit(id, 'ozi:toggle-change', { open: true });
+                _emit(id, 'ozi:toggle-open', { open: true }, source);
+                _emit(id, 'ozi:toggle-change', { open: true }, source);
             }
         );
     }
 
-    function close(id) {
+    function close(id, source) {
         id = str(id);
         if (!id) return;
 
@@ -477,18 +511,18 @@
         runBatch(
             contents,
             function (content, next) {
-                if (!isVisible(content)) { next(); return; }
+                if (!isOpen(content)) { next(); return; }
                 applyHide(content, next);
             },
             function () {
                 animateIndicators(id, 'show');
-                _emit(id, 'ozi:toggle-close', { open: false });
-                _emit(id, 'ozi:toggle-change', { open: false });
+                _emit(id, 'ozi:toggle-close', { open: false }, source);
+                _emit(id, 'ozi:toggle-change', { open: false }, source);
             }
         );
     }
 
-    function toggle(id) {
+    function toggle(id, source) {
         id = str(id);
         if (!id) return;
 
@@ -501,11 +535,12 @@
                 invertContentState(content, next);
             },
             function () {
-                animateIndicators(id);
-                // estado final lido do DOM apos animacao
-                var isOpen = isVisible(getContentsById(id)[0]);
-                _emit(id, isOpen ? 'ozi:toggle-open' : 'ozi:toggle-close', { open: isOpen });
-                _emit(id, 'ozi:toggle-change', { open: isOpen });
+                // estado final lido do conteudo apos animacao; os indicadores
+                // seguem esse estado (antes invertiam os rotulos do trigger)
+                var opened = isOpen(getContentsById(id)[0]);
+                animateIndicators(id, opened ? 'hide' : 'show');
+                _emit(id, opened ? 'ozi:toggle-open' : 'ozi:toggle-close', { open: opened }, source);
+                _emit(id, 'ozi:toggle-change', { open: opened }, source);
             }
         );
     }
@@ -522,8 +557,10 @@
 
         var triggers = getTriggersById(id);
 
+        // [3.0.1] o estado vem do conteudo (antes: dos rotulos do trigger, e um
+        // conteudo aberto de inicio ficava com aria-expanded="false")
         if (triggers.length) {
-            updateIndicators(id, getTriggerIndicatorState(triggers[0]));
+            updateIndicators(id, isOpen(getContentsById(id)[0]) ? 'hide' : 'show');
             return;
         }
 
@@ -550,7 +587,7 @@
     // que nenhum consumidor escuta ozi:toggle-* — sem shim.
     // ---------------------------------------------
 
-    function _emit(id, eventName, extra) {
+    function _emit(id, eventName, extra, source) {
         extra = extra || {};
 
         var triggers = getTriggersById(id);
@@ -561,7 +598,7 @@
             component: 'ozi-toggle',
             name:      id,
             value:     ('open' in extra) ? extra.open : null,
-            source:    'user',
+            source:    source === 'user' ? 'user' : 'api',
             id:        id
         };
         if ('open' in extra) detail.open = extra.open;
@@ -585,7 +622,7 @@
         var id = str(trigger.getAttribute(ATTRS.trigger));
         if (!id) return;
         e.preventDefault();
-        toggle(id);
+        toggle(id, 'user');
     });
 
 
@@ -593,10 +630,15 @@
     // [16] API PUBLICA - OZI.behaviors.toggle
     // ---------------------------------------------
 
+    // a API publica emite source 'api' (o 2o argumento interno nao e exposto)
+    function apiOpen(id)   { open(id, 'api'); }
+    function apiClose(id)  { close(id, 'api'); }
+    function apiToggle(id) { toggle(id, 'api'); }
+
     var toggleBehavior = {
-        open:    open,
-        close:   close,
-        toggle:  toggle,
+        open:    apiOpen,
+        close:   apiClose,
+        toggle:  apiToggle,
         sync:    syncGroup,
         syncAll: syncAllGroups
     };
@@ -606,9 +648,9 @@
     window.OziToggle = toggleBehavior;
 
     // aliases funcoes soltas v0.x
-    window.oziToggleToggle = toggle;
-    window.oziToggleOpen   = open;
-    window.oziToggleClose  = close;
+    window.oziToggleToggle = apiToggle;
+    window.oziToggleOpen   = apiOpen;
+    window.oziToggleClose  = apiClose;
     window.oziToggleSync   = function (id) {
         if (typeof id === 'undefined' || id === null || str(id) === '') {
             syncAllGroups();
@@ -624,8 +666,8 @@
 
     // registro de namespace e hook — feito direto (core zero-jQuery ja garante
     // DOM parseado ao carregar este script depois de ozi.js).
-    // syncAllGroups nao e chamado aqui — a fonte 'dom' do ozi-hooks ja dispara
-    // afterRender no DOMContentLoaded, evitando chamada dupla no carregamento inicial.
+    // [3.0.1] syncAllGroups e chamado aqui tambem: a fonte 'dom' do ozi-hooks roda
+    // antes de este script registrar o hook (nao ha replay para registro tardio).
     function _expose() {
         if (window.OZI && window.OZI.behaviors) {
             window.OZI.behaviors.toggle = toggleBehavior;
@@ -637,6 +679,11 @@
                 syncAllGroups(root);
             });
         }
+
+        // [3.0.1] sincroniza ja: o registro acima chega depois da 1a rodada do
+        // afterRender (fonte 'dom'), e sem isto o trigger ficava com os dois
+        // rotulos visiveis ate o 1o clique. Repetir o sync e inofensivo.
+        syncAllGroups(document);
     }
 
     if (document.readyState === 'loading') {

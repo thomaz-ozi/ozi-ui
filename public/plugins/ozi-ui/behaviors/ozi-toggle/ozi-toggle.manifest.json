@@ -1,0 +1,37 @@
+{
+ "_": "Fonte única dos atributos do ozi-toggle (roadmap pronto-para-ia, N3). Lido por tools/build-manifest.mjs (confere a deriva com o código e gera o registro do OZI-W001 em core/ozi-attrs.js) e pelo site (tabela de atributos e llms-full.txt). Atributo novo = entrada aqui na mesma mudança, senão o CI reprova.",
+ "manifest": 1,
+ "plugin": "ozi-toggle",
+ "namespace": "toggle",
+ "type": "behavior",
+ "deps": [],
+ "groups": [
+  { "id": "structure", "title": { "pt-BR": "Estrutura", "en": "Structure", "es": "Estructura" },
+    "note": { "pt-BR": "O trigger e o conteúdo recebem o **mesmo nome**: é ele que liga os dois. Vários triggers e vários conteúdos podem ter o mesmo nome (todos abrem e fecham juntos). O clique é ouvido no `document`, então elementos criados depois (Livewire, `ozi-loaddata`) funcionam sem reinicializar. O estado inicial é o do conteúdo: esconda com `style=\"display:none\"`, uma classe com `display:none` ou o atributo `hidden` (classe com `!important`, como a `.d-none` do Bootstrap, não abre).", "en": "The trigger and the content take the **same name**: it is what ties them together. Several triggers and several contents can share a name (they all open and close together). Clicks are listened to on the `document`, so elements created later (Livewire, `ozi-loaddata`) work without re-initializing. The initial state is the content's: hide it with `style=\"display:none\"`, a class with `display:none` or the `hidden` attribute (a class with `!important`, such as Bootstrap's `.d-none`, does not open).", "es": "El trigger y el contenido reciben el **mismo nombre**: es lo que los une. Varios triggers y varios contenidos pueden tener el mismo nombre (todos abren y cierran juntos). El clic se escucha en el `document`, así que los elementos creados después (Livewire, `ozi-loaddata`) funcionan sin reinicializar. El estado inicial es el del contenido: ocúltelo con `style=\"display:none\"`, una clase con `display:none` o el atributo `hidden` (una clase con `!important`, como `.d-none` de Bootstrap, no abre)." } },
+  { "id": "indicators", "title": { "pt-BR": "Rótulos no trigger", "en": "Trigger labels", "es": "Etiquetas en el trigger" },
+    "note": { "pt-BR": "Vão em elementos **dentro** do trigger e não levam valor. O trigger também recebe `aria-expanded` e, se o conteúdo tiver `id`, `aria-controls`.", "en": "They go on elements **inside** the trigger and take no value. The trigger also gets `aria-expanded` and, if the content has an `id`, `aria-controls`.", "es": "Van en elementos **dentro** del trigger y no llevan valor. El trigger también recibe `aria-expanded` y, si el contenido tiene `id`, `aria-controls`." } },
+  { "id": "animation", "title": { "pt-BR": "Animação", "en": "Animation", "es": "Animación" } }
+ ],
+ "attributes": [
+  { "name": "data-ozi-toggle-trigger", "group": "structure", "type": "string", "required": true, "example": "filtros",
+    "desc": { "pt-BR": "Elemento que abre e fecha o conteúdo de mesmo nome ao ser clicado (botão, link, qualquer elemento). O clique não segue o link nem envia o formulário", "en": "Element that opens and closes the content of the same name when clicked (button, link, any element). The click does not follow the link or submit the form", "es": "Elemento que abre y cierra el contenido del mismo nombre al hacer clic (botón, enlace, cualquier elemento). El clic no sigue el enlace ni envía el formulario" } },
+  { "name": "data-ozi-toggle-content", "group": "structure", "type": "string", "required": true, "example": "filtros",
+    "desc": { "pt-BR": "Conteúdo que aparece e some. Recebe `aria-hidden`. Dê um `id` a ele para o trigger ganhar `aria-controls`", "en": "Content that shows and hides. It gets `aria-hidden`. Give it an `id` so the trigger gets `aria-controls`", "es": "Contenido que aparece y desaparece. Recibe `aria-hidden`. Dele un `id` para que el trigger reciba `aria-controls`" } },
+  { "name": "data-ozi-toggle-show", "group": "indicators", "type": "flag",
+    "desc": { "pt-BR": "Aparece com o conteúdo fechado (ex.: \"Mostrar filtros\")", "en": "Shown while the content is closed (e.g. \"Show filters\")", "es": "Aparece con el contenido cerrado (ej.: \"Mostrar filtros\")" } },
+  { "name": "data-ozi-toggle-hide", "group": "indicators", "type": "flag",
+    "desc": { "pt-BR": "Aparece com o conteúdo aberto (ex.: \"Ocultar filtros\")", "en": "Shown while the content is open (e.g. \"Hide filters\")", "es": "Aparece con el contenido abierto (ej.: \"Ocultar filtros\")" } },
+  { "name": "data-ozi-toggle-icon", "group": "indicators", "type": "flag",
+    "desc": { "pt-BR": "Ícone dentro do `-show` ou do `-hide`: some e volta com um fade na troca de estado", "en": "Icon inside `-show` or `-hide`: fades out and back in when the state changes", "es": "Ícono dentro de `-show` o `-hide`: se desvanece y vuelve al cambiar el estado" } },
+  { "name": "data-ozi-toggle-options", "group": "animation", "type": "map", "example": "slide-time:400;",
+    "desc": { "pt-BR": "Vai no **conteúdo** (não no trigger). Com o atributo, o conteúdo desliza ao abrir e fechar; `slide-time` é a duração em ms (padrão `600`). Sem o atributo, abre e fecha na hora", "en": "Goes on the **content** (not the trigger). With it, the content slides when opening and closing; `slide-time` is the duration in ms (default `600`). Without it, it opens and closes instantly", "es": "Va en el **contenido** (no en el trigger). Con el atributo, el contenido se desliza al abrir y cerrar; `slide-time` es la duración en ms (por defecto `600`). Sin el atributo, abre y cierra al instante" } }
+ ],
+ "shared": [],
+ "internal": [],
+ "events": [
+  { "name": "ozi:toggle-open", "detail": ["component", "name", "value", "source", "id", "open"] },
+  { "name": "ozi:toggle-close", "detail": ["component", "name", "value", "source", "id", "open"] },
+  { "name": "ozi:toggle-change", "detail": ["component", "name", "value", "source", "id", "open"] }
+ ],
+ "lang": []
+}

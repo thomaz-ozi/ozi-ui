@@ -80,7 +80,7 @@
             todos = check('open(): detail.component === "ozi-toggle"', detail.component === 'ozi-toggle') && todos;
             todos = check('open(): detail.name === "t1"', detail.name === 't1') && todos;
             todos = check('open(): detail.value === true (aberto)', detail.value === true) && todos;
-            todos = check('open(): detail.source === "user"', detail.source === 'user') && todos;
+            todos = check('open() pela API: detail.source === "api" (3.0.1; o clique é "user")', detail.source === 'api') && todos;
             todos = check('open(): content visível (display !== none)', content1.style.display !== 'none') && todos;
             todos = check('open(): aria-hidden="false" no content', content1.getAttribute('aria-hidden') === 'false') && todos;
             todos = check('open(): aria-expanded="true" no trigger', trigger1.getAttribute('aria-expanded') === 'true') && todos;

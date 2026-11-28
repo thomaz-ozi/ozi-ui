@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OZI-UI v2 — Aceite ozi-toggle 3.0.1 (achados do manifesto)</title>
+<style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.2rem; } .pass { color: #15803d; } .fail { color: #b91c1c; }
+    li { margin: .35rem 0; } code { background: #f3f4f6; padding: 0 .3em; border-radius: 3px; }
+    #veredito { font-weight: bold; font-size: 1.1rem; margin-top: 1rem; }
+    .fixtures { border-top: 1px dashed #ddd; margin-top: 1rem; padding-top: 1rem; opacity: .35; }
+    .escondido { display: none; }
+</style>
+</head>
+<body>
+<h1>OZI-UI v2 — Aceite <small>(ozi-toggle 3.0.1 + ficha 3.0.1, pacote 2.11.6)</small></h1>
+<p>Achados ao escrever o <code>ozi-toggle.manifest.json</code>. Cada bloco tem o teste negativo: a
+asserção falha no ozi-toggle 3.0.0 / ficha 3.0.0.</p>
+<ul id="resultados"></ul>
+<div id="veredito">aguardando boot…</div>
+
+<div class="fixtures">
+    <!-- [1] conteúdo escondido por classe CSS -->
+    <button type="button" id="t1" data-ozi-toggle-trigger="classe">classe</button>
+    <div id="c1" class="escondido" data-ozi-toggle-content="classe">conteúdo 1</div>
+
+    <!-- [1b] conteúdo com o atributo hidden -->
+    <button type="button" id="t1b" data-ozi-toggle-trigger="oculto">hidden</button>
+    <div id="c1b" hidden data-ozi-toggle-content="oculto">conteúdo 1b</div>
+
+    <!-- [2] fechado de início, com rótulos: estado inicial sem clique -->
+    <button type="button" id="t2" data-ozi-toggle-trigger="fechado">
+        <span data-ozi-toggle-show>Mostrar</span><span data-ozi-toggle-hide>Ocultar</span>
+    </button>
+    <div id="c2" style="display:none" data-ozi-toggle-content="fechado">conteúdo 2</div>
+
+    <!-- [3] aberto de início -->
+    <button type="button" id="t3" data-ozi-toggle-trigger="aberto">
+        <span data-ozi-toggle-show>Mostrar</span><span data-ozi-toggle-hide>Ocultar</span>
+    </button>
+    <div id="c3" data-ozi-toggle-content="aberto">conteúdo 3</div>
+
+    <!-- [4] conteúdo sem id -->
+    <button type="button" id="t4" data-ozi-toggle-trigger="semid">sem id</button>
+    <div style="display:none" data-ozi-toggle-content="semid">conteúdo 4</div>
+
+    <!-- [5]/[6] source e ficha Livewire -->
+    <button type="button" id="t5" data-ozi-toggle-trigger="api">api</button>
+    <div id="c5" style="display:none" data-ozi-toggle-content="api">conteúdo 5</div>
+</div>
+
+<script src="../plugins/ozi-ui/ozi.js"></script>
+<script>
+    oziConf({ plugins: ['toggle', 'toggle-plugin'] });
+
+    var erros = [];
+    window.addEventListener('error', function (ev) {
+        if (ev.message === 'Script error.' && !ev.filename && !ev.lineno) return;
+        erros.push((ev.message || 'error') + ' @ ' + ev.filename + ':' + ev.lineno);
+    });
+
+    function check(nome, ok, extra) {
+        var li = document.createElement('li');
+        li.className = ok ? 'pass' : 'fail';
+        li.textContent = (ok ? '✓ ' : '✗ ') + nome + (extra ? ' — ' + extra : '');
+        document.getElementById('resultados').appendChild(li);
+        return ok;
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    function $(id) { return document.getElementById(id); }
+    function shown(el) { return window.getComputedStyle(el).display !== 'none'; }
+    function label(t, which) { return t.querySelector('[data-ozi-toggle-' + which + ']'); }
+
+    var vered = $('veredito');
+    var watchdog = setTimeout(function () {
+        vered.textContent = '✗ FALHOU — testes não terminaram em 9s';
+        vered.className = 'fail';
+    }, 9000);
+
+    var eventos = [];
+    document.addEventListener('ozi:toggle-change', function (e) { eventos.push(e.detail); });
+
+    OZI.ready(function () {
+        (async function () {
+            var todos = true;
+            await wait(100);
+
+            // ---- [2]/[3] estado inicial, antes de qualquer clique ----
+            var t2 = $('t2'), t3 = $('t3');
+            todos = check('[2] fechado de início: só "Mostrar" visível, sem clique',
+                shown(label(t2, 'show')) && !shown(label(t2, 'hide')),
+                'mostrar=' + shown(label(t2, 'show')) + ' ocultar=' + shown(label(t2, 'hide'))) && todos;
+            todos = check('[2] fechado de início: aria-expanded="false"',
+                t2.getAttribute('aria-expanded') === 'false', 'aria-expanded=' + t2.getAttribute('aria-expanded')) && todos;
+            todos = check('[3] aberto de início: só "Ocultar" visível',
+                shown(label(t3, 'hide')) && !shown(label(t3, 'show')),
+                'mostrar=' + shown(label(t3, 'show')) + ' ocultar=' + shown(label(t3, 'hide'))) && todos;
+            todos = check('[3] aberto de início: aria-expanded="true"',
+                t3.getAttribute('aria-expanded') === 'true', 'aria-expanded=' + t3.getAttribute('aria-expanded')) && todos;
+            t3.click(); await wait(30);
+            todos = check('[3] 1º clique fecha o que estava aberto e o rótulo acompanha',
+                !shown($('c3')) && shown(label(t3, 'show')) && !shown(label(t3, 'hide'))) && todos;
+
+            // ---- [4] aria-controls ----
+            todos = check('[4] aria-controls = id do conteúdo',
+                t2.getAttribute('aria-controls') === 'c2', 'aria-controls=' + t2.getAttribute('aria-controls')) && todos;
+            todos = check('[4] conteúdo sem id: trigger sem aria-controls',
+                !$('t4').hasAttribute('aria-controls'), 'aria-controls=' + $('t4').getAttribute('aria-controls')) && todos;
+
+            // ---- [1] conteúdo escondido por CSS ----
+            $('t1').click(); await wait(30);
+            todos = check('[1] conteúdo escondido por classe CSS abre no clique', shown($('c1'))) && todos;
+            $('t1').click(); await wait(30);
+            todos = check('[1] e fecha de novo', !shown($('c1'))) && todos;
+            $('t1').click(); await wait(30);
+            todos = check('[1] e reabre', shown($('c1'))) && todos;
+            $('t1b').click(); await wait(30);
+            todos = check('[1b] conteúdo com o atributo hidden abre no clique', shown($('c1b'))) && todos;
+
+            // ---- [5] source ----
+            eventos = [];
+            OZI.behaviors.toggle.open('api'); await wait(30);
+            todos = check('[5] API open(): source "api"',
+                eventos.length === 1 && eventos[0].source === 'api', JSON.stringify(eventos.map(function (d) { return d.source; }))) && todos;
+            eventos = [];
+            window.oziToggleClose('api'); await wait(30);
+            todos = check('[5] alias oziToggleClose(): source "api"',
+                eventos.length === 1 && eventos[0].source === 'api') && todos;
+            eventos = [];
+            $('t5').click(); await wait(30);
+            todos = check('[5] clique: source "user"',
+                eventos.length === 1 && eventos[0].source === 'user' && eventos[0].value === true) && todos;
+
+            // ---- [6] ficha Livewire, chamada como o adapter chama: getValue(getInstance(el)) ----
+            var p = OZI.integrations.getPlugin('toggle');
+            var el = $('t5');
+            todos = check('[6] ficha: getValue(inst) = true com o conteúdo aberto',
+                !!p && p.getValue(p.getInstance(el)) === true, 'valor=' + (p && p.getValue(p.getInstance(el)))) && todos;
+            eventos = [];
+            p.setValue(el, 'false'); await wait(30);
+            todos = check('[6] ficha: setValue("false") fecha',
+                !shown($('c5')) && p.getValue(p.getInstance(el)) === false) && todos;
+            todos = check('[6] ficha: setValue emite source "api" (o adapter não repropaga)',
+                eventos.length === 1 && eventos[0].source === 'api') && todos;
+            p.setValue(el, true); await wait(30);
+            todos = check('[6] ficha: setValue(true) abre', shown($('c5'))) && todos;
+
+            todos = check('zero erros JS', erros.length === 0, erros.join(' | ') || null) && todos;
+
+            clearTimeout(watchdog);
+            vered.textContent = todos ? '✓ ACEITE ozi-toggle 3.0.1: PASSOU' : '✗ ACEITE ozi-toggle 3.0.1: FALHOU';
+            vered.className = todos ? 'pass' : 'fail';
+        })().catch(function (err) {
+            clearTimeout(watchdog);
+            check('exceção não tratada no teste', false, String(err) + (err && err.stack ? ' | ' + err.stack : ''));
+            vered.textContent = '✗ ACEITE ozi-toggle 3.0.1: FALHOU (exceção)';
+            vered.className = 'fail';
+        });
+    });
+</script>
+</body>
+</html>
